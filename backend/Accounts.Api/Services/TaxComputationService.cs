@@ -16,6 +16,16 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
 {
     public const string OutputKind = "corporation-tax-support-data-not-ct1-return";
 
+    // The description every "income within the charitable exemption" line starts with, so the tax
+    // bridges can reconcile taxable profit to the streams less that line.
+    public const string CharitableExemptionAdjustmentPrefix = "Income within the charitable exemption";
+
+    /// <summary>The (zero or negative) charitable-exemption line in a computation's adjustments.</summary>
+    public static decimal CharitableExemptionDeduction(IEnumerable<TaxAdjustment> adjustments) =>
+        adjustments
+            .Where(adjustment => adjustment.Description.StartsWith(CharitableExemptionAdjustmentPrefix, StringComparison.Ordinal))
+            .Sum(adjustment => adjustment.Amount);
+
     public record TaxAdjustment(string Description, decimal Amount, string Basis);
 
     public record TaxSourceReference(string Code, string Title, string Url);
@@ -128,7 +138,8 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         decimal PreliminaryTaxPaid,
         CapitalAllowanceSupport CapitalAllowances,
         List<string> BlockingReasons,
-        string CalculationSha256);
+        string CalculationSha256,
+        TaxAdjustment? CharitableExemption = null);
 
     public async Task<TaxComputation> ComputeAsync(int companyId, int periodId)
     {
@@ -182,7 +193,7 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
 
         return new TaxComputation(
             core.AccountingProfit,
-            core.Adjustments,
+            core.CharitableExemption is { } exemptLine ? [.. core.Adjustments, exemptLine] : core.Adjustments,
             taxableProfit,
             core.CurrentPeriodTradingLoss,
             taxAt125,
@@ -220,9 +231,7 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         var computation = await ComputeAsync(companyId, periodId);
         var pl = await statementsService.GetProfitAndLossAsync(companyId, periodId);
         var payroll = await db.PayrollSummaries.AsNoTracking().FirstOrDefaultAsync(item => item.PeriodId == periodId);
-        var depreciation = await db.DepreciationEntries
-            .Where(item => item.PeriodId == periodId)
-            .SumAsync(item => item.Charge);
+        var depreciation = DepreciationCharged(await new AccountingLedgerService(db).BuildAsync(companyId, periodId));
 
         return new Ct1SupportData(
             period.Company.LegalName,
@@ -416,9 +425,11 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         var adjustments = new List<TaxAdjustment>();
         var blockers = new List<string>();
 
-        var depreciation = await db.DepreciationEntries
-            .Where(item => item.PeriodId == periodId)
-            .SumAsync(item => item.Charge);
+        var ledger = await new AccountingLedgerService(db).BuildAsync(companyId, periodId);
+        // Accounting depreciation is never deductible (capital allowances replace it), so exactly the
+        // depreciation charged in profit is added back: every posting on the Depreciation line (system
+        // and manual journals, bank items), whatever the account's tax flag or later edits.
+        var depreciation = DepreciationCharged(ledger);
         if (depreciation != 0)
         {
             adjustments.Add(new TaxAdjustment(
@@ -427,12 +438,17 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
                 "Accounting depreciation is not the capital-allowance claim."));
         }
 
-        var nonDeductibleCategories = await db.AccountCategories
-            .Where(category => (category.CompanyId == companyId || category.CompanyId == null && category.IsSystem)
-                && category.Type == AccountCategoryType.Expense
-                && category.TaxTreatment == TaxTreatment.NonDeductible)
+        // The flag-driven stream leaves out the Depreciation line (added back in full above) and the
+        // TaxOnProfit line: profit before tax never includes the CT charge, so nothing on it is added back.
+        var nonDeductibleCategories = (await db.AccountCategories
+                .Where(category => (category.CompanyId == companyId || category.CompanyId == null && category.IsSystem)
+                    && category.Type == AccountCategoryType.Expense
+                    && category.TaxTreatment == TaxTreatment.NonDeductible)
+                .ToListAsync())
+            .Where(category => CategoryClassification.Line(category) is not (AccountStatementLine.Depreciation
+                or AccountStatementLine.TaxOnProfit))
             .Select(category => category.Id)
-            .ToListAsync();
+            .ToList();
 
         // Bank expense entries are negative. Negating the signed amount adds an expense back and
         // deducts a refund/reversal. Preserve that sign so refunds cannot become extra tax.
@@ -475,7 +491,7 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         adjustments.AddRange(capital.Adjustments);
         blockers.AddRange(capital.BlockingReasons);
 
-        var ambiguousIncome = await FindAmbiguousIncomeCategoriesAsync(companyId, periodId);
+        var ambiguousIncome = FindAmbiguousIncomeCategories(ledger);
         if (ambiguousIncome.Count > 0)
         {
             blockers.Add(
@@ -523,6 +539,37 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             .Select(item => item.Paid)
             .FirstOrDefaultAsync();
 
+        // A company holding a charitable tax exemption whose CT liability is validly confirmed as due is
+        // taxed only on the attested taxable profit outside the exemption, attested separately for the
+        // 12.5% trading and the 25% non-trading stream. One explicit line removes the income within the
+        // exemption from each stream, so each stream's taxable profit equals its attested figure.
+        // Without a valid confirmation nothing here changes.
+        var tradingTaxable = tradingProfitAfterLoss;
+        var nonTradingTaxable = Math.Max(0m, passiveIncome);
+        TaxAdjustment? charitableExemption = null;
+        if (period.Company.HoldsCharitableTaxExemption)
+        {
+            var confirmation = await db.TaxBalances
+                .AsNoTracking()
+                .Where(balance => balance.PeriodId == periodId)
+                .Where(CorporationTaxObligation.ConfirmedDue)
+                .Select(balance => new { balance.ConfirmedDueBy, balance.ConfirmedDueAt, balance.ConfirmedTaxableProfitOutsideExemption, balance.ConfirmedNonTradingProfitOutsideExemption })
+                .FirstOrDefaultAsync();
+            if (confirmation is not null)
+            {
+                var attestedTrading = confirmation.ConfirmedTaxableProfitOutsideExemption!.Value;
+                var attestedNonTrading = confirmation.ConfirmedNonTradingProfitOutsideExemption!.Value;
+                var tradingWithinExemption = Math.Max(0m, tradingTaxable - attestedTrading);
+                var nonTradingWithinExemption = Math.Max(0m, nonTradingTaxable - attestedNonTrading);
+                tradingTaxable -= tradingWithinExemption;
+                nonTradingTaxable -= nonTradingWithinExemption;
+                charitableExemption = new TaxAdjustment(
+                    $"{CharitableExemptionAdjustmentPrefix} (confirmed by {confirmation.ConfirmedDueBy} on {confirmation.ConfirmedDueAt!.Value.ToString("d MMM yyyy", CultureInfo.InvariantCulture)})",
+                    0m - (tradingWithinExemption + nonTradingWithinExemption),
+                    $"Taxable profit from activities outside the charitable exemption attested at €{attestedTrading.ToString("N2", CultureInfo.InvariantCulture)} trading (12.5%) and €{attestedNonTrading.ToString("N2", CultureInfo.InvariantCulture)} non-trading (25%), with the corporation tax liability confirmed as due.");
+            }
+        }
+
         var fingerprint = CalculationFingerprint(
             period,
             scope,
@@ -533,7 +580,8 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             currentPeriodLoss,
             lossUsed,
             closingLoss,
-            preliminaryTax);
+            preliminaryTax,
+            charitableExemption);
 
         return new CoreCalculation(
             period,
@@ -547,12 +595,13 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             currentPeriodLoss,
             lossUsed,
             closingLoss,
-            tradingProfitAfterLoss,
-            Math.Max(0m, passiveIncome),
+            tradingTaxable,
+            nonTradingTaxable,
             preliminaryTax,
             capital,
             blockers.Distinct(StringComparer.Ordinal).ToList(),
-            fingerprint);
+            fingerprint,
+            charitableExemption);
     }
 
     private async Task<CapitalAllowanceSupport> ComputeCapitalAllowanceSupportAsync(
@@ -683,13 +732,20 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             balancingCharges);
     }
 
-    private async Task<List<string>> FindAmbiguousIncomeCategoriesAsync(int companyId, int periodId)
+    // The depreciation charged in profit, as the P&L reads it: every expense account on the Depreciation
+    // line, debits less credits.
+    private static decimal DepreciationCharged(AccountingLedgerService.LedgerSnapshot ledger) =>
+        ledger.Lines.Values
+            .Where(line => line.Category.Type == AccountCategoryType.Expense
+                && CategoryClassification.Line(line.Category) == AccountStatementLine.Depreciation)
+            .Sum(line => line.Debit - line.Credit);
+
+    private static List<string> FindAmbiguousIncomeCategories(AccountingLedgerService.LedgerSnapshot ledger)
     {
-        var ledger = await new AccountingLedgerService(db).BuildAsync(companyId, periodId);
         return ledger.Lines.Values
             .Where(line => line.Category.Type == AccountCategoryType.Income
                 && !line.Category.IsNonTradingIncome
-                && !line.Category.Code.StartsWith("4", StringComparison.Ordinal)
+                && CategoryClassification.Line(line.Category) != AccountStatementLine.Turnover
                 && line.Credit != line.Debit)
             .Select(line => $"{line.Category.Code} {line.Category.Name}")
             .Order(StringComparer.Ordinal)
@@ -775,7 +831,8 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
         decimal currentLoss,
         decimal lossUsed,
         decimal closingLoss,
-        decimal preliminaryTax)
+        decimal preliminaryTax,
+        TaxAdjustment? charitableExemption = null)
     {
         static string Money(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
         static string Bool(bool? value) => value is null ? "null" : value.Value ? "true" : "false";
@@ -792,6 +849,9 @@ public class TaxComputationService(AccountsDbContext db, FinancialStatementsServ
             $"scope-evidence:{scope?.BroughtForwardLossEvidence}|{scope?.EvidenceNote}",
             .. adjustmentRows
         ]);
+        // Appended only when the line is present, so every other fingerprint is unchanged.
+        if (charitableExemption is not null)
+            canonical += $"\ncharitable-exemption:{charitableExemption.Description}|{Money(charitableExemption.Amount)}|{charitableExemption.Basis}";
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 

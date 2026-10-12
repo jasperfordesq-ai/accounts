@@ -36,6 +36,7 @@ public static class DomainAuditCoverage
         new("bank.delete", "bank", "BankAccount", AuditEventCodes.BankAccountDeleted, true, false, true, false),
         new("category.create", "category", "AccountCategory", AuditEventCodes.AccountCategoryCreated, true, false, false, true),
         new("category.seed", "category", "AccountCategory", AuditEventCodes.AccountCategoriesSeeded, true, false, false, true),
+        new("category.chart-adopt", "category", "Company", AuditEventCodes.AccountCategoriesChartAdopted, true, false, true, true),
         new("rule.create", "rule", "TransactionRule", AuditEventCodes.TransactionRuleCreated, true, false, false, true),
         new("rule.delete", "rule", "TransactionRule", AuditEventCodes.TransactionRuleDeleted, true, false, true, false),
         new("adjustment.approve", "professional-approval", "Adjustment", AuditEventCodes.AdjustmentApproved, true, true, true, true),
@@ -112,7 +113,11 @@ public static class DomainAuditCoverage
         category.TaxTreatment,
         category.IsNonTradingIncome,
         category.IsSystem,
-        category.ParentId
+        category.ParentId,
+        category.StatementLine,
+        category.CashFlowClass,
+        category.SystemRole,
+        category.IsArchived
     };
 
     public static object RuleSnapshot(TransactionRule rule) => new

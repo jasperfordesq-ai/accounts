@@ -134,6 +134,13 @@ public class IxbrlService(
         var rbs = RoundBalanceSheet(bs);
         var rpbs = priorBs != null ? RoundBalanceSheet(priorBs) : null;
 
+        // Charity chart: charity wording on the human-readable labels only. The tagged concepts and
+        // contexts stay the generic ones (the pinned FRS 102 entry point is referenced by URL only), and a
+        // company with nil share capital carries no share-capital fact.
+        var charity = company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg;
+        var bankOverdraft = charity
+            && ((bs.CreditorsWithinYear.BankOverdraft ?? 0) != 0 || (priorBs?.CreditorsWithinYear.BankOverdraft ?? 0) != 0);
+
         // Balance Sheet
         sb.AppendLine("<h2>Balance Sheet</h2>");
         sb.AppendLine($"<p>as at {period.PeriodEnd:dd MMMM yyyy}</p>");
@@ -145,40 +152,41 @@ public class IxbrlService(
         AddIxbrlRow(sb, "Debtors", "core:Debtors", rbs.Debtors, priorAmount: rpbs?.Debtors);
         AddIxbrlRow(sb, "Cash at bank and in hand", "core:CashBankInHand", rbs.Cash, priorAmount: rpbs?.Cash);
         AddIxbrlRow(sb, "Total current assets", "core:CurrentAssets", rbs.CurrentAssetsTotal, true, priorAmount: rpbs?.CurrentAssetsTotal);
-        AddIxbrlRow(sb, "Creditors: due within one year", "core:CreditorsAmountsFallingDueWithinOneYear", -rbs.CreditorsWithin, priorAmount: rpbs != null ? -rpbs.CreditorsWithin : null);
+        AddIxbrlRow(sb, bankOverdraft ? "Creditors: due within one year (including bank overdraft)" : "Creditors: due within one year", "core:CreditorsAmountsFallingDueWithinOneYear", -rbs.CreditorsWithin, priorAmount: rpbs != null ? -rpbs.CreditorsWithin : null);
         AddIxbrlRow(sb, "Net current assets", "core:NetCurrentAssetsLiabilities", rbs.NetCurrentAssets, true, priorAmount: rpbs?.NetCurrentAssets);
         AddIxbrlRow(sb, "Total assets less current liabilities", "core:TotalAssetsLessCurrentLiabilities", rbs.TotalAssetsLessCurrent, true, priorAmount: rpbs?.TotalAssetsLessCurrent);
         if (rbs.CreditorsAfter > 0)
             AddIxbrlRow(sb, "Creditors: due after one year", "core:CreditorsAmountsFallingDueAfterOneYear", -rbs.CreditorsAfter, priorAmount: rpbs != null ? -rpbs.CreditorsAfter : null);
         AddIxbrlRow(sb, "Net assets", "core:NetAssetsLiabilities", rbs.NetAssets, true, priorAmount: rpbs?.NetAssets);
         sb.AppendLine("<tr><td colspan=\"3\">&#160;</td></tr>");
-        AddIxbrlRow(sb, "Share capital", "core:CalledUpShareCapital", rbs.ShareCapital, priorAmount: rpbs?.ShareCapital);
-        AddIxbrlRow(sb, "Profit and loss account", "core:ProfitLossAccountReserve", rbs.RetainedEarnings, priorAmount: rpbs?.RetainedEarnings);
-        AddIxbrlRow(sb, "Shareholders' funds", "core:ShareholderFunds", rbs.ShareholdersFunds, true, priorAmount: rpbs?.ShareholdersFunds);
+        if (!charity || rbs.ShareCapital != 0 || (rpbs?.ShareCapital ?? 0) != 0)
+            AddIxbrlRow(sb, "Share capital", "core:CalledUpShareCapital", rbs.ShareCapital, priorAmount: rpbs?.ShareCapital);
+        AddIxbrlRow(sb, charity ? "Unrestricted and restricted funds" : "Profit and loss account", "core:ProfitLossAccountReserve", rbs.RetainedEarnings, priorAmount: rpbs?.RetainedEarnings);
+        AddIxbrlRow(sb, charity ? "Total members' funds" : "Shareholders' funds", "core:ShareholderFunds", rbs.ShareholdersFunds, true, priorAmount: rpbs?.ShareholdersFunds);
         sb.AppendLine("</table>");
 
         // Revenue receives private filing data. CRO Micro/abridgement presentation exemptions must
         // never remove Revenue-required P&L or Detailed P&L facts from the review prototype.
         // P&L
-        sb.AppendLine("<h2>Profit and Loss Account</h2>");
+        sb.AppendLine(charity ? "<h2>Income and Expenditure Account</h2>" : "<h2>Profit and Loss Account</h2>");
         sb.AppendLine($"<p>for the year ended {period.PeriodEnd:dd MMMM yyyy}</p>");
         sb.AppendLine("<table>");
         if (hasPrior)
             sb.AppendLine($"<tr class=\"bold\"><td></td><td class=\"amount\">{period.PeriodEnd:yyyy}</td><td class=\"amount\">{priorPeriod!.PeriodEnd:yyyy}</td></tr>");
         var rpl = RoundProfitAndLoss(pl);
         var rppl = priorPl != null ? RoundProfitAndLoss(priorPl) : null;
-        AddIxbrlRow(sb, "Turnover", "core:TurnoverGrossRevenue", rpl.Turnover, contextRef: "current", priorAmount: rppl?.Turnover, priorContextRef: "prior");
+        AddIxbrlRow(sb, charity ? "Income" : "Turnover", "core:TurnoverGrossRevenue", rpl.Turnover, contextRef: "current", priorAmount: rppl?.Turnover, priorContextRef: "prior");
         AddIxbrlRow(sb, "Cost of sales", "core:CostSales", -rpl.CostOfSales, contextRef: "current", priorAmount: rppl != null ? -rppl.CostOfSales : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Gross profit", "core:GrossProfitLoss", rpl.GrossProfit, bold: true, contextRef: "current", priorAmount: rppl?.GrossProfit, priorContextRef: "prior");
+        AddIxbrlRow(sb, charity ? "Gross surplus/(deficit)" : "Gross profit", "core:GrossProfitLoss", rpl.GrossProfit, bold: true, contextRef: "current", priorAmount: rppl?.GrossProfit, priorContextRef: "prior");
         if (rpl.OtherIncome != 0)
             AddIxbrlRow(sb, "Other operating income", "core:OtherOperatingIncome", rpl.OtherIncome, contextRef: "current", priorAmount: rppl?.OtherIncome, priorContextRef: "prior");
         AddIxbrlRow(sb, "Administrative expenses", "core:AdministrativeExpenses", -rpl.TotalOverheads, contextRef: "current", priorAmount: rppl != null ? -rppl.TotalOverheads : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Operating profit", "core:OperatingProfitLoss", rpl.OperatingProfit, bold: true, contextRef: "current", priorAmount: rppl?.OperatingProfit, priorContextRef: "prior");
+        AddIxbrlRow(sb, charity ? "Operating surplus/(deficit)" : "Operating profit", "core:OperatingProfitLoss", rpl.OperatingProfit, bold: true, contextRef: "current", priorAmount: rppl?.OperatingProfit, priorContextRef: "prior");
         if (rpl.InterestPayable != 0)
             AddIxbrlRow(sb, "Interest payable and similar charges", "core:InterestPayableSimilarChargesFinanceCosts", -rpl.InterestPayable, contextRef: "current", priorAmount: rppl != null ? -rppl.InterestPayable : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", rpl.ProfitBeforeTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitBeforeTax, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -rpl.TaxCharge, contextRef: "current", priorAmount: rppl != null ? -rppl.TaxCharge : null, priorContextRef: "prior");
-        AddIxbrlRow(sb, "Profit for the year", "core:ProfitLossForPeriod", rpl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitAfterTax, priorContextRef: "prior");
+        AddIxbrlRow(sb, charity ? "Surplus/(deficit) before taxation" : "Profit before taxation", "core:ProfitLossOnOrdinaryActivitiesBeforeTax", rpl.ProfitBeforeTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitBeforeTax, priorContextRef: "prior");
+        AddIxbrlRow(sb, charity ? "Tax on surplus" : "Tax on profit", "core:TaxTaxCreditOnProfitOrLossOnOrdinaryActivities", -rpl.TaxCharge, contextRef: "current", priorAmount: rppl != null ? -rppl.TaxCharge : null, priorContextRef: "prior");
+        AddIxbrlRow(sb, charity ? "Surplus/(deficit) for the financial year" : "Profit for the year", "core:ProfitLossForPeriod", rpl.ProfitAfterTax, bold: true, contextRef: "current", priorAmount: rppl?.ProfitAfterTax, priorContextRef: "prior");
         sb.AppendLine("</table>");
 
         sb.AppendLine("</body>");

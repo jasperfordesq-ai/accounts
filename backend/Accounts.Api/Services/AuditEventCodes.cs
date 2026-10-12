@@ -25,6 +25,7 @@ public static class AuditEventCodes
     public const string BankAccountDeleted = "BankAccountDeleted";
     public const string AccountCategoryCreated = "AccountCategoryCreated";
     public const string AccountCategoriesSeeded = "AccountCategoriesSeeded";
+    public const string AccountCategoriesChartAdopted = "AccountCategoriesChartAdopted";
     public const string TransactionRuleCreated = "TransactionRuleCreated";
     public const string TransactionRuleDeleted = "TransactionRuleDeleted";
     public const string AnnualReturnDateRecorded = "AnnualReturnDateRecorded";
@@ -37,12 +38,15 @@ public static class AuditEventCodes
     public const string SizeClassificationDataSaved = "SizeClassificationDataSaved";
     public const string SizeClassificationRun = "SizeClassificationRun";
     public const string SizeClassificationOverrideApplied = "SizeClassificationOverrideApplied";
+    public const string SizeClassificationHistoricAnchorRecorded = "SizeClassificationHistoricAnchorRecorded";
+    public const string SizeClassificationHistoricAnchorRetired = "SizeClassificationHistoricAnchorRetired";
     public const string FilingRegimeDetermined = "FilingRegimeDetermined";
     public const string MemberAuditNoticeUpdated = "MemberAuditNoticeUpdated";
     public const string DeadlinesCalculated = "DeadlinesCalculated";
     public const string DeadlineOverrideRecorded = "DeadlineOverrideRecorded";
     public const string DeadlineMarkedFiled = "DeadlineMarkedFiled";
     public const string CroFilingStatusChanged = "CroFilingStatusChanged";
+    public const string CroFilingTreatedAsNotDelivered = "CroFilingTreatedAsNotDelivered";
     public const string CroPaymentConfirmed = "CroPaymentConfirmed";
     public const string CroDocumentGenerated = "CroDocumentGenerated";
     public const string IxbrlInternalCheckCompleted = "IxbrlInternalCheckCompleted";
@@ -93,6 +97,7 @@ public static class AuditEventCodes
     public const string DividendDeleted = "DividendDeleted";
     public const string GoingConcernUpdated = "GoingConcernUpdated";
     public const string TaxBalanceUpserted = "TaxBalanceUpserted";
+    public const string TaxBalanceCorporationTaxDueConfirmed = "TaxBalanceCorporationTaxDueConfirmed";
     public const string YearEndReviewConfirmationUpdated = "YearEndReviewConfirmationUpdated";
     public const string NotesGenerated = "NotesGenerated";
     public const string NoteDisclosureCreated = "NoteDisclosureCreated";

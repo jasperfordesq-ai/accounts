@@ -86,6 +86,10 @@ public static class CompanyOnboardingValidation
             }
             if (!string.IsNullOrWhiteSpace(company.CroNumber) && company.CroNumber.Trim().Length > 20)
                 errors["croNumber"] = ["CRO number must be 20 characters or fewer."];
+            if (company.ChartOfAccountsVariant is { } variant && !Enum.IsDefined(variant))
+                errors["chartOfAccountsVariant"] = ["Chart of accounts variant is not supported."];
+            else if (company.ChartOfAccountsVariant is { } chosen && !ChartDefinitions.IsAvailableTo(chosen, company.CompanyType))
+                errors["chartOfAccountsVariant"] = [ChartDefinitions.CharityChartRequiresClg];
         }
 
         var officers = input.Officers;

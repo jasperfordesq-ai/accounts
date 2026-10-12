@@ -444,7 +444,16 @@ const workflowStateClasses: Record<WorkflowState, string> = {
   todo: "border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--muted-foreground)]",
 };
 
-export function WorkflowRail({ items, title = "Accounting Workflow" }: { items: WorkflowItem[]; title?: string }) {
+export function WorkflowRail({
+  items,
+  title = "Accounting Workflow",
+  guide = false,
+}: {
+  items: WorkflowItem[];
+  title?: string;
+  /** Neutral guide: list the stages only, with no completion/active state badge or aria-current. */
+  guide?: boolean;
+}) {
   const railInstanceId = useId();
   const railCueId = `${railInstanceId}-scroll-cue`;
 
@@ -470,7 +479,7 @@ export function WorkflowRail({ items, title = "Accounting Workflow" }: { items: 
         <ol className="grid w-max min-w-full auto-cols-[minmax(9rem,1fr)] grid-flow-col divide-x divide-[var(--border)]">
           {items.map((item) => (
             <li key={item.id ?? item.label} className="min-w-0">
-              <WorkflowRailItem item={item} />
+              <WorkflowRailItem item={item} guide={guide} />
             </li>
           ))}
         </ol>
@@ -479,12 +488,12 @@ export function WorkflowRail({ items, title = "Accounting Workflow" }: { items: 
   );
 }
 
-function WorkflowRailItem({ item }: { item: WorkflowItem }) {
+function WorkflowRailItem({ item, guide }: { item: WorkflowItem; guide: boolean }) {
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          {item.icon ?? <WorkflowIcon state={item.state} />}
+          {item.icon ?? (guide ? <Circle className="h-4 w-4 text-[var(--muted-foreground)]" /> : <WorkflowIcon state={item.state} />)}
           <span className="truncate text-xs font-semibold uppercase text-[var(--foreground)]">
             {item.label}
           </span>
@@ -494,9 +503,11 @@ function WorkflowRailItem({ item }: { item: WorkflowItem }) {
       <p className="mt-2 min-h-10 text-xs leading-5 text-[var(--muted-foreground)]">
         {item.detail}
       </p>
-      <span className={`mt-3 inline-flex min-h-6 items-center rounded-full border px-2 text-[11px] font-semibold ${workflowStateClasses[item.state]}`}>
-        {workflowStateLabel[item.state]}
-      </span>
+      {!guide && (
+        <span className={`mt-3 inline-flex min-h-6 items-center rounded-full border px-2 text-[11px] font-semibold ${workflowStateClasses[item.state]}`}>
+          {workflowStateLabel[item.state]}
+        </span>
+      )}
     </>
   );
 
@@ -507,7 +518,7 @@ function WorkflowRailItem({ item }: { item: WorkflowItem }) {
   }
 
   return (
-    <Link href={item.href} aria-current={item.state === "active" ? "step" : undefined} className={className}>
+    <Link href={item.href} aria-current={!guide && item.state === "active" ? "step" : undefined} className={className}>
       {content}
     </Link>
   );

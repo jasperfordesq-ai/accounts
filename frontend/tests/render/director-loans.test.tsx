@@ -17,7 +17,7 @@ describe("DirectorLoansManager", () => {
     expect(await screen.findByRole("button", { name: "Add statutory evidence" })).toBeInTheDocument();
     expect(screen.getByLabelText("Related director")).toHaveValue("9");
     expect(screen.getByLabelText("Claimed legal basis")).toHaveValue("Unassessed");
-    expect(screen.getByText(/does not replace the separate release-level qualified-accountant approval/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not replace the directors' s\.324 approval of the accounts/i)).toBeInTheDocument();
   });
 
   it("posts dated movements with correctly derived advances, closing and maximum balances", async () => {

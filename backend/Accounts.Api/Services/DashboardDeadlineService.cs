@@ -76,8 +76,7 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                     .ThenByDescending(period => period.Id)
                     .Select(period => (int?)period.Id)
                     .FirstOrDefault(),
-                company.IsCharitableOrganisation,
-                company.HoldsCharitableTaxExemption))
+                company.IsCharitableOrganisation))
             .ToListAsync(cancellationToken);
 
         var companyIds = companies.Select(company => company.Id).ToArray();
@@ -105,12 +104,27 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
                 .ToListAsync(cancellationToken))
             .ToHashSet();
 
+        // The periods with a Revenue (CT1) obligation: every period, except where the company holds a
+        // charitable tax exemption and the period's corporation tax is not confirmed as due.
+        var revenuePeriods = companyIds.Length == 0
+            ? []
+            : await db.AccountingPeriods
+                .AsNoTracking()
+                .Where(period => companyIds.Contains(period.CompanyId))
+                .Where(CorporationTaxObligation.RevenueAppliesToPeriod)
+                .Select(period => new { period.CompanyId, period.Id })
+                .ToListAsync(cancellationToken);
+        var revenuePeriodsByCompany = revenuePeriods
+            .GroupBy(period => period.CompanyId)
+            .ToDictionary(group => group.Key, group => (IReadOnlySet<int>)group.Select(period => period.Id).ToHashSet());
+
         var items = companies
             .Select(company => BuildItem(
                 company,
                 deadlinesByCompany.GetValueOrDefault(company.Id) ?? [],
                 today,
-                workedPeriodIds))
+                workedPeriodIds,
+                revenuePeriodsByCompany.GetValueOrDefault(company.Id) ?? new HashSet<int>()))
             .ToList();
         var counts = DashboardDeadlineStates.All.ToDictionary(
             state => state,
@@ -128,7 +142,8 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
         CompanyDeadlineScope company,
         IReadOnlyList<FilingDeadline> deadlines,
         DateOnly today,
-        IReadOnlySet<int>? workedPeriodIds = null)
+        IReadOnlySet<int>? workedPeriodIds = null,
+        IReadOnlySet<int>? revenuePeriodIds = null)
     {
         if (company.PeriodCount == 0)
         {
@@ -165,14 +180,15 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
         }
 
         // A filed Revenue row may remain as historical evidence after an exemption is recorded.
-        // It is retained in storage but is no longer an applicable dashboard obligation.
+        // It is retained in storage but is no longer an applicable dashboard obligation. Revenue
+        // applies per period (CorporationTaxObligation.RevenueAppliesToPeriod).
         var applicableDeadlines = deadlines
-            .Where(deadline => !(company.HoldsCharitableTaxExemption
-                    && deadline.DeadlineType == DeadlineType.Revenue)
+            .Where(deadline => !(deadline.DeadlineType == DeadlineType.Revenue
+                    && revenuePeriodIds?.Contains(deadline.PeriodId) != true)
                 && !(!company.IsCharitableOrganisation
                     && deadline.DeadlineType == DeadlineType.Charity))
             .ToList();
-        var expectedRevenueCount = company.HoldsCharitableTaxExemption ? 0 : company.PeriodCount;
+        var expectedRevenueCount = revenuePeriodIds?.Count ?? 0;
         var expectedCharityCount = company.IsCharitableOrganisation ? company.PeriodCount : 0;
         var expectedDeadlineCount = company.PeriodCount + expectedRevenueCount + expectedCharityCount;
         var fullyConfigured = applicableDeadlines.Count == expectedDeadlineCount
@@ -253,6 +269,5 @@ public sealed class DashboardDeadlineService(AccountsDbContext db, DeadlineServi
         DateOnly IncorporationDate,
         int PeriodCount,
         int? LatestPeriodId,
-        bool IsCharitableOrganisation,
-        bool HoldsCharitableTaxExemption);
+        bool IsCharitableOrganisation);
 }

@@ -13,6 +13,8 @@ describe("CorporationTaxScopeReviewSection", () => {
     render(<Harness onSave={onSave} />);
 
     expect(screen.getByText(/not a CT1 return/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a CT1 return/i)).toHaveTextContent("does not replace the directors' review");
+    expect(screen.queryByText(/qualified review/i)).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("Is the company a close company?"), "yes");
     await user.selectOptions(screen.getByLabelText("If close, is it a service company?"), "yes");
     await user.selectOptions(screen.getByLabelText("Is the company a close company?"), "no");

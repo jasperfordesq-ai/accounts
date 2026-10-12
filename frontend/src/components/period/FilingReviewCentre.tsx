@@ -19,6 +19,8 @@ import {
   WorkflowDecisionSummary,
 } from "@/components/workbench";
 import { directorsApprovalGateLabel, directorsApprovalRecorded } from "@/lib/filingEvidence";
+import { isCroCorrectionOpen, isCroInCorrection } from "@/lib/croCorrection";
+import { CroNotDeliveredControl } from "@/components/period/CroNotDeliveredControl";
 
 type FilingReviewAction = () => void | Promise<void>;
 
@@ -38,6 +40,9 @@ interface FilingReviewCentreProps {
   onConfirmCroPayment: FilingReviewAction;
   onMarkCroAccepted: FilingReviewAction;
   onRecordCroSendBack: FilingReviewAction;
+  companyId?: number;
+  periodId?: number;
+  onCroTreatedAsNotDelivered?: FilingReviewAction;
 }
 
 export function FilingReviewCentre({
@@ -56,13 +61,16 @@ export function FilingReviewCentre({
   onConfirmCroPayment,
   onMarkCroAccepted,
   onRecordCroSendBack,
+  companyId,
+  periodId,
+  onCroTreatedAsNotDelivered,
 }: FilingReviewCentreProps) {
   const filingIssues = buildFilingIssueGroups(filingStatus, filingReadinessProfile);
   const requiredEvidence = filingReadinessProfile
     ? sortFilingEvidenceByRisk(filingReadinessProfile.requiredEvidence)
     : [];
   const croActionRequiresApproval = filingStatus != null
-    && ["NotStarted", "InProgress", "PackageGenerated"].includes(filingStatus.cro.status);
+    && (["NotStarted", "InProgress", "PackageGenerated"].includes(filingStatus.cro.status) || isCroInCorrection(filingStatus.cro.status));
   const canUseCroAction = croActionRequiresApproval ? canApprove : canReview;
 
   return (
@@ -215,6 +223,7 @@ export function FilingReviewCentre({
                 className="h-9 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--ring)] focus:ring-2 focus:ring-teal-100 disabled:bg-[var(--muted-surface)] disabled:text-[var(--muted-foreground)] dark:focus:ring-teal-900/40"
                 placeholder="CORE-2026-0001"
               />
+              <PreviousCroSubmission cro={filingStatus.cro} />
             </div>
           )}
 
@@ -242,6 +251,9 @@ export function FilingReviewCentre({
                 onConfirmCroPayment={onConfirmCroPayment}
                 onMarkCroAccepted={onMarkCroAccepted}
                 onRecordCroSendBack={onRecordCroSendBack}
+                notDeliveredControl={companyId != null && periodId != null && onCroTreatedAsNotDelivered
+                  ? <CroNotDeliveredControl companyId={companyId} periodId={periodId} onClosed={onCroTreatedAsNotDelivered} />
+                  : null}
               />
             ) : (
               <PermissionDeniedPanel
@@ -946,6 +958,7 @@ function CroWorkflowActions({
   onConfirmCroPayment,
   onMarkCroAccepted,
   onRecordCroSendBack,
+  notDeliveredControl,
 }: {
   filingStatus: FilingWorkflowStatus;
   filingReadinessProfile: FilingReadinessProfile | null;
@@ -955,12 +968,25 @@ function CroWorkflowActions({
   onConfirmCroPayment: FilingReviewAction;
   onMarkCroAccepted: FilingReviewAction;
   onRecordCroSendBack: FilingReviewAction;
+  notDeliveredControl?: React.ReactNode;
 }) {
-  if (["NotStarted", "InProgress", "PackageGenerated"].includes(filingStatus.cro.status)) {
+  // A filing sent back for correction (or rejected) keeps its tracker while the corrected pack is
+  // approved again; the new CORE submission then ends it.
+  const inCorrection = isCroInCorrection(filingStatus.cro.status);
+  if (["NotStarted", "InProgress", "PackageGenerated"].includes(filingStatus.cro.status) || inCorrection) {
     const disabledReason = approvalDisabledReason(filingStatus, filingReadinessProfile);
 
     return (
       <div className="flex min-w-0 flex-col gap-2">
+        {filingStatus.cro.status === "CorrectionRequired" && (
+          <Chip size="sm" variant="soft" color="danger">
+            {correctionDeadlineLabel(filingStatus.cro.correctionDeadline)}
+          </Chip>
+        )}
+        {filingStatus.cro.status === "Rejected" && (
+          <Chip size="sm" variant="soft" color="danger">Rejected by CRO</Chip>
+        )}
+        {inCorrection && <PreviousCroSubmission cro={filingStatus.cro} />}
         <Button
           variant="primary"
           size="sm"
@@ -978,6 +1004,7 @@ function CroWorkflowActions({
             filingReadinessProfile={filingReadinessProfile}
           />
         )}
+        {inCorrection && notDeliveredControl}
       </div>
     );
   }
@@ -1003,6 +1030,7 @@ function CroWorkflowActions({
             A CORE reference is required before recording an external CRO submission.
           </p>
         )}
+        {isCroCorrectionOpen(filingStatus.cro) && notDeliveredControl}
       </div>
     );
   }
@@ -1051,15 +1079,24 @@ function CroWorkflowActions({
     return <Chip size="sm" variant="soft" color="success">Filing accepted by CRO</Chip>;
   }
 
-  if (filingStatus.cro.status === "CorrectionRequired") {
-    return (
-      <Chip size="sm" variant="soft" color="danger">
-        Correction due {filingStatus.cro.correctionDeadline ? new Date(filingStatus.cro.correctionDeadline).toLocaleDateString("en-IE") : "within 14 days"}
-      </Chip>
-    );
-  }
-
   return null;
+}
+
+/** The correction chip: when the corrected filing is due, or that the deadline has passed. */
+function correctionDeadlineLabel(correctionDeadline: string | undefined, now = Date.now()) {
+  if (!correctionDeadline) return "Correction due within 14 days";
+  const deadline = new Date(correctionDeadline);
+  return deadline.getTime() < now
+    ? `Correction deadline passed ${deadline.toLocaleDateString("en-IE")}`
+    : `Correction due ${deadline.toLocaleDateString("en-IE")}`;
+}
+
+/** During a correction the box needs the new CORE reference; the sent-back one is shown for context. */
+function PreviousCroSubmission({ cro }: { cro: FilingWorkflowStatus["cro"] }) {
+  if (!isCroCorrectionOpen(cro) || !cro.submissionReference) return null;
+  return (
+    <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">Previous submission: {cro.submissionReference}</p>
+  );
 }
 
 function ApprovalEvidenceGates({
@@ -1166,6 +1203,7 @@ function croActionBarStatusLabel(status: FilingWorkflowStatus["cro"]["status"]) 
   if (status === "Submitted") return "External submission evidence open";
   if (status === "Accepted") return "Accepted by CRO";
   if (status === "CorrectionRequired") return "Correction required";
+  if (status === "Rejected") return "Rejected by CRO";
   if (status === "PackageGenerated") return "Pack generated";
   if (status === "InProgress") return "Workflow in progress";
   return "Workflow not started";
@@ -1191,8 +1229,8 @@ function croActionBarDescription(
     return "The filing record is closed because CRO acceptance evidence has been recorded.";
   }
 
-  if (filingStatus.cro.status === "CorrectionRequired") {
-    return "Track the CRO send-back and correction deadline before generating corrected output.";
+  if (isCroInCorrection(filingStatus.cro.status)) {
+    return `Correct and regenerate the pack, approve it, then record the new CORE submission; the CORE reference${filingStatus.cro.status === "Rejected" ? " is" : " and correction deadline are"} kept until then. If the CRO treats the filing as not delivered, close the correction here.`;
   }
 
   return "Approve only after all evidence, sign-off gates and internal checks support the filing pack.";

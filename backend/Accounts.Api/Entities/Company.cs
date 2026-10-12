@@ -58,6 +58,9 @@ public class Company
     public string? CharitableTaxExemptionReference { get; set; }
     public DateOnly? CharitableTaxExemptionConfirmedDate { get; set; }
 
+    // Which chart of accounts the company's categories follow. Existing companies are generic.
+    public ChartOfAccountsVariant ChartOfAccountsVariant { get; set; } = ChartOfAccountsVariant.GenericTrading;
+
     // Recoverable quarantine. Detailed immutable evidence is retained separately.
     public bool IsQuarantined { get; set; }
     public DateTime? QuarantinedAtUtc { get; set; }

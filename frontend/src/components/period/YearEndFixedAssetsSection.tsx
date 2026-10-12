@@ -150,6 +150,7 @@ export function YearEndFixedAssetsSection({
               aria-label="Asset category"
             >
               <option value="Equipment">Equipment</option>
+              <option value="Leased Equipment">Leased equipment</option>
               <option value="Vehicles">Vehicles</option>
               <option value="Property">Property</option>
               <option value="Furniture">Furniture &amp; Fixtures</option>

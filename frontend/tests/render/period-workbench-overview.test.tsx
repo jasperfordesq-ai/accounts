@@ -79,7 +79,7 @@ describe("PeriodWorkbenchOverview", () => {
       "href",
       "/companies/7/periods/3/statements",
     );
-    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    const workflow = screen.getByRole("navigation", { name: "Accounts workflow" });
     expect(workflow).toBeInTheDocument();
     const workflowNav = within(workflow);
     expect(screen.getByText("8 stages")).toBeInTheDocument();
@@ -136,10 +136,36 @@ describe("PeriodWorkbenchOverview", () => {
     expect(command.getByText("2 stages ready")).toBeInTheDocument();
     expect(command.getByText("Import, Classify")).toBeInTheDocument();
 
-    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    const workflow = screen.getByRole("navigation", { name: "Accounts workflow" });
     const setupStep = within(workflow).getByRole("link", { name: /Setup/ });
     expect(setupStep).toHaveTextContent("Director and secretary evidence required");
     expect(setupStep).toHaveAttribute("aria-current", "step");
+  }, 20_000);
+
+  it("does not count historic figures from filed accounts as this period's classification", () => {
+    const period = samplePeriod();
+    render(
+      <PeriodWorkbenchOverview
+        companyId="7"
+        periodId="3"
+        company={sampleCompany()}
+        period={{ ...period, sizeClassification: { ...period.sizeClassification!, calculatedClass: "Large", inputBasis: "HistoricAnchor" } }}
+        yearEnd={sampleYearEnd()}
+        readiness={sampleReadiness()}
+        filingStatus={sampleFilingStatus()}
+        filingReadinessProfile={sampleFilingReadinessProfile()}
+        transactionTotal={10}
+        categorisedCount={6}
+      />,
+    );
+
+    const command = within(screen.getByRole("heading", { name: "Period command centre" }).closest("section")!);
+    expect(command.getByText("2 stages ready")).toBeInTheDocument();
+    expect(command.getByText("Setup, Import")).toBeInTheDocument();
+    const workflow = screen.getByRole("navigation", { name: "Accounts workflow" });
+    const classifyStep = within(workflow).getByRole("link", { name: /Classify/ });
+    expect(classifyStep).toHaveTextContent("Historic figures (from filed accounts)");
+    expect(classifyStep).not.toHaveTextContent("Large");
   }, 20_000);
 });
 

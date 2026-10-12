@@ -91,6 +91,12 @@ public static class TenantIsolationMigrationSql
         new("directors_approval_events", TenantOwnershipPath.Period)
     ];
 
+    // Installed by migration AddHistoricAnchorEvidenceArchive.
+    public static IReadOnlyList<TenantIsolationPolicyDefinition> HistoricAnchorEvidencePolicyInventory { get; } =
+    [
+        new("historic_anchor_evidence_records", TenantOwnershipPath.Period)
+    ];
+
     /// <summary>
     /// Installs forced row-level security for tables added after the Version 1 install. Unlike
     /// <see cref="BuildInstallSql"/> it does not recreate roles, the context-key table or functions.

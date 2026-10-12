@@ -48,7 +48,7 @@ export function DashboardPracticeSummary({
   return (
     <ReviewPanel
       title="Practice command summary"
-      description="One firm-level snapshot before drilling into the accountant work queue."
+      description="One firm-level snapshot before drilling into the work queue."
       actions={
         <StatusBadge tone={deadlinePressure > 0 || unassignedReviewers > 0 ? "warn" : "good"}>
           {deadlinePressure > 0 ? `${deadlinePressure} deadline pressure` : "No deadline pressure"}

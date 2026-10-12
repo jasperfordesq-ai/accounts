@@ -84,6 +84,10 @@ public static class FilingWorkflowEndpoints
                 result => result.Id);
         });
 
+        group.MapPost("/cro-not-delivered", TreatCroAsNotDeliveredEndpointAsync)
+            .Produces<FilingWorkflowService.FilingWorkflowStatus>()
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapPost("/charity-report-generated", async (int companyId, int periodId, CharityReportGeneratedInput input, FilingWorkflowService service, AccountsDbContext db, HttpContext context, ApiAccessService apiAccess, [FromServices] IdempotencyService? idempotency = null) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
@@ -280,6 +284,29 @@ public static class FilingWorkflowEndpoints
         return command.Error ?? IdempotencyHttpContract.JsonResult(command.Execution!);
     }
 
+    /// <summary>
+    /// Owner/Reviewer with recent verification: closes a CRO correction that the CRO treats as not
+    /// delivered. Returns the refreshed filing status.
+    /// </summary>
+    public static async Task<IResult> TreatCroAsNotDeliveredEndpointAsync(
+        int companyId,
+        int periodId,
+        CroNotDeliveredInput input,
+        FilingWorkflowService service,
+        AccountsDbContext db,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        await service.TreatCroAsNotDeliveredAsync(companyId, periodId, input.Reason, AuthContext.RequireUser(context));
+        return Results.Ok(await service.GetStatusAsync(companyId, periodId));
+    }
+
     private static string? AuditUserId(HttpContext context)
     {
         var user = AuthContext.GetUser(context);
@@ -294,3 +321,4 @@ public record RevenueExternalValidationInput(string ArtifactSha256, string Exter
 public record RevenueFilingStatusInput(FilingStatus Status, string? Reason, string? FilingReference);
 public record MarkGeneratedInput(string DocumentType);
 public record CroPaymentInput(string? By);
+public record CroNotDeliveredInput(string Reason);

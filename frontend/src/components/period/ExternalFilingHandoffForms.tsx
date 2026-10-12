@@ -568,9 +568,9 @@ export function RevenueSnapshotForm({ workspace, predecessor, busy, onSave, onCa
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Support calculation as-of date" name="asOfDate"><input id="asOfDate" name="asOfDate" type="date" className={inputClass} defaultValue={workspace.preparation.periodEnd} /></Field>
           {predecessor && <Field label="Amendment reason" name="amendmentReason" required><textarea id="amendmentReason" name="amendmentReason" className={inputClass} rows={2} required /></Field>}
-          <div className="md:col-span-2"><Field label="Outstanding manual CT1 completion items" name="manualCt1CompletionItems" hint="One live-ROS panel or follow-up per line. Leave empty only after the named reviewer has checked every unsupported section."><textarea id="manualCt1CompletionItems" name="manualCt1CompletionItems" className={inputClass} rows={6} /></Field></div>
+          <div className="md:col-span-2"><Field label="Outstanding manual CT1 completion items" name="manualCt1CompletionItems" hint="One live-ROS panel or follow-up per line. Leave empty only once every unsupported section has been checked against the live ROS return."><textarea id="manualCt1CompletionItems" name="manualCt1CompletionItems" className={inputClass} rows={6} /></Field></div>
         </div>
-        <Check name="unsupportedSectionsReviewed" label="A qualified reviewer checked every unsupported CT1 section against the live ROS return." />
+        <Check name="unsupportedSectionsReviewed" label="Every unsupported CT1 section was checked against the live ROS return." />
         <div className="flex flex-wrap gap-2"><button className={buttonClass} disabled={busy}>{predecessor ? "Retain linked Revenue amendment" : "Retain Revenue support snapshot"}</button><button type="button" className={secondaryButtonClass} onClick={onCancel}>Cancel</button></div>
       </form>
     </ReviewPanel>

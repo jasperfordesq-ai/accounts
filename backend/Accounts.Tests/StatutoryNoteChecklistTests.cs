@@ -289,7 +289,9 @@ public sealed class StatutoryNoteChecklistTests
             CalculatedClass = size,
             Turnover = 100m,
             BalanceSheetTotal = 200m,
-            AvgEmployees = 0
+            AvgEmployees = 0,
+            // A recorded decision: readiness and notes do not use a saved-but-undecided row.
+            DecisionInputFingerprintSha256 = new string('a', 64)
         });
         db.FilingRegimes.Add(new FilingRegime
         {

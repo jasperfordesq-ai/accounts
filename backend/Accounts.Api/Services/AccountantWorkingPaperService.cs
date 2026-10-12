@@ -446,7 +446,15 @@ public class AccountantWorkingPaperService(
             .ThenBy(item => item.Id)
             .ToListAsync(cancellationToken);
         var yearEndFacts = await LoadYearEndFactSourcesAsync(companyId, period, cancellationToken);
-        var accountSources = BuildAccountSources(period, transactions, adjustments, openings, banks, yearEndFacts, statementSources);
+        var categories = await db.AccountCategories
+            .AsNoTracking()
+            .Where(item => item.CompanyId == companyId || (item.IsSystem && item.CompanyId == null))
+            .ToListAsync(cancellationToken);
+        var fixedAssetClasses = await db.FixedAssets
+            .AsNoTracking()
+            .Where(item => item.CompanyId == companyId)
+            .ToDictionaryAsync(item => item.Id, item => item.Category, cancellationToken);
+        var accountSources = BuildAccountSources(period, transactions, adjustments, openings, banks, yearEndFacts, statementSources, categories, fixedAssetClasses);
         var sourceHash = Hash(new
         {
             period.Id,
@@ -711,10 +719,11 @@ public class AccountantWorkingPaperService(
             .Where(item => item.SourceType is "corporation-tax-scope-review" or "corporation-tax-loss-record"
                 or "capital-allowance-claim" or "fixed-asset" or "payroll-summary" or "tax-balance")
             .ToList();
+        var charitableExemption = TaxComputationService.CharitableExemptionDeduction(support.Adjustments);
         var rows = new List<CorporationTaxBridgeRow>
         {
             new("accounting-profit", "Accounting profit before tax", support.NetProfit, "Financial statements", data.AccountSources.Values.SelectMany(item => item).DistinctBy(item => (item.SourceType, item.EntityId)).ToList()),
-            new("tax-adjustments", "Net tax adjustments", support.Adjustments.Sum(item => item.Amount), "Corporation-tax adjustment bridge", taxSources),
+            new("tax-adjustments", "Net tax adjustments", support.Adjustments.Sum(item => item.Amount) - charitableExemption, "Corporation-tax adjustment bridge", taxSources),
             new("capital-allowances", "Capital allowances", -support.CapitalAllowances, "Reviewed fixed-asset and capital-allowance schedules", taxSources),
             new("trading-loss-used", "Same-trade brought-forward loss used", -support.TradingLossUsed, "Retained corporation-tax loss ledger", taxSources),
             new("passive-income", "Passive/non-trading income", support.PassiveNonTradingIncome, "Reviewed income classification", taxSources),
@@ -723,10 +732,17 @@ public class AccountantWorkingPaperService(
             new("preliminary-tax", "Preliminary tax recorded", -support.PreliminaryTaxPaid, "Retained tax balance/payment evidence", taxSources),
             new("balance-due", "Supported balance due", support.BalanceDue, "Corporation tax less preliminary tax", taxSources)
         };
+        // The charitable-exemption line, shown on its own (and only when present) before taxable profit.
+        if (support.Adjustments.Any(item => item.Description.StartsWith(TaxComputationService.CharitableExemptionAdjustmentPrefix, StringComparison.Ordinal)))
+        {
+            rows.Insert(
+                rows.FindIndex(row => row.Code == "taxable-profit"),
+                new("charitable-exemption", "Income within the charitable exemption", charitableExemption, "Confirmed attested taxable profit outside the charitable exemption", taxSources));
+        }
         var reconciliations = new List<Reconciliation>
         {
             Reconcile("accounting-profit", "Tax bridge starts from the final statement profit before tax.", support.NetProfit, data.ProfitAndLoss.ProfitBeforeTax),
-            Reconcile("taxable-streams", "Taxable profit equals supported trading and passive streams.", support.TaxableProfit, Math.Max(0m, support.TradingProfitAfterLossRelief) + Math.Max(0m, support.PassiveNonTradingIncome)),
+            Reconcile("taxable-streams", "Taxable profit equals supported trading and passive streams.", support.TaxableProfit, Math.Max(0m, support.TradingProfitAfterLossRelief) + Math.Max(0m, support.PassiveNonTradingIncome) + charitableExemption),
             Reconcile("tax-balance", "Tax due less preliminary tax equals the supported balance.", support.BalanceDue, support.TaxDue - support.PreliminaryTaxPaid)
         };
         var blockers = support.BlockingReasons.ToList();
@@ -891,8 +907,30 @@ public class AccountantWorkingPaperService(
         IReadOnlyList<OpeningBalance> openings,
         IReadOnlyList<BankAccount> banks,
         IReadOnlyList<SourceReference> yearEndFacts,
-        IReadOnlyList<FinancialStatementsService.StatementSourceSummary> statementSources)
+        IReadOnlyList<FinancialStatementsService.StatementSourceSummary> statementSources,
+        IReadOnlyList<AccountCategory> categories,
+        IReadOnlyDictionary<int, string> fixedAssetClasses)
     {
+        // Sources are keyed by account code, so two active accounts sharing a code cannot be told
+        // apart: refuse clearly instead of attaching evidence to the wrong account.
+        var duplicateCodes = statementSources
+            .GroupBy(item => item.Code, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        if (duplicateCodes.Count > 0)
+            throw new BusinessRuleException(
+                $"Working papers cannot attribute sources because more than one active account uses code {string.Join(", ", duplicateCodes)}. Give each account a unique code first.");
+        // Accounts are found by system role (or statement line), never by a fixed code number.
+        string? RoleCode(AccountSystemRole role) =>
+            CategoryClassification.PreferredByRole(categories, period.CompanyId, role)?.Code;
+        var loansAfterYearCode = categories
+            .Where(item => CategoryClassification.Line(item) == AccountStatementLine.LoansAfterYear)
+            .OrderByDescending(item => item.CompanyId == period.CompanyId)
+            .ThenBy(item => item.Id)
+            .FirstOrDefault()?.Code;
+        var bankCode = RoleCode(AccountSystemRole.BankControl);
         var result = statementSources.ToDictionary(
             item => item.Code,
             _ => new List<SourceReference>(),
@@ -905,12 +943,12 @@ public class AccountantWorkingPaperService(
         foreach (var opening in openings)
             Add(opening.AccountCategory.Code, OpeningSource(period.Company, period, opening));
         foreach (var bank in banks.Where(item => item.OpeningBalance != 0 && item.OpeningBalanceDate <= period.PeriodStart))
-            Add("1400", Source("bank-opening", bank.Id, period.Id, bank.Name, bank.OpeningBalance, $"Opening date {bank.OpeningBalanceDate:yyyy-MM-dd}", null, null, $"/companies/{period.CompanyId}/periods/{period.Id}?tab=opening-balances"));
+            Add(bankCode, Source("bank-opening", bank.Id, period.Id, bank.Name, bank.OpeningBalance, $"Opening date {bank.OpeningBalanceDate:yyyy-MM-dd}", null, null, $"/companies/{period.CompanyId}/periods/{period.Id}?tab=opening-balances"));
         foreach (var transaction in transactions.Where(item => item.CategoryId is not null && !item.IsDuplicate))
         {
             var reference = Source("imported-transaction", transaction.Id, period.Id, transaction.Description, transaction.Amount, transaction.ImportBatch?.SourceFileSha256, transaction.DuplicateDecisionByDisplayName, transaction.DuplicateDecisionAtUtc, $"/companies/{period.CompanyId}/periods/{period.Id}/categorise?transactionId={transaction.Id}");
             Add(transaction.Category?.Code, reference);
-            Add("1400", reference);
+            Add(bankCode, reference);
         }
         foreach (var adjustment in adjustments)
         {
@@ -920,7 +958,14 @@ public class AccountantWorkingPaperService(
         }
         foreach (var fact in yearEndFacts)
         {
-            Add(FactAccountCode(fact.SourceType, fact.Label), fact);
+            // A non-generic chart posts each register class to its own asset account (as automatic
+            // adjustments and the statements do); the generic chart keeps its existing mapping.
+            var code = fact.SourceType == "fixed-asset"
+                && period.Company.ChartOfAccountsVariant != ChartOfAccountsVariant.GenericTrading
+                && fixedAssetClasses.TryGetValue(fact.EntityId, out var assetClass)
+                    ? ChartAccountDefaults.FixedAssetAccount(period.Company.ChartOfAccountsVariant, assetClass).Code
+                    : FactAccountCode(fact.SourceType, fact.Label, RoleCode, loansAfterYearCode);
+            Add(code, fact);
         }
         foreach (var source in statementSources)
         {
@@ -953,17 +998,23 @@ public class AccountantWorkingPaperService(
             StringComparer.Ordinal);
     }
 
-    private static string? FactAccountCode(string sourceType, string label) => sourceType switch
+    private static string? FactAccountCode(
+        string sourceType,
+        string label,
+        Func<AccountSystemRole, string?> roleCode,
+        string? loansAfterYearCode) => sourceType switch
     {
-        "inventory" => "1000",
-        "debtor" when label.Contains("prepayment", StringComparison.OrdinalIgnoreCase) => "1200",
-        "debtor" => "1100",
-        "creditor" when label.Contains("accrual", StringComparison.OrdinalIgnoreCase) => "2100",
-        "creditor" => "2000",
-        "loan-balance-snapshot" => "2700",
-        "tax-balance" when label.Contains("VAT", StringComparison.OrdinalIgnoreCase) => "2200",
-        "tax-balance" => "2400",
-        "dividend" => "3200",
+        "inventory" => roleCode(AccountSystemRole.Stock),
+        "debtor" when label.Contains("prepayment", StringComparison.OrdinalIgnoreCase) => roleCode(AccountSystemRole.Prepayments),
+        "debtor" => roleCode(AccountSystemRole.TradeDebtors),
+        "creditor" when label.Contains("accrual", StringComparison.OrdinalIgnoreCase) => roleCode(AccountSystemRole.Accruals),
+        "creditor" => roleCode(AccountSystemRole.TradeCreditors),
+        "loan-balance-snapshot" => loansAfterYearCode,
+        "tax-balance" when label.Contains("VAT", StringComparison.OrdinalIgnoreCase) => roleCode(AccountSystemRole.VatPayable),
+        "tax-balance" => roleCode(AccountSystemRole.CorporationTaxPayable),
+        "dividend" => roleCode(AccountSystemRole.DividendsPaid),
+        // Fixed-asset register classes map to the generic chart's asset codes (as the statements'
+        // register matching does); other chart variants use ChartAccountDefaults.FixedAssetAccount.
         "fixed-asset" when label.Contains("Land & Buildings", StringComparison.OrdinalIgnoreCase)
             || label.Contains("Property", StringComparison.OrdinalIgnoreCase) => "0010",
         "fixed-asset" when label.Contains("Plant & Machinery", StringComparison.OrdinalIgnoreCase) => "0020",

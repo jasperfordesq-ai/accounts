@@ -32,7 +32,7 @@ import {
 } from "@/lib/operations";
 
 export default function Dashboard() {
-  const { canCreateCompany, canDeleteCompany, canReviewReleaseEvidence, canReadInternalWorkingPapers, isOwner } = useAuth();
+  const { canCreateCompany, canDeleteCompany, canReviewReleaseEvidence, canReadInternalWorkingPapers, canWriteWorkingPapers, isOwner } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [deadlines, setDeadlines] = useState<Record<number, FilingDeadline | null>>({});
   const [companyState, setCompanyState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
@@ -199,6 +199,7 @@ export default function Dashboard() {
       historicDeadlines={historicDeadlines}
       canManageDeadlineRisk={canReadInternalWorkingPapers}
       canRunDeadlineDelivery={isOwner}
+      canRetryDeadlineReminder={canWriteWorkingPapers}
       deadlineRiskItems={deadlineRiskItems}
       deadlineRiskState={deadlineRiskState}
       deadlineRiskBusyKey={deadlineRiskBusyKey}

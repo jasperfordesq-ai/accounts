@@ -411,7 +411,7 @@ public static class ExternalFilingHandoffArtifactBuilder
             var support = request.RevenueCt1Support!;
             blockers.AddRange(support.SupportBlockingReasons.Where(reason => !string.IsNullOrWhiteSpace(reason)).Select(reason => reason.Trim()));
             if (support.ManualCt1CompletionItems.Count > 0)
-                blockers.Add("A qualified accountant must complete the unsupported CT1 sections in ROS before any external filing outcome is recorded.");
+                blockers.Add("The unsupported CT1 sections must be completed in ROS before any external filing outcome is recorded.");
         }
 
         return blockers.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

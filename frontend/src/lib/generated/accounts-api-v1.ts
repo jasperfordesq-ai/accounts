@@ -1705,6 +1705,203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/companies/{companyId}/periods/{periodId}/classification/prerequisites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClassificationPrerequisites"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["HistoricAnchorInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SizeClassification"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["HistoricAnchorRetirementInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SizeClassification"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HistoricAnchorEvidenceSummary"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor/archive/{recordId}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                    recordId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{companyId}/periods/{periodId}/size-classification/override": {
         parameters: {
             query?: never;
@@ -2259,7 +2456,9 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    include?: string;
+                };
                 header?: never;
                 path: {
                     companyId: number;
@@ -2432,6 +2631,107 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/categories/chart-adoption/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChartAdoptionPlan"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/categories/chart-adoption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChartAdoptionInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChartAdoptionPlan"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChartAdoptionRefusalResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3414,6 +3714,46 @@ export interface paths {
             };
         };
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/tax-balances/CorporationTax/confirm-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorporationTaxDueConfirmationInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7021,6 +7361,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/companies/{companyId}/periods/{periodId}/filing/cro-not-delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CroNotDeliveredInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FilingWorkflowStatus"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{companyId}/periods/{periodId}/filing/charity-report-generated": {
         parameters: {
             query?: never;
@@ -7410,6 +7799,55 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval-withdrawal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    companyId: number;
+                    periodId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DirectorsApprovalWithdrawalInput"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DirectorsApprovalHistoryItem"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7818,6 +8256,8 @@ export interface components {
             reviewLetterSha256: null | string;
             state: string;
         };
+        /** @enum {unknown} */
+        AccountCashFlowClass: "Operating" | "Investing" | "Tax" | "Dividend" | "Loan" | "ShareIssue" | "OtherFinancing" | "Cash" | null;
         AccountCategoryInput: {
             code?: null | string;
             name?: null | string;
@@ -7826,6 +8266,8 @@ export interface components {
             isNonTradingIncome?: boolean;
             /** Format: int32 */
             parentId?: null | number | string;
+            statementLine?: null | components["schemas"]["AccountStatementLine"];
+            cashFlowClass?: null | components["schemas"]["AccountCashFlowClass"];
         };
         /** @enum {unknown} */
         AccountCategoryType: "Income" | "Expense" | "Asset" | "Liability" | "Equity";
@@ -7858,6 +8300,10 @@ export interface components {
             goingConcernConfirmed?: boolean;
             goingConcernNote?: null | string;
         };
+        /** @enum {unknown} */
+        AccountStatementLine: "TangibleFixedAssets" | "Stocks" | "Debtors" | "Prepayments" | "CashAtBank" | "TradeCreditors" | "Accruals" | "TaxCreditors" | "OtherCreditorsWithinYear" | "LoansAfterYear" | "OtherCreditorsAfterYear" | "ShareCapital" | "Reserves" | "RestrictedFunds" | "DividendsPaid" | "Suspense" | "OpeningBalanceControl" | "Turnover" | "OtherOperatingIncome" | "CostOfSales" | "AdministrativeExpenses" | "Depreciation" | "InterestPayable" | "TaxOnProfit" | null;
+        /** @enum {unknown} */
+        AccountSystemRole: "BankControl" | "RetainedEarnings" | "Depreciation" | "Prepayments" | "Stock" | "CostOfSalesStockMovement" | "Accruals" | "TradeDebtors" | "TradeDebtorIncome" | "TradeCreditors" | "DirectorLoanLiability" | "DirectorLoanReceivable" | "CorporationTaxCharge" | "CorporationTaxPayable" | "DividendsPaid" | "DividendsPayable" | "DisposalLoss" | "DisposalGain" | "VatPayable" | "VatReceivable" | "Suspense" | "OpeningBalanceControl";
         AdjustmentInput: {
             description: string;
             /** Format: int32 */
@@ -8064,6 +8510,7 @@ export interface components {
             netAssets: number | string;
             capitalAndReserves: components["schemas"]["CapitalSection"];
             balances: boolean;
+            membersFunds?: null | components["schemas"]["MembersFundsSection"];
         };
         BankAccountInput: {
             name?: null | string;
@@ -8143,6 +8590,21 @@ export interface components {
             /** Format: int32 */
             categoryId: number | string;
         };
+        CharityFilingStatus: {
+            status: components["schemas"]["FilingStatus"];
+            sofaGenerated: boolean;
+            trusteesReportGenerated: boolean;
+            annualReturnReference: null | string;
+            rejectionReason: null | string;
+            /** Format: date-time */
+            correctionDeadline: null | string;
+            submittedBy: null | string;
+            /** Format: date-time */
+            submittedAt: null | string;
+            acceptedBy: null | string;
+            /** Format: date-time */
+            acceptedAt: null | string;
+        };
         CharityFilingStatusInput: {
             status: components["schemas"]["FilingStatus"];
             reason: null | string;
@@ -8175,6 +8637,122 @@ export interface components {
             evidenceReference?: null | string;
             /** Format: byte */
             evidenceArtifact?: null | string;
+        };
+        ChartAdoptionArchive: {
+            /** Format: int32 */
+            categoryId: number | string;
+            fromCode: string;
+            name: string;
+            toCode: string;
+            /** Format: int32 */
+            ruleCount: number | string;
+            releasedRole: null | components["schemas"]["AccountSystemRole"];
+        };
+        ChartAdoptionInput: {
+            variant: components["schemas"]["ChartOfAccountsVariant"];
+            planSha256: string;
+            acknowledgeStaleFilingArtifacts: boolean;
+        };
+        ChartAdoptionInsert: {
+            code: string;
+            name: string;
+            type: components["schemas"]["AccountCategoryType"];
+            statementLine: components["schemas"]["AccountStatementLine"];
+            cashFlowClass: components["schemas"]["AccountCashFlowClass"];
+            systemRole: null | components["schemas"]["AccountSystemRole"];
+        };
+        /** @enum {unknown} */
+        ChartAdoptionLegacyReason: "CharityCode" | "CharityCodeRange" | "CharityRole";
+        ChartAdoptionLegacyRecode: {
+            /** Format: int32 */
+            categoryId: number | string;
+            fromCode: string;
+            fromName: string;
+            toCode: string;
+            toName: string;
+            /** Format: int32 */
+            transactionCount: number | string;
+            /** Format: int32 */
+            journalCount: number | string;
+            /** Format: int32 */
+            openingBalanceCount: number | string;
+            /** Format: int32 */
+            ruleCount: number | string;
+            reason: components["schemas"]["ChartAdoptionLegacyReason"];
+            releasedRole: null | components["schemas"]["AccountSystemRole"];
+        };
+        ChartAdoptionPlan: {
+            /** Format: int32 */
+            companyId: number | string;
+            currentVariant: components["schemas"]["ChartOfAccountsVariant"];
+            targetVariant: components["schemas"]["ChartOfAccountsVariant"];
+            renames: components["schemas"]["ChartAdoptionRename"][];
+            legacyRecodes: components["schemas"]["ChartAdoptionLegacyRecode"][];
+            archives: components["schemas"]["ChartAdoptionArchive"][];
+            retained: components["schemas"]["ChartAdoptionRetained"][];
+            inserts: components["schemas"]["ChartAdoptionInsert"][];
+            staleFilingArtifacts: components["schemas"]["ChartAdoptionStaleArtifact"][];
+            blockedBy: string[];
+            planSha256: string;
+        };
+        ChartAdoptionRefusalResponse: {
+            error: string;
+            code: string;
+            plan: components["schemas"]["ChartAdoptionPlan"];
+        };
+        ChartAdoptionRename: {
+            /** Format: int32 */
+            categoryId: number | string;
+            role: components["schemas"]["AccountSystemRole"];
+            fromCode: string;
+            fromName: string;
+            toCode: string;
+            toName: string;
+        };
+        ChartAdoptionRetained: {
+            /** Format: int32 */
+            categoryId: number | string;
+            code: string;
+            name: string;
+            /** Format: int32 */
+            transactionCount: number | string;
+            /** Format: int32 */
+            journalCount: number | string;
+            /** Format: int32 */
+            openingBalanceCount: number | string;
+        };
+        ChartAdoptionStaleArtifact: {
+            /** Format: int32 */
+            periodId: number | string;
+            /** Format: date */
+            periodStart: string;
+            /** Format: date */
+            periodEnd: string;
+            status: components["schemas"]["PeriodStatus"];
+            croPackageStatus: components["schemas"]["FilingPackageStatus"];
+            croFilingStatus: components["schemas"]["FilingStatus"];
+        };
+        /** @enum {unknown} */
+        ChartOfAccountsVariant: "GenericTrading" | "CharityClg" | null;
+        ClassificationBlockingPeriod: {
+            /** Format: int32 */
+            periodId: number | string;
+            /** Format: date */
+            periodStart: string;
+            /** Format: date */
+            periodEnd: string;
+            reason: string;
+        };
+        ClassificationPrerequisites: {
+            ready: boolean;
+            isFirstYear: boolean;
+            firstBlockingPeriod: null | components["schemas"]["ClassificationBlockingPeriod"];
+            message: string;
+            historicFiguresPeriod?: null | components["schemas"]["ClassificationBlockingPeriod"];
+            /** @default false */
+            canRecordHistoricFigures: boolean;
+            /** Format: date */
+            suggestedThresholdElection?: null | string;
         };
         ClassificationResult: {
             calculatedClass: components["schemas"]["CompanySizeClass"];
@@ -8295,6 +8873,7 @@ export interface components {
             charitableTaxExemptionReference?: null | string;
             /** Format: date */
             charitableTaxExemptionConfirmedDate?: null | string;
+            chartOfAccountsVariant?: null | components["schemas"]["ChartOfAccountsVariant"];
         };
         CompanyOfficerInput: {
             name?: null | string;
@@ -8327,6 +8906,13 @@ export interface components {
             /** Format: double */
             estimatedAmount?: null | number | string;
             likelihood?: string;
+        };
+        CorporationTaxDueConfirmationInput: {
+            reason: null | string;
+            /** Format: double */
+            taxableProfitOutsideExemption?: null | number | string;
+            /** Format: double */
+            nonTradingProfitOutsideExemption?: null | number | string;
         };
         /** @enum {unknown} */
         CorporationTaxLossTreatment: "Unreviewed" | "NotApplicable" | "CarryForwardSameTrade" | "CurrentPeriodOrCarryBackClaim" | "GroupRelief" | "TerminalLossRelief" | "Other";
@@ -8382,9 +8968,24 @@ export interface components {
             otherCreditors: number | string;
             /** Format: double */
             total: number | string;
+            /** Format: double */
+            bankOverdraft?: null | number | string;
         };
         /** @enum {unknown} */
         CreditorType: "Trade" | "Other" | "Accrual" | "Tax";
+        CroFilingStatus: {
+            status: components["schemas"]["FilingStatus"];
+            accountsPdfReady: boolean;
+            signaturePageReady: boolean;
+            paymentCompleted: boolean;
+            submissionReference: null | string;
+            rejectionReason: null | string;
+            /** Format: date-time */
+            correctionDeadline: null | string;
+        };
+        CroNotDeliveredInput: {
+            reason: string;
+        };
         CroOfficerInput: {
             /** Format: int32 */
             officerId: number | string;
@@ -8700,6 +9301,18 @@ export interface components {
             officerId: number | string;
             name: string;
         };
+        DirectorsApprovalHistoryItem: {
+            /** Format: int32 */
+            eventId: number | string;
+            kind: string;
+            /** Format: date */
+            approvalDate: string;
+            reason: null | string;
+            recordedByDisplayName: string;
+            /** Format: date-time */
+            recordedAtUtc: string;
+            recordSha256: string;
+        };
         DirectorsApprovalPageInput: {
             /** Format: date */
             approvalDate: string;
@@ -8741,6 +9354,7 @@ export interface components {
             current: null | components["schemas"]["DirectorsApprovalSummary"];
             /** Format: date */
             periodApprovalDate: null | string;
+            history: components["schemas"]["DirectorsApprovalHistoryItem"][];
         };
         DirectorsApprovalSummary: {
             /** Format: int32 */
@@ -8752,6 +9366,10 @@ export interface components {
             /** Format: date-time */
             recordedAtUtc: string;
             recordSha256: string;
+        };
+        DirectorsApprovalWithdrawalInput: {
+            reason: string;
+            note: string;
         };
         DividendInput: {
             /** Format: double */
@@ -8962,6 +9580,8 @@ export interface components {
         };
         /** @enum {unknown} */
         ExternalHandoffFieldStatus: "Complete" | "Missing" | "RequiresReview" | "ProtectedManualEntry" | "NotApplicable";
+        /** @enum {unknown} */
+        FilingPackageStatus: "Draft" | "Generated" | "Submitted" | "Accepted";
         FilingReadinessEvidenceItem: {
             code: string;
             label: string;
@@ -9034,6 +9654,14 @@ export interface components {
             reason: null | string;
             submissionReference: null | string;
         };
+        FilingWorkflowStatus: {
+            cro: components["schemas"]["CroFilingStatus"];
+            revenue: components["schemas"]["RevenueFilingStatus"];
+            charity: components["schemas"]["CharityFilingStatus"];
+            blockingIssues: string[];
+            warningIssues: string[];
+            readyToFile: boolean;
+        };
         FixedAssetInput: {
             name?: null | string;
             category?: null | string;
@@ -9076,6 +9704,51 @@ export interface components {
         GoingConcernInput: {
             confirmed: boolean;
             note: null | string;
+        };
+        /** @enum {unknown} */
+        HistoricAnchorEvidenceEvent: "Retired" | "Replaced";
+        HistoricAnchorEvidenceSummary: {
+            /** Format: int32 */
+            id: number | string;
+            event: components["schemas"]["HistoricAnchorEvidenceEvent"];
+            /** Format: date-time */
+            archivedAt: string;
+            archivedBy: string;
+            /** Format: double */
+            turnover: number | string;
+            /** Format: double */
+            balanceSheetTotal: number | string;
+            /** Format: int32 */
+            avgEmployees: number | string;
+            sourceReference: string;
+            evidenceSha256: string;
+            attestedBy: string;
+            attestedRole: string;
+            /** Format: date-time */
+            attestedAt: string;
+            attestedEffectiveClass: null | components["schemas"]["CompanySizeClass"];
+            /** Format: date-time */
+            retiredAt: null | string;
+            retiredBy: null | string;
+            retiredReason: null | string;
+        };
+        HistoricAnchorInput: {
+            /** Format: double */
+            turnover: number | string;
+            /** Format: double */
+            balanceSheetTotal: number | string;
+            /** Format: int32 */
+            avgEmployees: number | string;
+            sourceReference: string;
+            /** Format: byte */
+            evidenceArtifact: string;
+            evidenceSha256: string;
+            attestedEffectiveClass?: null | components["schemas"]["CompanySizeClass"];
+            /** Format: date */
+            thresholdElectionEffectiveFrom?: null | string;
+        };
+        HistoricAnchorRetirementInput: {
+            reason: null | string;
         };
         HttpValidationProblemDetails: {
             type?: null | string;
@@ -9215,6 +9888,18 @@ export interface components {
             received: boolean;
             /** Format: date */
             noticeDate: null | string;
+        };
+        MembersFundsSection: {
+            /** Format: double */
+            fundsBroughtForward: number | string;
+            /** Format: double */
+            surplusForYear: number | string;
+            /** Format: double */
+            otherMovements: number | string;
+            /** Format: double */
+            restrictedFunds: number | string;
+            /** Format: double */
+            total: number | string;
         };
         MfaChallengeInput: {
             challengeToken: null | string;
@@ -9589,6 +10274,17 @@ export interface components {
             artifactSha256: string;
             externalReference: string;
         };
+        RevenueFilingStatus: {
+            status: components["schemas"]["FilingStatus"];
+            ixbrlReady: boolean;
+            ixbrlInternalChecksPassed: boolean;
+            ixbrlValid: boolean;
+            validationErrors: null | string;
+            ct1Reference: null | string;
+            generationSupport: string;
+            manualHandoffRequired: boolean;
+            reviewPrototypeChecksPassed: boolean;
+        };
         RevenueFilingStatusInput: {
             status: components["schemas"]["FilingStatus"];
             reason: null | string;
@@ -9686,6 +10382,63 @@ export interface components {
             /** Format: date */
             cancelledDate?: null | string;
         };
+        SizeClassification: {
+            /** Format: int32 */
+            id?: number | string;
+            /** Format: int32 */
+            periodId?: number | string;
+            /** Format: double */
+            turnover?: number | string;
+            /** Format: double */
+            balanceSheetTotal?: number | string;
+            /** Format: int32 */
+            avgEmployees?: number | string;
+            priorYearClass?: components["schemas"]["CompanySizeClass"];
+            rawCurrentClass?: components["schemas"]["CompanySizeClass"];
+            rawPriorClass?: components["schemas"]["CompanySizeClass"];
+            rawCurrentMicroQualified?: null | boolean;
+            rawCurrentSmallQualified?: null | boolean;
+            rawCurrentMediumQualified?: null | boolean;
+            rawPriorMicroQualified?: null | boolean;
+            rawPriorSmallQualified?: null | boolean;
+            rawPriorMediumQualified?: null | boolean;
+            /** Format: double */
+            annualisedTurnover?: null | number | string;
+            /** Format: double */
+            periodLengthInYears?: null | number | string;
+            /** Format: date */
+            thresholdElectionEffectiveFrom?: null | string;
+            /** Format: date */
+            thresholdScheduleEffectiveFrom?: null | string;
+            thresholdScheduleCode?: null | string;
+            decisionInputFingerprintSha256?: null | string;
+            calculatedClass?: components["schemas"]["CompanySizeClass"];
+            overrideClass?: null | components["schemas"]["CompanySizeClass"];
+            overrideReason?: null | string;
+            overrideAuthorityRole?: null | string;
+            overrideApprovedBy?: null | string;
+            /** Format: date-time */
+            overrideApprovedAt?: null | string;
+            overrideEvidenceSha256?: null | string;
+            overrideInputFingerprintSha256?: null | string;
+            overrideRequiresRereview?: boolean;
+            exclusionFlagsJson?: null | string;
+            qualificationNotes?: null | string;
+            /** Format: date-time */
+            calculatedAt?: string;
+            inputBasis?: components["schemas"]["SizeInputBasis"];
+            historicSourceReference?: null | string;
+            historicEvidenceSha256?: null | string;
+            historicAttestedBy?: null | string;
+            historicAttestedRole?: null | string;
+            /** Format: date-time */
+            historicAttestedAt?: null | string;
+            historicAttestedEffectiveClass?: null | components["schemas"]["CompanySizeClass"];
+            /** Format: date-time */
+            historicRetiredAt?: null | string;
+            historicRetiredBy?: null | string;
+            historicRetiredReason?: null | string;
+        };
         SizeClassificationInput: {
             /** Format: double */
             turnover: number | string;
@@ -9704,6 +10457,8 @@ export interface components {
             evidenceArtifact: string;
             evidenceSha256: string;
         };
+        /** @enum {unknown} */
+        SizeInputBasis: "Computed" | "HistoricAnchor" | "RetiredHistoricAnchor";
         SnapshotResponse: {
             document: components["schemas"]["ExternalFilingHandoffDocument"];
             artifactSha256: string;

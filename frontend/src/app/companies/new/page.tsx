@@ -12,7 +12,7 @@ import {
 } from "@heroui/react";
 import { Building2, ChevronLeft, ChevronRight, Plus, Trash2, Users, Check } from "lucide-react";
 import { toast } from "sonner";
-import { onboardCompany } from "@/lib/api";
+import { onboardCompany, type ChartOfAccountsVariant } from "@/lib/api";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useAuth } from "@/components/AuthProvider";
 import { validateStep } from "@/lib/validation";
@@ -39,6 +39,17 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+
+const CHART_OF_ACCOUNTS_VARIANTS: ReadonlyArray<{ value: ChartOfAccountsVariant; label: string }> = [
+  { value: "GenericTrading", label: "Standard trading company" },
+  { value: "CharityClg", label: "Charity / company limited by guarantee" },
+];
+
+// Mirrors the server default (ChartDefinitions.DefaultVariantFor): a charitable CLG starts on the
+// charity chart, every other company on the standard trading chart.
+function defaultChartOfAccountsVariant(companyType: string, isCharitableOrganisation: boolean): ChartOfAccountsVariant {
+  return companyType === "CompanyLimitedByGuarantee" && isCharitableOrganisation ? "CharityClg" : "GenericTrading";
+}
 
 const STEP_LABELS = ["Legal Details", "Structure", "Address & Opening Setup", "Officers"];
 
@@ -86,6 +97,13 @@ export default function NewCompanyPage() {
   const [isInsuranceUndertaking, setIsInsuranceUndertaking] = useState(false);
   const [isPensionFund, setIsPensionFund] = useState(false);
   const [isCharitableOrganisation, setIsCharitableOrganisation] = useState(false);
+  // null = follow the default for the company type and charity answers; set once the user picks.
+  const [chartOfAccountsVariantChoice, setChartOfAccountsVariantChoice] = useState<ChartOfAccountsVariant | null>(null);
+  // The charity / CLG chart is only available to a company limited by guarantee; any other company is
+  // created on the standard trading chart, so no chart is offered or sent for it.
+  const offersChartOfAccounts = companyType === "CompanyLimitedByGuarantee";
+  const chartOfAccountsVariant = chartOfAccountsVariantChoice
+    ?? defaultChartOfAccountsVariant(companyType, isCharitableOrganisation);
 
   // Step 3: Address & Periods
   const [address1, setAddress1] = useState("");
@@ -130,6 +148,7 @@ export default function NewCompanyPage() {
     || isInsuranceUndertaking
     || isPensionFund
     || isCharitableOrganisation
+    || chartOfAccountsVariantChoice !== null
     || address1 !== ""
     || address2 !== ""
     || city !== ""
@@ -146,7 +165,7 @@ export default function NewCompanyPage() {
     || officers[0]?.name !== ""
     || officers[0]?.role !== "Director",
   [
-    address1, address2, annualReturnDate, annualReturnDateEvidenceReference, bankAccountName, bankIban, city, companyType,
+    address1, address2, annualReturnDate, annualReturnDateEvidenceReference, bankAccountName, bankIban, chartOfAccountsVariantChoice, city, companyType,
     county, croNumber, eircode, financialYearStartMonth, firstPeriodEnd, hasBorrowings,
     hasDirectorLoans, hasStock, incorporationDate, isCharitableOrganisation,
     isCreditInstitution, isDormant, isEmployer, isGroupMember, isHolding,
@@ -303,6 +322,7 @@ export default function NewCompanyPage() {
           isInsuranceUndertaking,
           isPensionFund,
           isCharitableOrganisation,
+          chartOfAccountsVariant: offersChartOfAccounts ? chartOfAccountsVariant : undefined,
         },
         officers: validOfficers.map((officer) => ({
           name: officer.name.trim(),
@@ -568,6 +588,31 @@ export default function NewCompanyPage() {
                   </OnboardingCheckbox>
                 </div>
               </div>
+
+              {offersChartOfAccounts && (
+              <div>
+                <label htmlFor="chart-of-accounts" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Chart of accounts
+                </label>
+                <select
+                  id="chart-of-accounts"
+                  value={chartOfAccountsVariant}
+                  onChange={(e) => setChartOfAccountsVariantChoice(e.target.value as ChartOfAccountsVariant)}
+                  className={selectClass}
+                  aria-label="Chart of accounts"
+                  title="Chart of accounts"
+                >
+                  {CHART_OF_ACCOUNTS_VARIANTS.map((variant) => (
+                    <option key={variant.value} value={variant.value}>
+                      {variant.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                  Pre-selected from the company type and charity status. The accounts list is created with the company.
+                </p>
+              </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">

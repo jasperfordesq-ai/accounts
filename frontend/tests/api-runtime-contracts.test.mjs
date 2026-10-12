@@ -14,6 +14,7 @@ import {
   authUserSchema,
   balanceSheetSchema,
   charityInfoSchema,
+  classificationPrerequisitesSchema,
   classificationResultSchema,
   companySchema,
   directorsReportSchema,
@@ -25,6 +26,7 @@ import {
   parseApiContract,
   payrollSummarySchema,
   profitAndLossSchema,
+  sizeClassificationSchema,
   sofaSchema,
   transactionPageSchema,
   yearEndSummarySchema,
@@ -35,6 +37,7 @@ import {
   directorsApprovalPageUrl,
   generateDirectorsApprovalPage,
   getAdjustmentSummary,
+  getClassificationPrerequisites,
   getCompanies,
   getCompany,
   getDirectorsApproval,
@@ -54,7 +57,10 @@ import {
   recordAuditorReport,
   recordCroSigningPack,
   recordDirectorsApproval,
+  withdrawDirectorsApproval,
 } from "../src/lib/api.ts";
+import { getArchivedHistoricFigures, recordHistoricSizeFigures, retireHistoricSizeFigures } from "../src/lib/historicSizeFigures.ts";
+import { confirmCorporationTaxDue } from "../src/lib/corporationTaxDue.ts";
 
 const parse = (schema, payload, name = "test") => parseApiContract(schema, payload, name);
 
@@ -151,6 +157,50 @@ test("size classification contract distinguishes saved inputs from a recorded de
   };
   assert.equal(parse(classificationResultSchema, result).periodLengthInYears, 1.4483);
   assert.throws(() => parse(classificationResultSchema, { ...result, periodLengthInYears: 0 }), /periodLengthInYears/);
+});
+
+test("classification prerequisites contract requires an explicit blocking period and a consistent ready flag", async () => {
+  const blocked = {
+    ready: false,
+    isFirstYear: false,
+    firstBlockingPeriod: { periodId: 1, periodStart: "2017-07-20", periodEnd: "2018-12-30", reason: "not classified yet" },
+    message: "Classify 1 Aug 2024 – 31 Jul 2025 first.",
+  };
+  assert.equal(parse(classificationPrerequisitesSchema, blocked).firstBlockingPeriod.periodId, 1);
+  const ready = { ready: true, isFirstYear: true, firstBlockingPeriod: null, message: "First financial year." };
+  assert.equal(parse(classificationPrerequisitesSchema, ready).firstBlockingPeriod, null);
+  const missing = { ...ready };
+  delete missing.firstBlockingPeriod;
+  assert.throws(() => parse(classificationPrerequisitesSchema, missing), /firstBlockingPeriod/);
+  assert.throws(
+    () => parse(classificationPrerequisitesSchema, { ...blocked, ready: true }),
+    /firstBlockingPeriod/,
+  );
+  assert.throws(
+    () => parse(classificationPrerequisitesSchema, { ...blocked, firstBlockingPeriod: { ...blocked.firstBlockingPeriod, periodEnd: "2017-01-01" } }),
+    /periodEnd/,
+  );
+
+  const originalFetch = globalThis.fetch;
+  let requested = "";
+  globalThis.fetch = async (url) => {
+    requested = String(url);
+    return new Response(JSON.stringify({ ...blocked, ready: "no" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  try {
+    await assert.rejects(
+      () => getClassificationPrerequisites(1, 9),
+      (error) => error instanceof ApiContractError
+        && error.contract === "classification prerequisites"
+        && error.issuePath === "ready",
+    );
+    assert.match(requested, /\/api\/companies\/1\/periods\/9\/classification\/prerequisites$/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("transaction pagination and aggregate contracts fail closed on drift", () => {
@@ -293,6 +343,29 @@ test("financial statement contracts reconcile every displayed subtotal", () => {
   assert.throws(() => parse(balanceSheetSchema, wrongNetAssets), /netAssets/);
 });
 
+test("charity balance sheet contract reconciles the bank overdraft and members' funds", () => {
+  const balanceSheet = balanceSheetFixture();
+  balanceSheet.currentAssets = { ...balanceSheet.currentAssets, cash: 1_200, total: 1_700 };
+  balanceSheet.creditorsWithinYear = { ...balanceSheet.creditorsWithinYear, bankOverdraft: 200, total: 700 };
+  balanceSheet.membersFunds = {
+    fundsBroughtForward: 750,
+    surplusForYear: 1_000,
+    otherMovements: 0,
+    restrictedFunds: 150,
+    total: 2_000,
+  };
+  const parsed = parse(balanceSheetSchema, balanceSheet);
+  assert.equal(parsed.creditorsWithinYear.bankOverdraft, 200);
+  assert.equal(parsed.membersFunds.restrictedFunds, 150);
+
+  const unreconciledOverdraft = structuredClone(balanceSheet);
+  unreconciledOverdraft.creditorsWithinYear.bankOverdraft = 300;
+  assert.throws(() => parse(balanceSheetSchema, unreconciledOverdraft), /creditorsWithinYear/);
+  const unreconciledFunds = structuredClone(balanceSheet);
+  unreconciledFunds.membersFunds.restrictedFunds = 999;
+  assert.throws(() => parse(balanceSheetSchema, unreconciledFunds), /membersFunds/);
+});
+
 test("directors report contract requires dated service and retained statutory evidence", () => {
   const report = directorsReportFixture();
   assert.equal(parse(directorsReportSchema, report).directorServicePeriods[0].name, "Named Director");
@@ -416,7 +489,7 @@ function directorsPageFixture(overrides = {}) {
 }
 
 test("directors approval state mirrors the backend: nullable members are explicit nulls", () => {
-  const empty = { eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null };
+  const empty = { eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null, history: [] };
   assert.equal(parse(directorsApprovalStateSchema, empty).current, null);
   for (const key of Object.keys(empty)) {
     const missing = structuredClone(empty);
@@ -437,8 +510,17 @@ test("directors approval state mirrors the backend: nullable members are explici
       recordSha256: HASH_B,
     },
     periodApprovalDate: "2026-03-01",
+    history: [
+      { eventId: 10, kind: "Revoked", approvalDate: "2026-03-01", reason: "withdrawn-superseded", recordedByDisplayName: "Reviewer One", recordedAtUtc: "2026-03-03T09:00:00Z", recordSha256: HASH_A },
+      { eventId: 9, kind: "Approved", approvalDate: "2026-03-01", reason: null, recordedByDisplayName: "Reviewer One", recordedAtUtc: "2026-03-02T09:00:00Z", recordSha256: HASH_B },
+    ],
   };
   assert.equal(parse(directorsApprovalStateSchema, full).current.eventId, 9);
+  assert.equal(parse(directorsApprovalStateSchema, full).history[0].reason, "withdrawn-superseded");
+  assert.throws(
+    () => parse(directorsApprovalStateSchema, { ...full, history: [{ ...full.history[1], reason: "withdrawn-superseded" }] }),
+    /reason/,
+  );
   assert.throws(
     () => parse(directorsApprovalStateSchema, { ...full, latestPage: directorsPageFixture({ pageSha256: "short" }) }),
     /pageSha256/,
@@ -555,7 +637,7 @@ test("directors approval client calls use the filing routes, send base64 evidenc
     assert.equal(payload.sha256, createHash("sha256").update(bytes).digest("hex"));
 
     const base = "/api/companies/1/periods/2/filing";
-    responses.push({ eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null });
+    responses.push({ eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null, history: [] });
     await getDirectorsApproval(1, 2, "2026-03-01");
     assert.equal(requests.at(-1).url, base + "/directors-approval?onDate=2026-03-01");
 
@@ -580,6 +662,28 @@ test("directors approval client calls use the filing routes, send base64 evidenc
       "approvalPageId", "resolutionArtifact", "resolutionSha256", "signedPageArtifact", "signedPageSha256",
     ]);
     assert.equal(requests.at(-1).body.signedPageSha256, payload.sha256);
+
+    responses.push({
+      eventId: 10, kind: "Revoked", approvalDate: "2026-03-01", reason: "withdrawn-entered-in-error",
+      recordedByDisplayName: "Reviewer One", recordedAtUtc: "2026-03-02T10:00:00Z", recordSha256: HASH_A,
+    });
+    await withdrawDirectorsApproval(1, 2, { reason: "entered-in-error", note: "Recorded against the wrong minute." });
+    assert.equal(requests.at(-1).url, base + "/directors-approval-withdrawal");
+    assert.equal(requests.at(-1).method, "POST");
+    assert.deepEqual(requests.at(-1).body, { reason: "entered-in-error", note: "Recorded against the wrong minute." });
+
+    // A revocation must carry its reason; an approval must not.
+    responses.push({
+      eventId: 10, kind: "Revoked", approvalDate: "2026-03-01", reason: null,
+      recordedByDisplayName: "Reviewer One", recordedAtUtc: "2026-03-02T10:00:00Z", recordSha256: HASH_A,
+    });
+    await assert.rejects(() => withdrawDirectorsApproval(1, 2, { reason: "superseded", note: "A new approval follows." }), ApiContractError);
+
+    responses.push({
+      eligibleDirectors: [], latestPage: null, current: null, periodApprovalDate: null,
+      history: [{ eventId: 9, kind: "Deleted", approvalDate: "2026-03-01", reason: null, recordedByDisplayName: "Reviewer One", recordedAtUtc: "2026-03-02T09:00:00Z", recordSha256: HASH_B }],
+    });
+    await assert.rejects(() => getDirectorsApproval(1, 2), ApiContractError);
 
     responses.push({ signedByDirector: "Director One", signedBySecretary: "Secretary One", signedAtUtc: "2026-03-03T11:00:00Z", signedPdfSha256: HASH_A });
     await recordCroSigningPack(1, 2, { directorOfficerId: 1, secretaryOfficerId: 3, signedAtUtc: "2026-03-03T11:00:00Z", signedPack: file });
@@ -1076,3 +1180,195 @@ function filingReadinessFixture() {
     allowedNextActions: ["Resolve blockers"],
   };
 }
+
+test("historic size figures: both routes in the prerequisites, provenance on an anchor, PUT with PDF evidence", async () => {
+  const historicFiguresPeriod = {
+    periodId: 8, periodStart: "2024-01-01", periodEnd: "2024-12-31", reason: "record historic figures from the filed accounts",
+  };
+  const blocked = {
+    ready: false,
+    isFirstYear: false,
+    firstBlockingPeriod: { periodId: 1, periodStart: "2018-01-01", periodEnd: "2018-12-31", reason: "not classified yet" },
+    message: "Classify 1 Jan 2018 – 31 Dec 2018 first, or record historic figures from the filed accounts for 1 Jan 2024 – 31 Dec 2024.",
+    historicFiguresPeriod,
+    canRecordHistoricFigures: false,
+    suggestedThresholdElection: "2023-01-01",
+  };
+  assert.equal(parse(classificationPrerequisitesSchema, blocked).historicFiguresPeriod.periodId, 8);
+  const older = { ...blocked };
+  delete older.historicFiguresPeriod;
+  delete older.canRecordHistoricFigures;
+  delete older.suggestedThresholdElection;
+  assert.equal(parse(classificationPrerequisitesSchema, older).historicFiguresPeriod, null);
+  assert.equal(parse(classificationPrerequisitesSchema, older).canRecordHistoricFigures, false);
+  assert.equal(parse(classificationPrerequisitesSchema, blocked).suggestedThresholdElection, "2023-01-01");
+  assert.equal(parse(classificationPrerequisitesSchema, older).suggestedThresholdElection, null);
+  assert.throws(
+    () => parse(classificationPrerequisitesSchema, { ...blocked, ready: true, firstBlockingPeriod: null }),
+    /historicFiguresPeriod/,
+  );
+
+  const anchor = {
+    id: 3,
+    turnover: 1000000,
+    balanceSheetTotal: 500000,
+    avgEmployees: 5,
+    inputBasis: "HistoricAnchor",
+    historicSourceReference: "Fictitious members' accounts",
+    historicEvidenceSha256: HASH_A,
+    historicAttestedBy: "Reviewer One",
+    historicAttestedRole: "Reviewer",
+    historicAttestedAt: "2026-10-12T09:00:00Z",
+    historicAttestedEffectiveClass: null,
+    decisionInputFingerprintSha256: HASH_B,
+    calculatedClass: "Large",
+    rawCurrentClass: "Small",
+    periodLengthInYears: 1,
+    annualisedTurnover: 1000000,
+  };
+  assert.equal(parse(sizeClassificationSchema, anchor).inputBasis, "HistoricAnchor");
+  assert.throws(() => parse(sizeClassificationSchema, { ...anchor, historicEvidenceSha256: null }), /historicEvidenceSha256/);
+  assert.throws(() => parse(sizeClassificationSchema, { ...anchor, historicSourceReference: null }), /historicSourceReference/);
+  assert.throws(() => parse(sizeClassificationSchema, { ...anchor, inputBasis: "Keyed" }), /inputBasis/);
+
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), method: (init?.method ?? "GET").toUpperCase(), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    return new Response(JSON.stringify(anchor), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const bytes = new TextEncoder().encode("%PDF-1.4 fictitious filed accounts");
+    const evidence = new File([bytes], "accounts.pdf", { type: "application/pdf" });
+    const saved = await recordHistoricSizeFigures(1, 8, {
+      turnover: 1000000,
+      balanceSheetTotal: 500000,
+      avgEmployees: 5,
+      thresholdElectionEffectiveFrom: "2024-01-01",
+      sourceReference: "Fictitious members' accounts",
+      evidence,
+      attestedEffectiveClass: null,
+    });
+    assert.equal(saved.inputBasis, "HistoricAnchor");
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].method, "PUT");
+    assert.match(requests[0].url, /\/api\/companies\/1\/periods\/8\/classification\/historic-anchor$/);
+    assert.deepEqual(Object.keys(requests[0].body).sort(), [
+      "attestedEffectiveClass", "avgEmployees", "balanceSheetTotal", "evidenceArtifact", "evidenceSha256",
+      "sourceReference", "thresholdElectionEffectiveFrom", "turnover",
+    ]);
+    assert.equal(requests[0].body.evidenceSha256, createHash("sha256").update(bytes).digest("hex"));
+    assert.equal(requests[0].body.evidenceArtifact, Buffer.from(bytes).toString("base64"));
+
+    // A file that is not a PDF is refused before anything is sent.
+    const notPdf = new File([new TextEncoder().encode("<html></html>")], "accounts.pdf", { type: "application/pdf" });
+    await assert.rejects(
+      () => recordHistoricSizeFigures(1, 8, {
+        turnover: 1, balanceSheetTotal: 1, avgEmployees: 0, thresholdElectionEffectiveFrom: "2024-01-01",
+        sourceReference: "Fictitious", evidence: notPdf, attestedEffectiveClass: null,
+      }),
+      /PDF/,
+    );
+    assert.equal(requests.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("retired historic figures keep their evidence and retirement record, and the retire and CT due clients post exactly their inputs", async () => {
+  const retired = {
+    id: 3,
+    turnover: 1000000,
+    balanceSheetTotal: 500000,
+    avgEmployees: 5,
+    inputBasis: "RetiredHistoricAnchor",
+    historicSourceReference: "Fictitious members' accounts",
+    historicEvidenceSha256: HASH_A,
+    historicAttestedBy: "Reviewer One",
+    historicAttestedRole: "Reviewer",
+    historicAttestedAt: "2026-10-12T09:00:00Z",
+    historicRetiredAt: "2026-10-12T10:00:00Z",
+    historicRetiredBy: "Owner One",
+    historicRetiredReason: "Fictitious reason: wrong year",
+  };
+  assert.equal(parse(sizeClassificationSchema, retired).inputBasis, "RetiredHistoricAnchor");
+  assert.throws(() => parse(sizeClassificationSchema, { ...retired, historicRetiredReason: null }), /historicRetiredReason/);
+  assert.throws(() => parse(sizeClassificationSchema, { ...retired, historicEvidenceSha256: null }), /historicEvidenceSha256/);
+  assert.throws(
+    () => parse(sizeClassificationSchema, {
+      ...retired,
+      decisionInputFingerprintSha256: HASH_B,
+      calculatedClass: "Large",
+      rawCurrentClass: "Small",
+      periodLengthInYears: 1,
+      annualisedTurnover: 1000000,
+    }),
+    /decisionInputFingerprintSha256/,
+  );
+
+  const confirmed = {
+    id: 4,
+    periodId: 3,
+    taxType: "CorporationTax",
+    liability: 150,
+    paid: 0,
+    balance: 150,
+    confirmedDueBy: "Reviewer One",
+    confirmedDueAt: "2026-10-12T09:00:00Z",
+    confirmedDueReason: "Income outside the exemption",
+    confirmedDueLiability: 150,
+    confirmedTaxableProfitOutsideExemption: 1200,
+    confirmedNonTradingProfitOutsideExemption: 0,
+  };
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  let response = retired;
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), method: (init?.method ?? "GET").toUpperCase(), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    return new Response(JSON.stringify(response), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const saved = await retireHistoricSizeFigures(1, 8, "Fictitious reason: wrong year");
+    assert.equal(saved.inputBasis, "RetiredHistoricAnchor");
+    assert.equal(requests[0].method, "POST");
+    assert.match(requests[0].url, /\/api\/companies\/1\/periods\/8\/classification\/historic-anchor\/retire$/);
+    assert.deepEqual(requests[0].body, { reason: "Fictitious reason: wrong year" });
+
+    response = confirmed;
+    const due = await confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0);
+    assert.equal(due.confirmedDueReason, "Income outside the exemption");
+    assert.equal(requests[1].method, "POST");
+    assert.match(requests[1].url, /\/api\/companies\/1\/periods\/3\/tax-balances\/CorporationTax\/confirm-due$/);
+    assert.deepEqual(requests[1].body, { reason: "Income outside the exemption", taxableProfitOutsideExemption: 1200, nonTradingProfitOutsideExemption: 0 });
+
+    // A response that does not carry the confirmation is not accepted as one.
+    response = { ...confirmed, confirmedDueAt: null };
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedDueAt/);
+    // Nor one given for a different amount.
+    response = { ...confirmed, confirmedDueLiability: 120 };
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedDueLiability/);
+    // Nor one without the attested taxable profit outside the exemption.
+    response = { ...confirmed, confirmedTaxableProfitOutsideExemption: null };
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedTaxableProfitOutsideExemption/);
+    // Nor one without the attested non-trading profit outside the exemption.
+    response = { ...confirmed, confirmedNonTradingProfitOutsideExemption: null };
+    await assert.rejects(() => confirmCorporationTaxDue(1, 3, "Income outside the exemption", 1200, 0), /confirmedNonTradingProfitOutsideExemption/);
+
+    // The archive of retired or replaced evidence: read with GET, never carrying the PDF bytes.
+    const archivedRecord = {
+      id: 31, event: "Retired", archivedAt: "2026-10-12T10:00:00Z", archivedBy: "Owner One",
+      turnover: 1000000, balanceSheetTotal: 500000, avgEmployees: 5, sourceReference: "Fictitious members' accounts",
+      evidenceSha256: HASH_A, attestedBy: "Reviewer One", attestedRole: "Reviewer", attestedAt: "2026-10-12T09:00:00Z",
+      attestedEffectiveClass: null, retiredAt: "2026-10-12T10:00:00Z", retiredBy: "Owner One", retiredReason: "Fictitious reason",
+    };
+    response = [archivedRecord];
+    const archive = await getArchivedHistoricFigures(1, 8);
+    assert.equal(archive[0].event, "Retired");
+    assert.equal(requests.at(-1).method, "GET");
+    assert.match(requests.at(-1).url, /\/api\/companies\/1\/periods\/8\/classification\/historic-anchor\/archive$/);
+    response = [{ ...archivedRecord, retiredReason: null }];
+    await assert.rejects(() => getArchivedHistoricFigures(1, 8), /retiredReason/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

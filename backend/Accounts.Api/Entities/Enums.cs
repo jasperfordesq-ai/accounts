@@ -48,6 +48,20 @@ public enum CompanySizeClass
     Large
 }
 
+/// <summary>
+/// Where a period's size-test figures came from. Computed rows are decided by the engine here;
+/// a HistoricAnchor row holds figures keyed in from accounts filed elsewhere, retained only as the
+/// preceding-year evidence for the next period (never a filing basis). A RetiredHistoricAnchor row
+/// keeps a retired anchor's evidence: it is neither a chain root nor a decision, and the period is
+/// classified normally once its own figures are entered.
+/// </summary>
+public enum SizeInputBasis
+{
+    Computed,
+    HistoricAnchor,
+    RetiredHistoricAnchor
+}
+
 public enum OfficerRole
 {
     Director,

@@ -410,7 +410,8 @@ test("year-end questionnaire route delegates director-loan compliance summary", 
   assert.doesNotMatch(routeSource, /Director-loan statutory evidence/, "year-end questionnaire route should not own director-loan compliance summary markup");
   assert.doesNotMatch(routeSource, /Not strictly below/, "year-end questionnaire route should not own strict-threshold decision copy");
   assert.match(componentSource, /Director-loan statutory evidence/, "director-loan summary should preserve statutory review context");
-  assert.match(componentSource, /does not replace release-level qualified-accountant approval/, "director-loan summary should preserve the separate human gate");
+  assert.match(componentSource, /does not replace the directors&apos; s\.324 approval of the accounts/, "director-loan summary should preserve the separate human gate");
+  assert.doesNotMatch(componentSource, /qualified-accountant/, "director-loan summary must not imply an accountant is required");
   assert.match(componentSource, /Not strictly below/, "director-loan summary should preserve the strict section 240 boundary result");
   assert.doesNotMatch(componentSource, /SAP required under s\.239/, "director-loan summary must not repeat the former incorrect automatic-SAP claim");
 });

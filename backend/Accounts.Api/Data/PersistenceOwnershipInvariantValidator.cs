@@ -109,6 +109,8 @@ internal static class PersistenceOwnershipInvariantValidator
             RequireCurrentTenant(currentTenantId, company.TenantId, nameof(TransactionRule));
         }
 
+        foreach (var record in Changed<HistoricAnchorEvidenceRecord>(db))
+            await ValidatePeriodOwnedAsync(record.PeriodId, record.Period, nameof(HistoricAnchorEvidenceRecord), resolver, currentTenantId);
         foreach (var package in Changed<CroFilingPackage>(db))
             await ValidatePeriodOwnedAsync(package.PeriodId, package.Period, nameof(CroFilingPackage), resolver, currentTenantId);
         foreach (var page in Changed<DirectorsApprovalPage>(db))

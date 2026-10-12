@@ -85,7 +85,8 @@ public class FilingReadinessProfileService(AccountsDbContext db)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
 
         var company = period.Company;
-        var classification = period.SizeClassification;
+        // Historic figures keyed in from filed accounts are never this period's size classification.
+        var classification = period.SizeClassification is { InputBasis: SizeInputBasis.Computed } computed ? computed : null;
         var currentOverride = classification?.OverrideClass is not null
             && classification.OverrideRequiresRereview == false
             && classification.OverrideEvidenceArtifact is { Length: > 0 }

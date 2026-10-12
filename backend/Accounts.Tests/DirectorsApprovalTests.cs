@@ -681,7 +681,7 @@ public sealed partial class DirectorsApprovalTests
     public void StateResponse_SerialisesNullMembersExplicitly()
     {
         var json = System.Text.Json.JsonSerializer.Serialize(
-            new DirectorsApprovalStateResponse([], null, null, null),
+            new DirectorsApprovalStateResponse([], null, null, null, []),
             new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
             {
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull

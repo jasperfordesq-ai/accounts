@@ -34,6 +34,7 @@ import { YearEndPostBalanceSheetEventsSection } from "@/components/period/YearEn
 import { YearEndQuestionnaireSection as Section } from "@/components/period/YearEndQuestionnaireSection";
 import { YearEndRelatedPartyTransactionsSection } from "@/components/period/YearEndRelatedPartyTransactionsSection";
 import { YearEndTaxBalancesSection } from "@/components/period/YearEndTaxBalancesSection";
+import { CorporationTaxDueConfirmation } from "@/components/period/CorporationTaxDueConfirmation";
 import { CorporationTaxScopeReviewSection } from "@/components/period/CorporationTaxScopeReviewSection";
 import { CorporationTaxFilingSupportPanel } from "@/components/period/CorporationTaxFilingSupportPanel";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
@@ -1053,6 +1054,16 @@ export function YearEndQuestionnaireRoute({
               setTaxForms((prev) => ({ ...prev, [taxType]: balance }))
             }
             onSave={handleSaveTax}
+          />
+          <CorporationTaxDueConfirmation
+            companyId={cId}
+            periodId={pId}
+            holdsCharitableTaxExemption={company?.holdsCharitableTaxExemption === true}
+            balance={taxBalances.find((balance) => balance.taxType === "CorporationTax")}
+            canConfirm={canReview}
+            onConfirmed={(saved) =>
+              setTaxBalances((prev) => prev.map((balance) => (balance.taxType === "CorporationTax" ? saved : balance)))
+            }
           />
           <CorporationTaxScopeReviewSection
             canWrite={canWriteWorkingPapers}

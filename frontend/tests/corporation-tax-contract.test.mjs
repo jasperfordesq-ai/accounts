@@ -60,3 +60,31 @@ test("corporation-tax runtime contract rejects plausible final-return claims and
     /Trading-loss movement/,
   );
 });
+
+test("corporation-tax runtime contract reconciles an exempt company's charitable-exemption line, and only that line", () => {
+  const exempt = {
+    ...payload(),
+    accountingProfit: 41_000,
+    adjustments: [{
+      description: "Income within the charitable exemption (confirmed by Example Owner on 12 Oct 2026)",
+      amount: -40_000,
+      basis: "Taxable profit from activities outside the charitable exemption attested at €1,000.00.",
+    }],
+    taxableProfit: 1_000,
+    corporationTaxAt125: 125,
+    totalCorporationTax: 125,
+    preliminaryTaxPaid: 0,
+    balanceDue: 125,
+    tradingProfitBeforeLossRelief: 41_000,
+    tradingProfitAfterLossRelief: 41_000,
+  };
+  assert.equal(parseApiContract(taxComputationSchema, exempt, "corporation tax support").taxableProfit, 1_000);
+  // Any other deduction line does not reconcile taxable profit to the streams.
+  assert.throws(
+    () => parseApiContract(taxComputationSchema, {
+      ...exempt,
+      adjustments: [{ description: "Deduct: something else", amount: -40_000, basis: "Unrelated" }],
+    }, "corporation tax support"),
+    /taxableProfit/,
+  );
+});

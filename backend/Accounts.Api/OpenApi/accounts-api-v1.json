@@ -1393,6 +1393,237 @@
         }
       }
     },
+    "/api/companies/{companyId}/periods/{periodId}/classification/prerequisites": {
+      "get": {
+        "tags": [
+          "Classification"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassificationPrerequisites"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor": {
+      "put": {
+        "tags": [
+          "Classification"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoricAnchorInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SizeClassification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor/retire": {
+      "post": {
+        "tags": [
+          "Classification"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoricAnchorRetirementInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SizeClassification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor/archive": {
+      "get": {
+        "tags": [
+          "Classification"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HistoricAnchorEvidenceSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/classification/historic-anchor/archive/{recordId}/evidence": {
+      "get": {
+        "tags": [
+          "Classification"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "recordId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/companies/{companyId}/periods/{periodId}/size-classification/override": {
       "put": {
         "tags": [
@@ -2155,6 +2386,13 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2306,6 +2544,94 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/categories/chart-adoption/plan": {
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartAdoptionPlan"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/categories/chart-adoption": {
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChartAdoptionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartAdoptionPlan"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartAdoptionRefusalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
@@ -3584,6 +3910,50 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TaxBalanceInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/tax-balances/CorporationTax/confirm-due": {
+      "post": {
+        "tags": [
+          "Tax Balances"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorporationTaxDueConfirmationInput"
               }
             }
           },
@@ -7530,6 +7900,60 @@
         }
       }
     },
+    "/api/companies/{companyId}/periods/{periodId}/filing/cro-not-delivered": {
+      "post": {
+        "tags": [
+          "Filing Workflow"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CroNotDeliveredInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilingWorkflowStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/companies/{companyId}/periods/{periodId}/filing/charity-report-generated": {
       "post": {
         "tags": [
@@ -7976,6 +8400,60 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/companies/{companyId}/periods/{periodId}/filing/directors-approval-withdrawal": {
+      "post": {
+        "tags": [
+          "Directors Approval"
+        ],
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectorsApprovalWithdrawalInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorsApprovalHistoryItem"
+                }
+              }
+            }
           },
           "404": {
             "description": "Not Found"
@@ -8986,6 +9464,19 @@
           }
         }
       },
+      "AccountCashFlowClass": {
+        "enum": [
+          "Operating",
+          "Investing",
+          "Tax",
+          "Dividend",
+          "Loan",
+          "ShareIssue",
+          "OtherFinancing",
+          "Cash",
+          null
+        ]
+      },
       "AccountCategoryInput": {
         "type": "object",
         "properties": {
@@ -9018,6 +9509,26 @@
               "string"
             ],
             "format": "int32"
+          },
+          "statementLine": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccountStatementLine"
+              }
+            ]
+          },
+          "cashFlowClass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccountCashFlowClass"
+              }
+            ]
           }
         }
       },
@@ -9130,6 +9641,61 @@
             ]
           }
         }
+      },
+      "AccountStatementLine": {
+        "enum": [
+          "TangibleFixedAssets",
+          "Stocks",
+          "Debtors",
+          "Prepayments",
+          "CashAtBank",
+          "TradeCreditors",
+          "Accruals",
+          "TaxCreditors",
+          "OtherCreditorsWithinYear",
+          "LoansAfterYear",
+          "OtherCreditorsAfterYear",
+          "ShareCapital",
+          "Reserves",
+          "RestrictedFunds",
+          "DividendsPaid",
+          "Suspense",
+          "OpeningBalanceControl",
+          "Turnover",
+          "OtherOperatingIncome",
+          "CostOfSales",
+          "AdministrativeExpenses",
+          "Depreciation",
+          "InterestPayable",
+          "TaxOnProfit",
+          null
+        ]
+      },
+      "AccountSystemRole": {
+        "enum": [
+          "BankControl",
+          "RetainedEarnings",
+          "Depreciation",
+          "Prepayments",
+          "Stock",
+          "CostOfSalesStockMovement",
+          "Accruals",
+          "TradeDebtors",
+          "TradeDebtorIncome",
+          "TradeCreditors",
+          "DirectorLoanLiability",
+          "DirectorLoanReceivable",
+          "CorporationTaxCharge",
+          "CorporationTaxPayable",
+          "DividendsPaid",
+          "DividendsPayable",
+          "DisposalLoss",
+          "DisposalGain",
+          "VatPayable",
+          "VatReceivable",
+          "Suspense",
+          "OpeningBalanceControl"
+        ]
       },
       "AdjustmentInput": {
         "required": [
@@ -10001,6 +10567,16 @@
           },
           "balances": {
             "type": "boolean"
+          },
+          "membersFunds": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MembersFundsSection"
+              }
+            ]
           }
         }
       },
@@ -10351,6 +10927,77 @@
           }
         }
       },
+      "CharityFilingStatus": {
+        "required": [
+          "status",
+          "sofaGenerated",
+          "trusteesReportGenerated",
+          "annualReturnReference",
+          "rejectionReason",
+          "correctionDeadline",
+          "submittedBy",
+          "submittedAt",
+          "acceptedBy",
+          "acceptedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/FilingStatus"
+          },
+          "sofaGenerated": {
+            "type": "boolean"
+          },
+          "trusteesReportGenerated": {
+            "type": "boolean"
+          },
+          "annualReturnReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rejectionReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "correctionDeadline": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "submittedBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "submittedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "acceptedBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "acceptedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "CharityFilingStatusInput": {
         "required": [
           "status",
@@ -10493,6 +11140,510 @@
               "string"
             ],
             "format": "byte"
+          }
+        }
+      },
+      "ChartAdoptionArchive": {
+        "required": [
+          "categoryId",
+          "fromCode",
+          "name",
+          "toCode",
+          "ruleCount",
+          "releasedRole"
+        ],
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "fromCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "toCode": {
+            "type": "string"
+          },
+          "ruleCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "releasedRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccountSystemRole"
+              }
+            ]
+          }
+        }
+      },
+      "ChartAdoptionInput": {
+        "required": [
+          "variant",
+          "planSha256",
+          "acknowledgeStaleFilingArtifacts"
+        ],
+        "type": "object",
+        "properties": {
+          "variant": {
+            "$ref": "#/components/schemas/ChartOfAccountsVariant"
+          },
+          "planSha256": {
+            "type": "string"
+          },
+          "acknowledgeStaleFilingArtifacts": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChartAdoptionInsert": {
+        "required": [
+          "code",
+          "name",
+          "type",
+          "statementLine",
+          "cashFlowClass",
+          "systemRole"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AccountCategoryType"
+          },
+          "statementLine": {
+            "$ref": "#/components/schemas/AccountStatementLine"
+          },
+          "cashFlowClass": {
+            "$ref": "#/components/schemas/AccountCashFlowClass"
+          },
+          "systemRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccountSystemRole"
+              }
+            ]
+          }
+        }
+      },
+      "ChartAdoptionLegacyReason": {
+        "enum": [
+          "CharityCode",
+          "CharityCodeRange",
+          "CharityRole"
+        ]
+      },
+      "ChartAdoptionLegacyRecode": {
+        "required": [
+          "categoryId",
+          "fromCode",
+          "fromName",
+          "toCode",
+          "toName",
+          "transactionCount",
+          "journalCount",
+          "openingBalanceCount",
+          "ruleCount",
+          "reason",
+          "releasedRole"
+        ],
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "fromCode": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "toCode": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          },
+          "transactionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "journalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "openingBalanceCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "ruleCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ChartAdoptionLegacyReason"
+          },
+          "releasedRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccountSystemRole"
+              }
+            ]
+          }
+        }
+      },
+      "ChartAdoptionPlan": {
+        "required": [
+          "companyId",
+          "currentVariant",
+          "targetVariant",
+          "renames",
+          "legacyRecodes",
+          "archives",
+          "retained",
+          "inserts",
+          "staleFilingArtifacts",
+          "blockedBy",
+          "planSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "currentVariant": {
+            "$ref": "#/components/schemas/ChartOfAccountsVariant"
+          },
+          "targetVariant": {
+            "$ref": "#/components/schemas/ChartOfAccountsVariant"
+          },
+          "renames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAdoptionRename"
+            }
+          },
+          "legacyRecodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAdoptionLegacyRecode"
+            }
+          },
+          "archives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAdoptionArchive"
+            }
+          },
+          "retained": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAdoptionRetained"
+            }
+          },
+          "inserts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAdoptionInsert"
+            }
+          },
+          "staleFilingArtifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartAdoptionStaleArtifact"
+            }
+          },
+          "blockedBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "planSha256": {
+            "type": "string"
+          }
+        }
+      },
+      "ChartAdoptionRefusalResponse": {
+        "required": [
+          "error",
+          "code",
+          "plan"
+        ],
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/ChartAdoptionPlan"
+          }
+        }
+      },
+      "ChartAdoptionRename": {
+        "required": [
+          "categoryId",
+          "role",
+          "fromCode",
+          "fromName",
+          "toCode",
+          "toName"
+        ],
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AccountSystemRole"
+          },
+          "fromCode": {
+            "type": "string"
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "toCode": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          }
+        }
+      },
+      "ChartAdoptionRetained": {
+        "required": [
+          "categoryId",
+          "code",
+          "name",
+          "transactionCount",
+          "journalCount",
+          "openingBalanceCount"
+        ],
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "transactionCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "journalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "openingBalanceCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ChartAdoptionStaleArtifact": {
+        "required": [
+          "periodId",
+          "periodStart",
+          "periodEnd",
+          "status",
+          "croPackageStatus",
+          "croFilingStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "periodId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PeriodStatus"
+          },
+          "croPackageStatus": {
+            "$ref": "#/components/schemas/FilingPackageStatus"
+          },
+          "croFilingStatus": {
+            "$ref": "#/components/schemas/FilingStatus"
+          }
+        }
+      },
+      "ChartOfAccountsVariant": {
+        "enum": [
+          "GenericTrading",
+          "CharityClg",
+          null
+        ]
+      },
+      "ClassificationBlockingPeriod": {
+        "required": [
+          "periodId",
+          "periodStart",
+          "periodEnd",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "periodId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ClassificationPrerequisites": {
+        "required": [
+          "ready",
+          "isFirstYear",
+          "firstBlockingPeriod",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "isFirstYear": {
+            "type": "boolean"
+          },
+          "firstBlockingPeriod": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClassificationBlockingPeriod"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "historicFiguresPeriod": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClassificationBlockingPeriod"
+              }
+            ]
+          },
+          "canRecordHistoricFigures": {
+            "type": "boolean",
+            "default": false
+          },
+          "suggestedThresholdElection": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
           }
         }
       },
@@ -10975,6 +12126,16 @@
               "string"
             ],
             "format": "date"
+          },
+          "chartOfAccountsVariant": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChartOfAccountsVariant"
+              }
+            ]
           }
         }
       },
@@ -11117,6 +12278,38 @@
           },
           "likelihood": {
             "type": "string"
+          }
+        }
+      },
+      "CorporationTaxDueConfirmationInput": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "taxableProfitOutsideExemption": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "nonTradingProfitOutsideExemption": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -11377,6 +12570,15 @@
               "string"
             ],
             "format": "double"
+          },
+          "bankOverdraft": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -11387,6 +12589,62 @@
           "Accrual",
           "Tax"
         ]
+      },
+      "CroFilingStatus": {
+        "required": [
+          "status",
+          "accountsPdfReady",
+          "signaturePageReady",
+          "paymentCompleted",
+          "submissionReference",
+          "rejectionReason",
+          "correctionDeadline"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/FilingStatus"
+          },
+          "accountsPdfReady": {
+            "type": "boolean"
+          },
+          "signaturePageReady": {
+            "type": "boolean"
+          },
+          "paymentCompleted": {
+            "type": "boolean"
+          },
+          "submissionReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rejectionReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "correctionDeadline": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CroNotDeliveredInput": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        }
       },
       "CroOfficerInput": {
         "required": [
@@ -12617,6 +13875,51 @@
           }
         }
       },
+      "DirectorsApprovalHistoryItem": {
+        "required": [
+          "eventId",
+          "kind",
+          "approvalDate",
+          "reason",
+          "recordedByDisplayName",
+          "recordedAtUtc",
+          "recordSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "approvalDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recordedByDisplayName": {
+            "type": "string"
+          },
+          "recordedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordSha256": {
+            "type": "string"
+          }
+        }
+      },
       "DirectorsApprovalPageInput": {
         "required": [
           "approvalDate",
@@ -12753,7 +14056,8 @@
           "eligibleDirectors",
           "latestPage",
           "current",
-          "periodApprovalDate"
+          "periodApprovalDate",
+          "history"
         ],
         "type": "object",
         "properties": {
@@ -12789,6 +14093,12 @@
               "string"
             ],
             "format": "date"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectorsApprovalHistoryItem"
+            }
           }
         }
       },
@@ -12829,6 +14139,21 @@
             "format": "date-time"
           },
           "recordSha256": {
+            "type": "string"
+          }
+        }
+      },
+      "DirectorsApprovalWithdrawalInput": {
+        "required": [
+          "reason",
+          "note"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "note": {
             "type": "string"
           }
         }
@@ -13728,6 +15053,14 @@
           "NotApplicable"
         ]
       },
+      "FilingPackageStatus": {
+        "enum": [
+          "Draft",
+          "Generated",
+          "Submitted",
+          "Accepted"
+        ]
+      },
       "FilingReadinessEvidenceItem": {
         "required": [
           "code",
@@ -14091,6 +15424,43 @@
           }
         }
       },
+      "FilingWorkflowStatus": {
+        "required": [
+          "cro",
+          "revenue",
+          "charity",
+          "blockingIssues",
+          "warningIssues",
+          "readyToFile"
+        ],
+        "type": "object",
+        "properties": {
+          "cro": {
+            "$ref": "#/components/schemas/CroFilingStatus"
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/RevenueFilingStatus"
+          },
+          "charity": {
+            "$ref": "#/components/schemas/CharityFilingStatus"
+          },
+          "blockingIssues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warningIssues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readyToFile": {
+            "type": "boolean"
+          }
+        }
+      },
       "FixedAssetInput": {
         "type": "object",
         "properties": {
@@ -14255,6 +15625,200 @@
             "type": "boolean"
           },
           "note": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "HistoricAnchorEvidenceEvent": {
+        "enum": [
+          "Retired",
+          "Replaced"
+        ]
+      },
+      "HistoricAnchorEvidenceSummary": {
+        "required": [
+          "id",
+          "event",
+          "archivedAt",
+          "archivedBy",
+          "turnover",
+          "balanceSheetTotal",
+          "avgEmployees",
+          "sourceReference",
+          "evidenceSha256",
+          "attestedBy",
+          "attestedRole",
+          "attestedAt",
+          "attestedEffectiveClass",
+          "retiredAt",
+          "retiredBy",
+          "retiredReason"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "event": {
+            "$ref": "#/components/schemas/HistoricAnchorEvidenceEvent"
+          },
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "archivedBy": {
+            "type": "string"
+          },
+          "turnover": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "balanceSheetTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "avgEmployees": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "sourceReference": {
+            "type": "string"
+          },
+          "evidenceSha256": {
+            "type": "string"
+          },
+          "attestedBy": {
+            "type": "string"
+          },
+          "attestedRole": {
+            "type": "string"
+          },
+          "attestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attestedEffectiveClass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CompanySizeClass"
+              }
+            ]
+          },
+          "retiredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "retiredBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "retiredReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "HistoricAnchorInput": {
+        "required": [
+          "turnover",
+          "balanceSheetTotal",
+          "avgEmployees",
+          "sourceReference",
+          "evidenceArtifact",
+          "evidenceSha256"
+        ],
+        "type": "object",
+        "properties": {
+          "turnover": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "balanceSheetTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "avgEmployees": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "sourceReference": {
+            "type": "string"
+          },
+          "evidenceArtifact": {
+            "type": "string",
+            "format": "byte"
+          },
+          "evidenceSha256": {
+            "type": "string"
+          },
+          "attestedEffectiveClass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CompanySizeClass"
+              }
+            ]
+          },
+          "thresholdElectionEffectiveFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          }
+        }
+      },
+      "HistoricAnchorRetirementInput": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
             "type": [
               "null",
               "string"
@@ -14815,6 +16379,58 @@
               "string"
             ],
             "format": "date"
+          }
+        }
+      },
+      "MembersFundsSection": {
+        "required": [
+          "fundsBroughtForward",
+          "surplusForYear",
+          "otherMovements",
+          "restrictedFunds",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "fundsBroughtForward": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "surplusForYear": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "otherMovements": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "restrictedFunds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
           }
         }
       },
@@ -16405,6 +18021,55 @@
           }
         }
       },
+      "RevenueFilingStatus": {
+        "required": [
+          "status",
+          "ixbrlReady",
+          "ixbrlInternalChecksPassed",
+          "ixbrlValid",
+          "validationErrors",
+          "ct1Reference",
+          "generationSupport",
+          "manualHandoffRequired",
+          "reviewPrototypeChecksPassed"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/FilingStatus"
+          },
+          "ixbrlReady": {
+            "type": "boolean"
+          },
+          "ixbrlInternalChecksPassed": {
+            "type": "boolean"
+          },
+          "ixbrlValid": {
+            "type": "boolean"
+          },
+          "validationErrors": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ct1Reference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "generationSupport": {
+            "type": "string"
+          },
+          "manualHandoffRequired": {
+            "type": "boolean"
+          },
+          "reviewPrototypeChecksPassed": {
+            "type": "boolean"
+          }
+        }
+      },
       "RevenueFilingStatusInput": {
         "required": [
           "status",
@@ -16819,6 +18484,272 @@
           }
         }
       },
+      "SizeClassification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "periodId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "turnover": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "balanceSheetTotal": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "avgEmployees": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "priorYearClass": {
+            "$ref": "#/components/schemas/CompanySizeClass"
+          },
+          "rawCurrentClass": {
+            "$ref": "#/components/schemas/CompanySizeClass"
+          },
+          "rawPriorClass": {
+            "$ref": "#/components/schemas/CompanySizeClass"
+          },
+          "rawCurrentMicroQualified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "rawCurrentSmallQualified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "rawCurrentMediumQualified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "rawPriorMicroQualified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "rawPriorSmallQualified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "rawPriorMediumQualified": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "annualisedTurnover": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "periodLengthInYears": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "thresholdElectionEffectiveFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "thresholdScheduleEffectiveFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "thresholdScheduleCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "decisionInputFingerprintSha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "calculatedClass": {
+            "$ref": "#/components/schemas/CompanySizeClass"
+          },
+          "overrideClass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CompanySizeClass"
+              }
+            ]
+          },
+          "overrideReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "overrideAuthorityRole": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "overrideApprovedBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "overrideApprovedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "overrideEvidenceSha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "overrideInputFingerprintSha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "overrideRequiresRereview": {
+            "type": "boolean"
+          },
+          "exclusionFlagsJson": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "qualificationNotes": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "inputBasis": {
+            "$ref": "#/components/schemas/SizeInputBasis"
+          },
+          "historicSourceReference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "historicEvidenceSha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "historicAttestedBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "historicAttestedRole": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "historicAttestedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "historicAttestedEffectiveClass": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CompanySizeClass"
+              }
+            ]
+          },
+          "historicRetiredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "historicRetiredBy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "historicRetiredReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "SizeClassificationInput": {
         "required": [
           "turnover",
@@ -16894,6 +18825,13 @@
             "type": "string"
           }
         }
+      },
+      "SizeInputBasis": {
+        "enum": [
+          "Computed",
+          "HistoricAnchor",
+          "RetiredHistoricAnchor"
+        ]
       },
       "SnapshotResponse": {
         "required": [

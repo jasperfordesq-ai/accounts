@@ -222,7 +222,7 @@ public sealed class FilingGoldenPathPostgresIntegrationTests : IAsyncLifetime
             db,
             tenant.Id,
             period,
-            new DateOnly(2025, 12, 15));
+            new DateOnly(2026, 1, 15));
 
         // --- Statements balance, then final outputs emit ----------------------------------------
         var statements = new FinancialStatementsService(db);

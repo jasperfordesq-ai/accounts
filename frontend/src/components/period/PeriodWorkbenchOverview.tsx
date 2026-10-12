@@ -11,6 +11,7 @@ import type {
 import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowDecisionSummary, type WorkflowItem } from "@/components/workbench";
 import { AccountantWorkflowRail, type AccountantWorkflowStage } from "@/components/workbench/AccountantWorkflowRail";
 import { directorsApprovalGateLabel } from "@/lib/filingEvidence";
+import { isHistoricFigures, sizeClassificationLabel } from "@/lib/historicSizeFigures";
 
 interface PeriodWorkbenchOverviewProps {
   companyId: number | string;
@@ -105,8 +106,11 @@ export function PeriodWorkbenchOverview({
     {
       id: "classify",
       label: "Classify",
-      detail: period?.sizeClassification?.calculatedClass ?? "Size/regime not complete",
-      state: period?.sizeClassification?.calculatedClass ? "done" : transactionTotal > 0 ? "active" : "todo",
+      detail: sizeClassificationLabel(period?.sizeClassification, "Size/regime not complete"),
+      // Historic figures keyed in from filed accounts are not this period's classification.
+      state: period?.sizeClassification?.calculatedClass && !isHistoricFigures(period.sizeClassification)
+        ? "done"
+        : transactionTotal > 0 ? "active" : "todo",
       href: `/companies/${companyId}/periods/${periodId}/classify`,
     },
     {

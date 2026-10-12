@@ -938,7 +938,7 @@ public sealed class ExternalFilingHandoffService(
         Field("ct1.ixbrl.external-validation", "iXBRL", "External validation evidence", package.ExternalValidationResponseSha256, package.ExternalValidationReference ?? "Trusted external validator evidence"),
         Field("ct1.agent.tain", "ROS authority", "Masked TAIN", "Bound in authority record", "Filing authority engagement ledger"),
         Field("ct1.agent.engagement", "ROS authority", "Agent engagement", "Current engagement bound by SHA-256", "Filing authority engagement ledger"),
-        Field("ct1.manual.unsupported-sections-reviewed", "Manual CT1", "Unsupported CT1 sections", unsupportedReviewed && facts.ManualCt1CompletionItems.Count == 0 ? "Qualified accountant confirmed live ROS completion" : null, "Qualified accountant live ROS review")
+        Field("ct1.manual.unsupported-sections-reviewed", "Manual CT1", "Unsupported CT1 sections", unsupportedReviewed && facts.ManualCt1CompletionItems.Count == 0 ? "Live ROS completion of every unsupported section confirmed" : null, "Live ROS review of the unsupported CT1 sections")
     ];
 
     private static ExternalHandoffField Field(
@@ -1055,7 +1055,7 @@ public sealed class ExternalFilingHandoffService(
         if (!snapshots.Any(item => item.Document.Workflow == ExternalFilingWorkflow.RevenueCt1Support))
             gaps.Add("No immutable CT1 support/iXBRL handoff snapshot has been retained.");
         gaps.Add("Raw PPSN/IPN/RBO identifiers remain protected manual CORE entries and are never retained in general handoff JSON.");
-        gaps.Add("Bounded corporation-tax support is never a complete CT1; unsupported panels require qualified-accountant completion in ROS.");
+        gaps.Add("Bounded corporation-tax support is never a complete CT1; the unsupported panels must be completed in ROS.");
         return gaps.Distinct(StringComparer.Ordinal).ToList();
     }
 }

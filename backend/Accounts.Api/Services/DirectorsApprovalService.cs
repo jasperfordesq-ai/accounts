@@ -9,6 +9,9 @@ public sealed record DirectorsApprovalPageInput(DateOnly ApprovalDate, int First
 public sealed record DirectorsApprovalRecordInput(int ApprovalPageId, byte[] SignedPageArtifact, string SignedPageSha256, byte[] ResolutionArtifact, string ResolutionSha256);
 public sealed record DirectorsApprovalPageContent(DateOnly ApprovalDate, string FirstDirectorName, string? SecondDirectorName, string ResolutionReference, string AccountsPdfSha256);
 public sealed record CurrentDirectorsApproval(DirectorsApprovalPage Page, DirectorsApprovalEvent Approval);
+/// <summary>Reason is one of <see cref="DirectorsApprovalService.WithdrawalReasons"/>; the note explains it (3 to 500 characters).</summary>
+public sealed record DirectorsApprovalWithdrawalInput(string Reason, string Note);
+public sealed record DirectorsApprovalHistoryEntry(DirectorsApprovalEvent Event, DirectorsApprovalPage Page);
 
 /// <summary>An optional "reviewed by an accountant" attestation. Recorded and shown in readiness; never a gate.</summary>
 public sealed record AccountantReviewAttestationInput(
@@ -37,6 +40,9 @@ public sealed class DirectorsApprovalService(
 {
     private static readonly TimeZoneInfo Ireland = DeadlineService.ResolveIrelandTimeZone();
     private readonly TimeProvider time = clock ?? TimeProvider.System;
+
+    /// <summary>Why a recorded approval is withdrawn; stored on the Revoked event as "withdrawn-" + reason.</summary>
+    public static readonly IReadOnlyList<string> WithdrawalReasons = ["entered-in-error", "board-rescinded", "superseded"];
 
     /// <summary>The approval page prints each signatory's name; longer names are refused rather than truncated.</summary>
     public const int MaxSignatoryNameLength = 200;
@@ -98,9 +104,7 @@ public sealed class DirectorsApprovalService(
 
     public async Task<DirectorsApprovalEvent> RecordApprovalAsync(int companyId, int periodId, DirectorsApprovalRecordInput input, AuthenticatedUser actor)
     {
-        // Case-insensitive, as RoleAuthorizationService compares roles.
-        if (!string.Equals(actor.Role, "Owner", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(actor.Role, "Reviewer", StringComparison.OrdinalIgnoreCase))
+        if (!IsOwnerOrReviewer(actor))
             throw new BusinessRuleException("Only an Owner or Reviewer can record the directors' approval.");
         var period = await LoadPeriodAsync(companyId, periodId);
         var cro = RequireAccounts(period);
@@ -163,6 +167,66 @@ public sealed class DirectorsApprovalService(
     }
 
     /// <summary>
+    /// Withdraws the current approval (for example one recorded in error) without deleting anything:
+    /// a Revoked event attributed to the actor is chained after it, and every filing-package approval
+    /// bound to the board is revoked in the same unit of work. The note is kept in the audit trail.
+    /// </summary>
+    public async Task<DirectorsApprovalEvent> WithdrawAsync(int companyId, int periodId, DirectorsApprovalWithdrawalInput input, AuthenticatedUser actor)
+    {
+        if (!IsOwnerOrReviewer(actor))
+            throw new BusinessRuleException("Only an Owner or Reviewer can withdraw the directors' approval.");
+        var reason = input.Reason ?? string.Empty;
+        if (!WithdrawalReasons.Contains(reason, StringComparer.Ordinal))
+            throw new BusinessRuleException("Choose why the approval is being withdrawn.");
+        var note = (input.Note ?? string.Empty).Trim();
+        if (note.Length is < 3 or > 500)
+            throw new BusinessRuleException("Explain why the approval is being withdrawn (3 to 500 characters).");
+
+        var period = await db.AccountingPeriods
+            .Include(p => p.CroFilingPackage)
+            .Include(p => p.RevenueFilingPackage)
+            .Include(p => p.CharityFilingPackage)
+            .SingleOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+        var events = await db.DirectorsApprovalEvents.Where(e => e.PeriodId == periodId).OrderBy(e => e.Id).ToListAsync();
+        var pages = await db.DirectorsApprovalPages.Where(p => p.PeriodId == periodId).ToListAsync();
+        var current = ResolveCurrent(events, pages, period.CroFilingPackage)
+            ?? throw new BusinessRuleException("There is no current directors' approval to withdraw.");
+
+        var revokedFilings = FilingReleaseGate.RevokeApprovalsBoundToWithdrawnBoardApproval(period);
+        var revoked = new DirectorsApprovalEvent
+        {
+            PeriodId = periodId,
+            Kind = DirectorsApprovalEventKind.Revoked,
+            ApprovalPageId = current.Approval.ApprovalPageId,
+            ApprovalPageSha256 = current.Approval.ApprovalPageSha256,
+            RevocationReason = "withdrawn-" + reason,
+            RecordedByUserId = AuthenticatedIdentity.AuditUserId(actor),
+            RecordedByDisplayName = AuthenticatedIdentity.ReviewerDisplayName(actor),
+            RecordedAtUtc = Truncate(time.GetUtcNow().UtcDateTime),
+            PreviousRecordSha256 = current.Approval.RecordSha256,
+            RecordSha256 = string.Empty
+        };
+        revoked.RecordSha256 = DirectorsApprovalIntegrity.ComputeEventHash(revoked);
+        db.DirectorsApprovalEvents.Add(revoked);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // The previous-hash unique guard fired: another approval change won the race.
+            throw new BusinessRuleException("Another change to the directors' approval was recorded for this period at the same time; reload and try again.");
+        }
+        await audit.LogAsync(companyId, periodId, nameof(DirectorsApprovalEvent), revoked.Id,
+            AuditEventCodes.DirectorsApprovalRevoked,
+            new { ApprovalEventId = current.Approval.Id, current.Page.ApprovalDate, current.Page.ResolutionReference, ApprovalRecordSha256 = current.Approval.RecordSha256 },
+            new { Reason = reason, Note = note, revoked.RevocationReason, revoked.ApprovalPageId, revoked.ApprovalPageSha256, revoked.RecordSha256, RevokedFilingApprovals = revokedFilings },
+            AuthenticatedIdentity.AuditUserId(actor));
+        return revoked;
+    }
+
+    /// <summary>
     /// Records the optional accountant review attestation on the period's CRO package. Irish law does
     /// not require an accountant, so nothing depends on it: no blocker, manifest entry or release gate.
     /// It is cleared when the accounts PDF is regenerated, so it refers to the accounts actually filed.
@@ -213,6 +277,27 @@ public sealed class DirectorsApprovalService(
         return ResolveCurrent(events, pages, cro);
     }
 
+    /// <summary>
+    /// Every approval and revocation for the period, newest first, when the whole hash chain verifies;
+    /// nothing when it does not (a broken chain proves nothing about any event). Events whose page
+    /// record does not verify are left out.
+    /// </summary>
+    public async Task<IReadOnlyList<DirectorsApprovalHistoryEntry>> GetVerifiedHistoryAsync(int periodId)
+    {
+        var events = await db.DirectorsApprovalEvents.AsNoTracking().Where(e => e.PeriodId == periodId).OrderBy(e => e.Id).ToListAsync();
+        var pages = await db.DirectorsApprovalPages.AsNoTracking().Where(p => p.PeriodId == periodId).ToListAsync();
+        if (!ChainVerifies(events))
+            return [];
+        return events
+            .OrderByDescending(e => e.Id)
+            .Select(e => (Event: e, Page: pages.SingleOrDefault(p => p.Id == e.ApprovalPageId)))
+            .Where(x => x.Page is not null
+                && DirectorsApprovalIntegrity.IsValid(x.Page)
+                && string.Equals(x.Page.PageSha256, x.Event.ApprovalPageSha256, StringComparison.OrdinalIgnoreCase))
+            .Select(x => new DirectorsApprovalHistoryEntry(x.Event, x.Page!))
+            .ToList();
+    }
+
     /// <summary>The latest Approved event, not followed by a revocation, whose page and event hashes verify and whose page binds the current accounts.</summary>
     public static CurrentDirectorsApproval? ResolveCurrent(
         IReadOnlyList<DirectorsApprovalEvent> events,
@@ -221,13 +306,8 @@ public sealed class DirectorsApprovalService(
     {
         if (cro?.AccountsPdfSha256 is null || events.Count == 0)
             return null;
-        string? previous = null;
-        foreach (var e in events.OrderBy(e => e.Id))
-        {
-            if (!DirectorsApprovalIntegrity.IsValid(e) || e.PreviousRecordSha256 != previous)
-                return null; // a broken chain invalidates every later approval
-            previous = e.RecordSha256;
-        }
+        if (!ChainVerifies(events))
+            return null; // a broken chain invalidates every later approval
         var last = events.OrderBy(e => e.Id).Last();
         if (last.Kind != DirectorsApprovalEventKind.Approved)
             return null;
@@ -283,6 +363,23 @@ public sealed class DirectorsApprovalService(
         db.DirectorsApprovalEvents.Add(revoked);
         return revoked;
     }
+
+    private static bool ChainVerifies(IEnumerable<DirectorsApprovalEvent> events)
+    {
+        string? previous = null;
+        foreach (var e in events.OrderBy(e => e.Id))
+        {
+            if (!DirectorsApprovalIntegrity.IsValid(e) || e.PreviousRecordSha256 != previous)
+                return false;
+            previous = e.RecordSha256;
+        }
+        return true;
+    }
+
+    // Case-insensitive, as RoleAuthorizationService compares roles.
+    private static bool IsOwnerOrReviewer(AuthenticatedUser actor) =>
+        string.Equals(actor.Role, "Owner", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(actor.Role, "Reviewer", StringComparison.OrdinalIgnoreCase);
 
     private async Task<AccountingPeriod> LoadPeriodAsync(int companyId, int periodId) =>
         await db.AccountingPeriods.Include(p => p.CroFilingPackage)

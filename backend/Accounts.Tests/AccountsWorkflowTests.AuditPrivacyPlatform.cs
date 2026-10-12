@@ -451,7 +451,8 @@ public partial class AccountsWorkflowTests
         Assert.Contains("data-generation-support=\"manual-handoff-only\"", emit.Ixbrl);
 
         Assert.True(emit.Tax.FinalTaxChargeSupported, string.Join("; ", emit.Tax.BlockingReasons));
-        Assert.Equal(1_044.18m, emit.Tax.TotalCorporationTax);
+        // Profit 7,346.58 + depreciation 753.42 (added back once) - wear and tear 500 = 7,600.00 at 12.5%.
+        Assert.Equal(950.00m, emit.Tax.TotalCorporationTax);
         Assert.Contains(emit.Notes, n => n.Title == "Tangible Fixed Assets" && n.IsIncluded);
         Assert.Contains(emit.Notes, n => n.Title == "Creditors: Amounts Falling Due After More Than One Year" && n.IsIncluded);
 

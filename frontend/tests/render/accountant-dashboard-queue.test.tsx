@@ -19,9 +19,9 @@ describe("AccountantDashboardQueue", () => {
       />,
     );
 
-    expect(screen.getByText("Accountant Work Queue")).toBeInTheDocument();
-    expect(screen.getByText("Active production work across the firm.")).toBeInTheDocument();
-    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    expect(screen.getByRole("heading", { name: "Work queue" })).toBeInTheDocument();
+    expect(screen.getByText("Active production work across your companies.")).toBeInTheDocument();
+    const workflow = screen.getByRole("navigation", { name: "Accounts workflow" });
     expect(workflow).toBeInTheDocument();
     expect(screen.getByText("8 stages")).toBeInTheDocument();
     expect(workflow).toHaveTextContent("Setup");
@@ -32,7 +32,10 @@ describe("AccountantDashboardQueue", () => {
     expect(workflow).toHaveTextContent("Notes");
     expect(workflow).toHaveTextContent("Review");
     expect(workflow).toHaveTextContent("Filing");
-    expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
+    expect(screen.getByText("Open a period to see its progress through these stages.")).toBeInTheDocument();
+    expect(within(workflow).queryByText("Complete")).not.toBeInTheDocument();
+    expect(within(workflow).queryByText("Pending")).not.toBeInTheDocument();
+    expect(workflow.querySelector("[aria-current]")).toBeNull();
     expect(screen.getByText("Urgent clients")).toBeInTheDocument();
     expect(screen.getByText("2 urgent")).toBeInTheDocument();
     expect(screen.getByText("Due-soon deadlines")).toBeInTheDocument();
@@ -65,20 +68,20 @@ describe("AccountantDashboardQueue", () => {
     expect(within(reviewerActionQueue).getByText("Reviewer action queue")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("3 priority items")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("2 missing reviewer")).toBeInTheDocument();
-    expect(within(reviewerActionQueue).getByText("First three items needing practice attention.")).toBeInTheDocument();
+    expect(within(reviewerActionQueue).getByText("First three items needing attention.")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("Atlantic Public Limited Company")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getAllByText("Unassigned reviewer")).toHaveLength(2);
     expect(within(reviewerActionQueue).getByText("Manual handoff")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("Revenue due 20 Jun 2026")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("Review handoff")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("New Client Limited")).toBeInTheDocument();
-    expect(within(reviewerActionQueue).getAllByText("Assign before approval")).toHaveLength(2);
+    expect(within(reviewerActionQueue).getAllByText("Reviewer assignment is optional")).toHaveLength(2);
     expect(within(reviewerActionQueue).getByText("Create period")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("Connacht Visual Limited")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("Niamh Reviewer")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("CRO due 10 Jul 2026")).toBeInTheDocument();
     expect(within(reviewerActionQueue).getByText("Open filing")).toBeInTheDocument();
-    expect(screen.getByRole("searchbox", { name: "Filter Accountant work queue" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Filter Work queue" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3 rows")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Deadline" })).toHaveAttribute("aria-sort", "ascending");
     expect(screen.getByRole("columnheader", { name: "Assigned reviewer" })).toBeInTheDocument();
@@ -127,11 +130,31 @@ describe("AccountantDashboardQueue", () => {
     expect(screen.getAllByRole("link", { name: "Create period" }).at(-1)).toHaveAttribute("href", "/companies/9");
 
     expect(screen.getAllByRole("row")[1]).toHaveAttribute("data-tone", "bad");
-    await user.type(screen.getByRole("searchbox", { name: "Filter Accountant work queue" }), "niamh");
+    await user.type(screen.getByRole("searchbox", { name: "Filter Work queue" }), "niamh");
     expect(screen.getByText("1 of 3 rows")).toBeInTheDocument();
-    const filteredTable = screen.getByRole("table", { name: "Accountant work queue" });
+    const filteredTable = screen.getByRole("table", { name: "Work queue" });
     expect(within(filteredTable).getByText("Connacht Visual Limited")).toBeInTheDocument();
     expect(within(filteredTable).queryByText("Atlantic Public Limited Company")).not.toBeInTheDocument();
+  });
+
+  it("never shows unearned workflow completion for a company that has a period", () => {
+    render(
+      <AccountantDashboardQueue
+        companies={[sampleCompany()]}
+        deadlines={{ 7: sampleDeadline({ companyId: 7, periodId: 3, deadlineType: "CRO", dueDate: "2027-03-01" }) }}
+        today="2026-07-03"
+      />,
+    );
+
+    const workflow = screen.getByRole("navigation", { name: "Accounts workflow" });
+    for (const stage of ["Setup", "Import", "Classify", "Year-End", "Statements", "Notes", "Review", "Filing"]) {
+      expect(workflow).toHaveTextContent(stage);
+    }
+    for (const badge of ["Complete", "Next", "Blocked", "Pending"]) {
+      expect(within(workflow).queryByText(badge)).not.toBeInTheDocument();
+    }
+    expect(workflow.querySelector("[aria-current]")).toBeNull();
+    expect(screen.getByText("Open a period to see its progress through these stages.")).toBeInTheDocument();
   });
 
   it("ranks live-period risk above unverified historic deadlines without hiding them", () => {
@@ -156,7 +179,7 @@ describe("AccountantDashboardQueue", () => {
     const triage = screen.getByRole("region", { name: "Queue triage" });
     expect(within(triage).getByText("Late Live Filer Limited")).toBeInTheDocument();
     expect(within(triage).queryByText("Example Timebank CLG")).not.toBeInTheDocument();
-    const table = screen.getByRole("table", { name: "Accountant work queue" });
+    const table = screen.getByRole("table", { name: "Work queue" });
     expect(within(table).getByText("Example Timebank CLG")).toBeInTheDocument();
     expect(within(table).getByText("Historic filings unverified")).toBeInTheDocument();
     expect(within(table).getByText(/16 earlier-period deadlines have no recorded filing \(oldest Revenue due 23 Sept? 2019\)/)).toBeInTheDocument();
@@ -198,7 +221,7 @@ describe("AccountantDashboardQueue", () => {
       />,
     );
 
-    const table = screen.getByRole("table", { name: "Accountant work queue" });
+    const table = screen.getByRole("table", { name: "Work queue" });
     expect(within(table).getByText("Manual handoff")).toBeInTheDocument();
     expect(within(table).getByText(/PLC\/public-company workflow requires manual review\. 1 earlier-period deadline has no recorded filing \(oldest CRO due 25 June? 2020\)/)).toBeInTheDocument();
   });

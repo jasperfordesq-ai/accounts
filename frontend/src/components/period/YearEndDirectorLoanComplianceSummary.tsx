@@ -19,7 +19,7 @@ export function YearEndDirectorLoanComplianceSummary({ compliance }: YearEndDire
             Director-loan statutory evidence
           </h3>
           <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-            Sections 236, 239–245, 307 and 308 evidence. Arrangement review does not replace release-level qualified-accountant approval.
+            Sections 236, 239–245, 307 and 308 evidence. Arrangement review does not replace the directors&apos; s.324 approval of the accounts.
           </p>
         </div>
         <Chip variant="soft" size="sm" color={ready ? "success" : "danger"}>

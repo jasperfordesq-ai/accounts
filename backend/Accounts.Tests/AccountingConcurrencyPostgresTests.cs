@@ -651,6 +651,7 @@ public sealed class AccountingConcurrencyCoverageTests
             typeof(AnnualReturnDateRecord),
             typeof(DirectorsApprovalPage),
             typeof(DirectorsApprovalEvent),
+            typeof(HistoricAnchorEvidenceRecord),
             typeof(CompanyOnboardingRequest),
             typeof(DeadlineReminderOutbox),
             typeof(ExternalFilingHandoffSnapshot),

@@ -70,18 +70,51 @@ public class AdjustmentService(AccountsDbContext db)
         await db.SaveChangesAsync();
 
         var adjustments = new List<Adjustment>();
-        var depreciationExpenseId = await GetOrCreateCategoryIdAsync(companyId, "7000", "Depreciation", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
-        var prepaymentId = await GetOrCreateCategoryIdAsync(companyId, "1200", "Prepayments", AccountCategoryType.Asset, TaxTreatment.Other);
-        var inventoryId = await GetOrCreateCategoryIdAsync(companyId, "1000", "Stock / Inventory", AccountCategoryType.Asset, TaxTreatment.Other);
-        var costOfSalesId = await GetOrCreateCategoryIdAsync(companyId, "5000", "Cost of Sales", AccountCategoryType.Expense, TaxTreatment.Deductible);
-        var accrualsId = await GetOrCreateCategoryIdAsync(companyId, "2100", "Accruals", AccountCategoryType.Liability, TaxTreatment.Other);
-        var corporationTaxChargeId = await GetOrCreateCategoryIdAsync(companyId, "8000", "Corporation Tax Charge", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
-        var corporationTaxPayableId = await GetOrCreateCategoryIdAsync(companyId, "2400", "Corporation Tax Payable", AccountCategoryType.Liability, TaxTreatment.Other);
-        var dividendsPaidId = await GetOrCreateCategoryIdAsync(companyId, "3200", "Dividends Paid", AccountCategoryType.Equity, TaxTreatment.Other);
-        var dividendsPayableId = await GetOrCreateCategoryIdAsync(companyId, "2800", "Dividends Payable", AccountCategoryType.Liability, TaxTreatment.Other);
-        var bankControlId = await GetOrCreateCategoryIdAsync(companyId, "1400", "Bank Current Account", AccountCategoryType.Asset, TaxTreatment.Other);
-        var disposalLossId = await GetOrCreateCategoryIdAsync(companyId, "7050", "Loss on Disposal of Fixed Assets", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
-        var disposalGainId = await GetOrCreateCategoryIdAsync(companyId, "9000", "Gain on Disposal of Fixed Assets", AccountCategoryType.Income, TaxTreatment.Other);
+        // Postings find their accounts by system role, resolved (and created if missing) when a posting
+        // needs one. The generic chart resolves every role up front, in today's order and exactly as the
+        // old code lookup did (role holder, else the default code's account, else create), without any
+        // check: resolving is not posting (see ChartAccountDefaults.EnsuresAdjustmentRolesUpFront).
+        // The account must hold the role and have the role's Type only when a posting uses it.
+        var variant = period.Company.ChartOfAccountsVariant;
+        var companyRows = await db.AccountCategories.Where(c => c.CompanyId == companyId).ToListAsync();
+        var roleAccounts = new Dictionary<AccountSystemRole, AccountCategory>();
+        async Task<int> RoleId(AccountSystemRole role)
+        {
+            if (!roleAccounts.TryGetValue(role, out var account))
+                roleAccounts[role] = account = await GetOrCreateRoleCategoryAsync(companyId, variant, role, companyRows, adoptByCode: false);
+            RequirePostableRoleAccount(variant, role, account);
+            return account.Id;
+        }
+        // A company holding a charitable tax exemption gets no corporation-tax provision, so its CT
+        // accounts are neither posted to nor created (keyed on the exemption, not on the company type),
+        // unless an Owner or Reviewer has confirmed its entered liability is due: then it is provided for
+        // exactly as for a company without the exemption.
+        var corporationTaxExempt = period.Company.HoldsCharitableTaxExemption
+            && !await CorporationTaxObligation.IsConfirmedDueAsync(db, periodId);
+        async Task EnsureRolesUpFront(params AccountSystemRole[] roles)
+        {
+            if (!ChartAccountDefaults.EnsuresAdjustmentRolesUpFront(variant)) return;
+            foreach (var role in roles)
+            {
+                if (corporationTaxExempt && role is AccountSystemRole.CorporationTaxCharge or AccountSystemRole.CorporationTaxPayable)
+                    continue;
+                if (!roleAccounts.ContainsKey(role))
+                    roleAccounts[role] = await GetOrCreateRoleCategoryAsync(companyId, variant, role, companyRows, adoptByCode: true);
+            }
+        }
+        await EnsureRolesUpFront(
+            AccountSystemRole.Depreciation,
+            AccountSystemRole.Prepayments,
+            AccountSystemRole.Stock,
+            AccountSystemRole.CostOfSalesStockMovement,
+            AccountSystemRole.Accruals,
+            AccountSystemRole.CorporationTaxCharge,
+            AccountSystemRole.CorporationTaxPayable,
+            AccountSystemRole.DividendsPaid,
+            AccountSystemRole.DividendsPayable,
+            AccountSystemRole.BankControl,
+            AccountSystemRole.DisposalLoss,
+            AccountSystemRole.DisposalGain);
 
         var priorPeriod = await PeriodChronologyService
             .PriorPeriodQuery(db, companyId, period.PeriodStart)
@@ -172,13 +205,15 @@ public class AdjustmentService(AccountsDbContext db)
             depEntry.Charge = charge;
             depEntry.ClosingNbv = openingNbv - charge;
 
-            var assetCategoryId = await GetAssetCategoryIdAsync(companyId, asset.Category);
+            var assetCategoryId = await GetAssetCategoryIdAsync(companyId, variant, asset.Category, companyRows);
             if (charge > 0)
                 adjustments.Add(new Adjustment
             {
                 PeriodId = periodId,
                 Description = $"Depreciation — {asset.Name} ({asset.Category})",
-                DebitCategoryId = depreciationExpenseId,
+                DebitCategoryId = ChartAccountDefaults.DepreciationAccount(variant, asset.Category) is { } classDepreciation
+                    ? await GetOrCreateCodedCategoryIdAsync(companyId, classDepreciation, companyRows)
+                    : await RoleId(AccountSystemRole.Depreciation),
                 CreditCategoryId = assetCategoryId,
                 Amount = charge,
                 Source = AdjustmentSource.Auto,
@@ -205,7 +240,7 @@ public class AdjustmentService(AccountsDbContext db)
                     {
                         PeriodId = periodId,
                         Description = $"Fixed asset disposal loss — {asset.Name}",
-                        DebitCategoryId = disposalLossId,
+                        DebitCategoryId = await RoleId(AccountSystemRole.DisposalLoss),
                         CreditCategoryId = assetCategoryId,
                         Amount = difference,
                         Source = AdjustmentSource.Auto,
@@ -222,7 +257,7 @@ public class AdjustmentService(AccountsDbContext db)
                         PeriodId = periodId,
                         Description = $"Fixed asset disposal gain — {asset.Name}",
                         DebitCategoryId = assetCategoryId,
-                        CreditCategoryId = disposalGainId,
+                        CreditCategoryId = await RoleId(AccountSystemRole.DisposalGain),
                         Amount = Math.Abs(difference),
                         Source = AdjustmentSource.Auto,
                         Reason = $"Proceeds €{proceeds:N2} less NBV €{depEntry.ClosingNbv:N2}; fixed-asset source #{asset.Id}",
@@ -245,8 +280,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Prepayment — {prep.Name}",
-                DebitCategoryId = prepaymentId,
-                CreditCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, prep.Name),
+                DebitCategoryId = await RoleId(AccountSystemRole.Prepayments),
+                CreditCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, variant, prep.Name, companyRows),
                 Amount = prep.Amount,
                 Source = AdjustmentSource.Auto,
                 Reason = "Expense paid in advance, recognised as current asset",
@@ -264,8 +299,7 @@ public class AdjustmentService(AccountsDbContext db)
         // debtor as a current asset. Recognise the income (turnover) with the debtor as the contra so
         // the reserves side moves in step with the net-assets side and the sheet reconciles.
         // (Trade debtors only — Other debtors have an ambiguous contra and need a manual adjustment.)
-        var tradeDebtorsId = await GetOrCreateCategoryIdAsync(companyId, "1100", "Trade Debtors", AccountCategoryType.Asset, TaxTreatment.Other);
-        var salesId = await GetOrCreateCategoryIdAsync(companyId, "4000", "Sales / Revenue", AccountCategoryType.Income, TaxTreatment.Deductible);
+        await EnsureRolesUpFront(AccountSystemRole.TradeDebtors, AccountSystemRole.TradeDebtorIncome);
         var tradeDebtors = await db.Debtors
             .Where(d => d.PeriodId == periodId && d.Type == DebtorType.Trade && d.Amount > 0)
             .ToListAsync();
@@ -276,8 +310,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Trade debtor — {debtor.Name}",
-                DebitCategoryId = tradeDebtorsId,
-                CreditCategoryId = salesId,
+                DebitCategoryId = await RoleId(AccountSystemRole.TradeDebtors),
+                CreditCategoryId = await RoleId(AccountSystemRole.TradeDebtorIncome),
                 Amount = debtor.Amount,
                 Source = AdjustmentSource.Auto,
                 Reason = "Income earned but not yet received, recognised as turnover with a trade receivable",
@@ -300,8 +334,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Accrual — {acc.Name}",
-                DebitCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, acc.Name),
-                CreditCategoryId = accrualsId,
+                DebitCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, variant, acc.Name, companyRows),
+                CreditCategoryId = await RoleId(AccountSystemRole.Accruals),
                 Amount = acc.Amount,
                 Source = AdjustmentSource.Auto,
                 Reason = "Expense incurred but not yet invoiced/paid",
@@ -318,7 +352,7 @@ public class AdjustmentService(AccountsDbContext db)
         // P&L has not seen it, while the balance sheet already carries the payable. Recognise the
         // expense with the creditor as the contra so net assets and reserves stay reconciled.
         // (Trade creditors only — Other creditors have an ambiguous contra and need a manual entry.)
-        var tradeCreditorsId = await GetOrCreateCategoryIdAsync(companyId, "2000", "Trade Creditors", AccountCategoryType.Liability, TaxTreatment.Other);
+        await EnsureRolesUpFront(AccountSystemRole.TradeCreditors);
         var tradeCreditors = await db.Creditors
             .Where(c => c.PeriodId == periodId && c.Type == CreditorType.Trade && c.Amount > 0)
             .ToListAsync();
@@ -329,8 +363,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Trade creditor — {tradeCreditor.Name}",
-                DebitCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, tradeCreditor.Name),
-                CreditCategoryId = tradeCreditorsId,
+                DebitCategoryId = await GetExpenseCategoryForDescriptionAsync(companyId, variant, tradeCreditor.Name, companyRows),
+                CreditCategoryId = await RoleId(AccountSystemRole.TradeCreditors),
                 Amount = tradeCreditor.Amount,
                 Source = AdjustmentSource.Auto,
                 Reason = "Expense incurred but not yet paid, recognised with a trade payable",
@@ -347,8 +381,7 @@ public class AdjustmentService(AccountsDbContext db)
         // presented as a receivable in its own right, not netted against amounts the company owes its
         // directors. Post a reclassification from the director-loan-account liability to a director's
         // loan receivable. P&L-neutral — it moves a balance between presentation accounts only.
-        var directorLoanAccountId = await GetOrCreateCategoryIdAsync(companyId, "2500", "Director Loan Account", AccountCategoryType.Liability, TaxTreatment.Other);
-        var directorLoanReceivableId = await GetOrCreateCategoryIdAsync(companyId, "1150", "Director Loan Account (debit)", AccountCategoryType.Asset, TaxTreatment.Other);
+        await EnsureRolesUpFront(AccountSystemRole.DirectorLoanLiability, AccountSystemRole.DirectorLoanReceivable);
         var overdrawnDirectorLoans = await db.DirectorLoans
             .Include(d => d.Director)
             .Where(d => d.PeriodId == periodId
@@ -364,8 +397,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = $"Director loan reclassification — {dl.CounterpartyName ?? dl.Director?.Name ?? $"Arrangement #{dl.Id}"}",
-                DebitCategoryId = directorLoanReceivableId,
-                CreditCategoryId = directorLoanAccountId,
+                DebitCategoryId = await RoleId(AccountSystemRole.DirectorLoanReceivable),
+                CreditCategoryId = await RoleId(AccountSystemRole.DirectorLoanLiability),
                 Amount = dl.ClosingBalance,
                 Source = AdjustmentSource.Auto,
                 Reason = $"Overdrawn director's loan account of €{dl.ClosingBalance:N2} presented as a receivable, not offset against creditors",
@@ -381,14 +414,14 @@ public class AdjustmentService(AccountsDbContext db)
         var corpTax = await db.TaxBalances
             .FirstOrDefaultAsync(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax);
 
-        if (corpTax != null && corpTax.Liability > 0)
+        if (!corporationTaxExempt && corpTax != null && corpTax.Liability > 0)
         {
             adjustments.Add(new Adjustment
             {
                 PeriodId = periodId,
                 Description = "Corporation tax provision",
-                DebitCategoryId = corporationTaxChargeId,
-                CreditCategoryId = corporationTaxPayableId,
+                DebitCategoryId = await RoleId(AccountSystemRole.CorporationTaxCharge),
+                CreditCategoryId = await RoleId(AccountSystemRole.CorporationTaxPayable),
                 Amount = corpTax.Liability,
                 Source = AdjustmentSource.Auto,
                 Reason = $"Estimated corporation tax liability: €{corpTax.Liability:N2}",
@@ -412,8 +445,8 @@ public class AdjustmentService(AccountsDbContext db)
             {
                 PeriodId = periodId,
                 Description = "Closing stock / inventory recognition",
-                DebitCategoryId = inventoryId,
-                CreditCategoryId = costOfSalesId,
+                DebitCategoryId = await RoleId(AccountSystemRole.Stock),
+                CreditCategoryId = await RoleId(AccountSystemRole.CostOfSalesStockMovement),
                 Amount = closingStockValue,
                 Source = AdjustmentSource.Auto,
                 Reason = $"Closing stock valued at €{closingStockValue:N2} ({string.Join(", ", inventories.Select(i => i.ValuationMethod.ToString()).Distinct())})",
@@ -432,25 +465,24 @@ public class AdjustmentService(AccountsDbContext db)
             .Where(d => d.PeriodId == periodId && d.Amount > 0)
             .OrderBy(d => d.Id)
             .ToListAsync();
+        // A bank payment can only already be categorised to an existing dividends account, so the
+        // match looks the role up without creating it; with no such account nothing can match.
+        int? dividendsPaidId = roleAccounts.TryGetValue(AccountSystemRole.DividendsPaid, out var knownDividendsPaid)
+            ? knownDividendsPaid.Id
+            : RoleHolder(companyRows, AccountSystemRole.DividendsPaid)?.Id;
         foreach (var dividend in dividends)
         {
             if (dividend.DatePaid is { } paidDate)
             {
-                var matchedBankPosting = await db.ImportedTransactions.AnyAsync(t =>
-                    t.PeriodId == periodId
-                    && !t.IsDuplicate
-                    && t.CategoryId == dividendsPaidId
-                    && t.Date == paidDate
-                    && t.Amount == -dividend.Amount);
-                if (matchedBankPosting)
+                if (await IsDividendPaymentBankedAsync(db, periodId, dividendsPaidId, paidDate, dividend.Amount))
                     continue;
 
                 adjustments.Add(new Adjustment
                 {
                     PeriodId = periodId,
                     Description = $"Dividend paid — source #{dividend.Id}",
-                    DebitCategoryId = dividendsPaidId,
-                    CreditCategoryId = bankControlId,
+                    DebitCategoryId = await RoleId(AccountSystemRole.DividendsPaid),
+                    CreditCategoryId = await RoleId(AccountSystemRole.BankControl),
                     Amount = dividend.Amount,
                     Source = AdjustmentSource.Auto,
                     Reason = $"Dividend payment retained with paid date {paidDate:yyyy-MM-dd}",
@@ -465,8 +497,8 @@ public class AdjustmentService(AccountsDbContext db)
                 {
                     PeriodId = periodId,
                     Description = $"Dividend declared and unpaid — source #{dividend.Id}",
-                    DebitCategoryId = dividendsPaidId,
-                    CreditCategoryId = dividendsPayableId,
+                    DebitCategoryId = await RoleId(AccountSystemRole.DividendsPaid),
+                    CreditCategoryId = await RoleId(AccountSystemRole.DividendsPayable),
                     Amount = dividend.Amount,
                     Source = AdjustmentSource.Auto,
                     Reason = "Declared distribution recognised as a liability until payment",
@@ -535,64 +567,127 @@ public class AdjustmentService(AccountsDbContext db)
         return fraction;
     }
 
-    private async Task<int> GetAssetCategoryIdAsync(int companyId, string assetCategory)
-    {
-        var code = assetCategory switch
-        {
-            "Land & Buildings" or "Property" => "0010",
-            "Plant & Machinery" => "0020",
-            "Motor Vehicles" or "Vehicles" => "0030",
-            "Office Equipment" or "Equipment" or "Furniture" => "0040",
-            "Computer Equipment" or "IT" => "0050",
-            _ => "0040"
-        };
+    // A paid dividend is already in the ledger when a bank row categorised to the dividends account
+    // carries its paid date and amount. With no dividends account (null id) nothing can match: an
+    // uncategorised bank row never suppresses the dividend journal.
+    public static async Task<bool> IsDividendPaymentBankedAsync(
+        AccountsDbContext db, int periodId, int? dividendsPaidCategoryId, DateOnly paidDate, decimal amount) =>
+        dividendsPaidCategoryId is { } paidCategoryId
+        && await db.ImportedTransactions.AnyAsync(t =>
+            t.PeriodId == periodId
+            && !t.IsDuplicate
+            && t.CategoryId == paidCategoryId
+            && t.Date == paidDate
+            && t.Amount == -amount);
 
-        return await GetOrCreateCategoryIdAsync(companyId, code, assetCategory, AccountCategoryType.Asset, TaxTreatment.CapitalAllowance);
+    private async Task<int> GetAssetCategoryIdAsync(
+        int companyId, ChartOfAccountsVariant variant, string assetCategory, List<AccountCategory> companyRows) =>
+        await GetOrCreateCodedCategoryIdAsync(companyId, ChartAccountDefaults.FixedAssetAccount(variant, assetCategory), companyRows);
+
+    private async Task<int> GetExpenseCategoryForDescriptionAsync(
+        int companyId, ChartOfAccountsVariant variant, string description, List<AccountCategory> companyRows) =>
+        await GetOrCreateCodedCategoryIdAsync(companyId, ChartAccountDefaults.ExpenseAccountForDescription(variant, description), companyRows);
+
+    // The company account holding a system role (lowest Id first, as the code lookup did).
+    private static AccountCategory? RoleHolder(IEnumerable<AccountCategory> companyRows, AccountSystemRole role) =>
+        companyRows
+            .Where(c => CategoryClassification.Role(c) == role)
+            .OrderBy(c => c.Id)
+            .FirstOrDefault();
+
+    // A posting may use an account for a role only when it holds that role and has the role's Type;
+    // otherwise refuse rather than mis-post.
+    private static void RequirePostableRoleAccount(ChartOfAccountsVariant variant, AccountSystemRole role, AccountCategory account)
+    {
+        var expected = ChartAccountDefaults.RoleAccount(variant, role);
+        if (CategoryClassification.Role(account) != role)
+            throw new BusinessRuleException(
+                $"Automatic adjustments need an account for the {role} system role, but code {account.Code} is used by account '{account.Name}' ({account.Type}), which does not hold that role. Assign the role to the right account or free the code.");
+        if (account.Type != expected.Type)
+            throw new BusinessRuleException(
+                $"Account {account.Code} '{account.Name}' holds the {role} system role but is a {account.Type} account; automatic adjustments need a {expected.Type} account for that role.");
     }
 
-    private async Task<int> GetExpenseCategoryForDescriptionAsync(int companyId, string description)
-    {
-        var lower = description.ToLowerInvariant();
-        var (code, name) = lower switch
-        {
-            var text when text.Contains("interest") || text.Contains("loan") => ("6900", "Bank Charges & Interest"),
-            var text when text.Contains("account") || text.Contains("audit") => ("6810", "Accountancy Fees"),
-            var text when text.Contains("legal") || text.Contains("solicitor") => ("6820", "Legal Fees"),
-            var text when text.Contains("insurance") => ("6200", "Insurance"),
-            var text when text.Contains("electric") || text.Contains("heat") || text.Contains("light") => ("6300", "Light & Heat"),
-            var text when text.Contains("phone") || text.Contains("internet") || text.Contains("vodafone") => ("6400", "Telephone & Internet"),
-            var text when text.Contains("software") || text.Contains("subscription") => ("7300", "Software & Subscriptions"),
-            var text when text.Contains("rent") => ("6100", "Rent"),
-            _ => ("7900", "Sundry Expenses")
-        };
-
-        return await GetOrCreateCategoryIdAsync(companyId, code, name, AccountCategoryType.Expense, TaxTreatment.Deductible);
-    }
-
-    private async Task<int> GetOrCreateCategoryIdAsync(
+    // Role holder, else (generic up-front resolution only) the account with the default code, as the
+    // old code lookup adopted it; else a new account holding the role. Outside up-front resolution a
+    // default-coded account that does not hold the role is never adopted: its meaning is something
+    // else (e.g. a charity chart's 3200 restricted funds).
+    private async Task<AccountCategory> GetOrCreateRoleCategoryAsync(
         int companyId,
-        string code,
-        string name,
-        AccountCategoryType type,
-        TaxTreatment taxTreatment)
+        ChartOfAccountsVariant variant,
+        AccountSystemRole role,
+        List<AccountCategory> companyRows,
+        bool adoptByCode)
     {
-        var category = await db.AccountCategories
-            .FirstOrDefaultAsync(c => c.CompanyId == companyId && c.Code == code);
+        if (RoleHolder(companyRows, role) is { } holder)
+            return holder;
+
+        var definition = ChartAccountDefaults.RoleAccount(variant, role);
+        if (companyRows.Where(c => c.Code == definition.Code).OrderBy(c => c.Id).FirstOrDefault() is { } coded)
+        {
+            if (adoptByCode)
+                return coded;
+            RequirePostableRoleAccount(variant, role, coded);
+        }
+
+        var category = new AccountCategory
+        {
+            CompanyId = companyId,
+            Code = definition.Code,
+            Name = definition.Name,
+            Type = definition.Type,
+            TaxTreatment = definition.TaxTreatment,
+            IsSystem = true,
+            StatementLine = definition.StatementLine,
+            CashFlowClass = definition.CashFlowClass,
+            SystemRole = role
+        };
+        // An explicit (non-generic) definition is complete; only a generic one is classified by code.
+        if (definition.StatementLine is null)
+            CategoryClassification.ClassifyNew(category, companyRows);
+        db.AccountCategories.Add(category);
+        await db.SaveChangesAsync();
+        companyRows.Add(category);
+
+        return category;
+    }
+
+    // Accounts without a system role (fixed-asset classes, expense heads) are found by the chart
+    // variant's code, and only when the existing account has the expected Type.
+    private async Task<int> GetOrCreateCodedCategoryIdAsync(
+        int companyId,
+        ChartAccountDefaults.DefaultAccount definition,
+        List<AccountCategory> companyRows)
+    {
+        var category = companyRows
+            .Where(c => c.Code == definition.Code)
+            .OrderBy(c => c.Id)
+            .FirstOrDefault();
 
         if (category != null)
+        {
+            if (category.Type != definition.Type)
+                throw new BusinessRuleException(
+                    $"Automatic adjustments need a {definition.Type} account with code {definition.Code}, but that code is used by '{category.Name}', a {category.Type} account.");
             return category.Id;
+        }
 
         category = new AccountCategory
         {
             CompanyId = companyId,
-            Code = code,
-            Name = name,
-            Type = type,
-            TaxTreatment = taxTreatment,
-            IsSystem = true
+            Code = definition.Code,
+            Name = definition.Name,
+            Type = definition.Type,
+            TaxTreatment = definition.TaxTreatment,
+            IsSystem = true,
+            StatementLine = definition.StatementLine,
+            CashFlowClass = definition.CashFlowClass
         };
+        if (definition.StatementLine is null)
+            CategoryClassification.ClassifyNew(category, companyRows);
         db.AccountCategories.Add(category);
         await db.SaveChangesAsync();
+        companyRows.Add(category);
 
         return category.Id;
     }

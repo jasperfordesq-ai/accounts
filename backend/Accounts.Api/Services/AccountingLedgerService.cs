@@ -83,7 +83,8 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
         AccountingPeriod Period,
         IReadOnlyList<AccountCategory> Categories,
         IReadOnlyDictionary<int, LedgerLine> Lines,
-        IReadOnlyList<CashMovement> CashMovements)
+        IReadOnlyList<CashMovement> CashMovements,
+        IReadOnlyList<CashMovement> CashOrOverdraftMovements)
     {
         public decimal TotalDebits => Lines.Values.Sum(line => line.Debit);
         public decimal TotalCredits => Lines.Values.Sum(line => line.Credit);
@@ -125,8 +126,8 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
                 .ToListAsync();
             var lines = categories.ToDictionary(c => c.Id, c => new LedgerLine(c));
             var categoryById = categories.ToDictionary(c => c.Id);
-            var bankCategory = PreferredCategory(categories, companyId, "1400");
-            var retainedCategory = PreferredCategory(categories, companyId, "3100");
+            var bankCategory = CategoryClassification.PreferredByRole(categories, companyId, AccountSystemRole.BankControl);
+            var retainedCategory = CategoryClassification.PreferredByRole(categories, companyId, AccountSystemRole.RetainedEarnings);
 
             var explicitOpenings = await db.OpeningBalances
                 .AsNoTracking()
@@ -142,7 +143,11 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
             if (carriedPriorLedger)
             {
                 var prior = await BuildAsync(companyId, priorPeriod!.Id, path);
-                CarryForward(prior, lines, categories, companyId, retainedCategory);
+                var variant = await db.Companies
+                    .Where(company => company.Id == companyId)
+                    .Select(company => (ChartOfAccountsVariant?)company.ChartOfAccountsVariant)
+                    .FirstOrDefaultAsync();
+                CarryForward(prior, lines, categories, companyId, retainedCategory, variant == ChartOfAccountsVariant.CharityClg);
             }
             else
             {
@@ -158,6 +163,7 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
 
                 if (bankCategory is not null)
                 {
+                    RequireUsableBankControl(bankCategory);
                     var bankOpenings = await db.BankAccounts
                         .AsNoTracking()
                         .Where(b => b.CompanyId == companyId
@@ -176,6 +182,9 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
             }
 
             var cashMovements = new List<CashMovement>();
+            // The charity presentation counts a bank overdraft account as cash: a transfer between two
+            // cash or overdraft accounts is no cash flow, and a journal to an overdraft account is one.
+            var cashOrOverdraftMovements = new List<CashMovement>();
             var transactions = await db.ImportedTransactions
                 .AsNoTracking()
                 .Where(t => t.PeriodId == periodId && t.CategoryId != null && !t.IsDuplicate)
@@ -185,7 +194,8 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
             foreach (var transaction in transactions)
             {
                 if (bankCategory is null)
-                    throw new BusinessRuleException("The bank control account (1400) is required before transactions can be posted.");
+                    throw new BusinessRuleException("The bank control account (an Asset account holding the BankControl system role) is required before transactions can be posted.");
+                RequireUsableBankControl(bankCategory);
                 if (!categoryById.TryGetValue(transaction.CategoryId!.Value, out var contra)
                     || !lines.TryGetValue(contra.Id, out var contraLine))
                     throw new BusinessRuleException($"Imported transaction #{transaction.Id} refers to an unavailable account category.");
@@ -207,7 +217,11 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
                     lines[bankCategory.Id].AddTransactionCredit(amount, source);
                     contraLine.AddTransactionDebit(amount, source);
                 }
-                cashMovements.Add(new CashMovement(transaction.Amount, contra, source));
+                // A transfer to another cash account moves cash within cash: no cash flow (as journals).
+                if (!IsCash(contra))
+                    cashMovements.Add(new CashMovement(transaction.Amount, contra, source));
+                if (!CategoryClassification.IsCashOrBankOverdraft(contra))
+                    cashOrOverdraftMovements.Add(new CashMovement(transaction.Amount, contra, source));
             }
 
             var adjustments = await db.Adjustments
@@ -235,9 +249,16 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
                         ? new CashMovement(adjustment.Amount, creditCategory, source)
                         : new CashMovement(-adjustment.Amount, debitCategory, source));
                 }
+                var debitIsCashOrOverdraft = CategoryClassification.IsCashOrBankOverdraft(debitCategory);
+                if (debitIsCashOrOverdraft ^ CategoryClassification.IsCashOrBankOverdraft(creditCategory))
+                {
+                    cashOrOverdraftMovements.Add(debitIsCashOrOverdraft
+                        ? new CashMovement(adjustment.Amount, creditCategory, source)
+                        : new CashMovement(-adjustment.Amount, debitCategory, source));
+                }
             }
 
-            return new LedgerSnapshot(period, categories, lines, cashMovements);
+            return new LedgerSnapshot(period, categories, lines, cashMovements, cashOrOverdraftMovements);
         }
         finally
         {
@@ -250,7 +271,8 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
         Dictionary<int, LedgerLine> currentLines,
         IReadOnlyList<AccountCategory> currentCategories,
         int companyId,
-        AccountCategory? retainedCategory)
+        AccountCategory? retainedCategory,
+        bool restrictedFundsPersist)
     {
         decimal retainedNetDebit = 0m;
         var priorReference = $"Carried from exact prior period #{prior.Period.Id} ending {prior.Period.PeriodEnd:yyyy-MM-dd}";
@@ -260,8 +282,14 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
             if (priorLine.NetDebit == 0)
                 continue;
 
+            // Share capital keeps its own balance, and so do restricted funds on the charity chart; every
+            // other equity, income and expense balance closes into retained earnings (members' funds on
+            // the charity chart). Any other company is unchanged, even one with a RestrictedFunds account.
+            var equityLine = CategoryClassification.Line(priorLine.Category);
             var isPersistentBalance = priorLine.Category.Type is AccountCategoryType.Asset or AccountCategoryType.Liability
-                || (priorLine.Category.Type == AccountCategoryType.Equity && priorLine.Category.Code == "3000");
+                || (priorLine.Category.Type == AccountCategoryType.Equity
+                    && (equityLine == AccountStatementLine.ShareCapital
+                        || (restrictedFundsPersist && equityLine == AccountStatementLine.RestrictedFunds)));
             if (!isPersistentBalance)
             {
                 retainedNetDebit += priorLine.NetDebit;
@@ -281,7 +309,10 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
         if (retainedNetDebit == 0)
             return;
         if (retainedCategory is null || !currentLines.TryGetValue(retainedCategory.Id, out var retainedLine))
-            throw new BusinessRuleException("The retained earnings account (3100) is required to close the prior-period ledger.");
+            throw new BusinessRuleException("The retained earnings account (an Equity account holding the RetainedEarnings system role) is required to close the prior-period ledger.");
+        if (retainedCategory.Type != AccountCategoryType.Equity)
+            throw new BusinessRuleException(
+                $"Account {retainedCategory.Code} holds the RetainedEarnings system role but is a {retainedCategory.Type} account; the retained earnings account must be an Equity account.");
 
         if (retainedNetDebit > 0) retainedLine.AddOpeningDebit(retainedNetDebit, priorReference + " (closed to retained earnings)");
         else retainedLine.AddOpeningCredit(retainedNetDebit, priorReference + " (closed to retained earnings)");
@@ -297,6 +328,14 @@ internal sealed class AccountingLedgerService(AccountsDbContext db)
             .ThenBy(c => c.Id)
             .FirstOrDefault();
 
-    internal static bool IsCash(AccountCategory category) =>
-        category.Type == AccountCategoryType.Asset && category.Code.StartsWith("14", StringComparison.Ordinal);
+    // Fail rather than mis-post when the BankControl role is held by an account that is not a cash
+    // at bank Asset.
+    private static void RequireUsableBankControl(AccountCategory bankCategory)
+    {
+        if (bankCategory.Type != AccountCategoryType.Asset || !CategoryClassification.IsCash(bankCategory))
+            throw new BusinessRuleException(
+                $"Account {bankCategory.Code} holds the BankControl system role but is a {bankCategory.Type} account on the {CategoryClassification.Line(bankCategory)} line; the bank control account must be an Asset presented as cash at bank.");
+    }
+
+    internal static bool IsCash(AccountCategory category) => CategoryClassification.IsCash(category);
 }

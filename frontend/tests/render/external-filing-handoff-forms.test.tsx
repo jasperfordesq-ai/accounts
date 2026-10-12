@@ -84,7 +84,9 @@ describe("external filing handoff command forms", () => {
     const { unmount } = render(
       <RevenueSnapshotForm workspace={externalFilingHandoffWorkspaceFixture} busy={false} onSave={revenueSave} onCancel={vi.fn()} />,
     );
-    await user.click(screen.getByRole("checkbox", { name: /qualified reviewer checked every unsupported CT1 section/i }));
+    expect(screen.getByText(/Leave empty only once every unsupported section has been checked against the live ROS return./)).toBeInTheDocument();
+    expect(screen.queryByText(/named reviewer/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /Every unsupported CT1 section was checked against the live ROS return/i }));
     await user.click(screen.getByRole("button", { name: "Retain Revenue support snapshot" }));
     expect(revenueSave).toHaveBeenCalledWith(expect.objectContaining({
       unsupportedSectionsReviewed: true,

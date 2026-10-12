@@ -139,7 +139,8 @@ public class FilingWorkflowService(
         if (!hasActiveSecretary) issues.Add("No active company secretary recorded for CRO accounts certification.");
         if (croStatus.Status == FilingStatus.Submitted && !croStatus.PaymentCompleted)
             issues.Add("CORE payment has not been confirmed. The B1 is not complete until payment is made.");
-        if (croStatus.Status == FilingStatus.CorrectionRequired && croStatus.CorrectionDeadline.HasValue && croStatus.CorrectionDeadline.Value < DateTime.UtcNow)
+        // Keyed on the open correction, so a corrected pack approved before the deadline is still blocked after it.
+        if (cro is not null && FilingReleaseGate.HasOpenCorrection(cro) && cro.CorrectionDeadline is { } correctionDeadline && correctionDeadline < DateTime.UtcNow)
             issues.Add("CRO correction deadline has passed. Treat the filing as not delivered and recalculate late filing exposure.");
 
         if (period.Company.IsCharitableOrganisation)
@@ -161,8 +162,8 @@ public class FilingWorkflowService(
                 && d.PeriodId == periodId
                 && d.FiledDate == null
                 && d.DueDate < today
-                && !(d.DeadlineType == DeadlineType.Revenue && period.Company.HoldsCharitableTaxExemption)
                 && !(d.DeadlineType == DeadlineType.Charity && !period.Company.IsCharitableOrganisation))
+            .Where(CorporationTaxObligation.DeadlineApplies)
             .OrderBy(d => d.DueDate)
             .ToListAsync();
 
@@ -183,6 +184,10 @@ public class FilingWorkflowService(
             ?? throw new FilingReleaseBlockedException("Generate and retain the CRO filing artifacts before changing final filing state.");
         var oldValue = CroFilingAuditSnapshot(pkg);
         string? coreSubmissionReference = null;
+        // The CRO sends back or rejects a filing it received: re-recording a send-back would restart its
+        // deadline, and a rejection from any other state would escape it.
+        if (status is FilingStatus.CorrectionRequired or FilingStatus.Rejected && pkg.FilingStatus != FilingStatus.Submitted)
+            throw new BusinessRuleException("A CRO send-back or rejection can only be recorded for a filing recorded as submitted to CORE.");
 
         if (status == FilingStatus.Approved)
         {
@@ -210,6 +215,11 @@ public class FilingWorkflowService(
                 throw new BusinessRuleException("Record the director and company secretary signatories before submitting the CRO filing.");
 
             coreSubmissionReference = NormalizeFilingReference(submissionReference ?? pkg.CroSubmissionReference, "CORE submission reference");
+            // A corrected filing is a new CORE submission: the send-back's reference cannot be reused.
+            if (FilingReleaseGate.HasOpenCorrection(pkg)
+                && string.Equals(coreSubmissionReference, pkg.CroSubmissionReference?.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new BusinessRuleException(
+                    $"Record the new CORE submission reference for the corrected filing; {pkg.CroSubmissionReference!.Trim()} is the reference of the filing the CRO sent back.");
 
             await ReleaseGate.AssertTransitionAsync(
                 companyId,
@@ -250,11 +260,20 @@ public class FilingWorkflowService(
             pkg.SubmittedBy = by;
             pkg.SubmittedAt = DateTime.UtcNow;
             pkg.CroSubmissionReference = coreSubmissionReference;
+            // The new submission ends any correction tracker; the audit entry keeps the old deadline and reason.
+            pkg.CorrectionDeadline = null;
+            pkg.RejectionReason = null;
         }
         if (status == FilingStatus.CorrectionRequired)
         {
             pkg.RejectionReason = string.IsNullOrWhiteSpace(reason) ? "CRO send-back/correction required. Correct and redeliver within 14 days." : reason.Trim();
-            pkg.CorrectionDeadline = DateTime.UtcNow.AddDays(14);
+            pkg.CorrectionDeadline = DateTime.UtcNow.AddDays(FilingReleaseGate.CorrectionWindowDays);
+        }
+        if (status == FilingStatus.Rejected)
+        {
+            // A rejection has no correction window; its recorded reason keeps the correction open.
+            pkg.RejectionReason = string.IsNullOrWhiteSpace(reason) ? "CRO rejected the submission." : reason.Trim();
+            pkg.CorrectionDeadline = null;
         }
 
         await db.SaveChangesAsync();
@@ -269,6 +288,78 @@ public class FilingWorkflowService(
                 oldValue,
                 CroFilingAuditSnapshot(pkg),
                 auditUserId ?? by);
+        }
+        return pkg;
+    }
+
+    /// <summary>
+    /// The CRO treats a filing sent back for correction (or rejected) as not delivered, typically once the
+    /// correction deadline has passed: an Owner or Reviewer closes the correction tracker with a reason.
+    /// The status returns to the pre-approval state and the approval and external submission are cleared,
+    /// so the filing is made afresh; a filed CRO deadline is reopened and the deadlines are recalculated
+    /// so late-filing exposure shows. Nothing is deleted from the record: the audit entry keeps the old
+    /// reference, deadline and send-back reason.
+    /// </summary>
+    public async Task<CroFilingPackage> TreatCroAsNotDeliveredAsync(int companyId, int periodId, string reason, AuthenticatedUser actor)
+    {
+        if (!string.Equals(actor.Role, "Owner", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(actor.Role, "Reviewer", StringComparison.OrdinalIgnoreCase))
+            throw new BusinessRuleException("Only an Owner or Reviewer can treat a CRO filing as not delivered.");
+        var trimmedReason = reason?.Trim() ?? "";
+        if (trimmedReason.Length is < 5 or > 1000)
+            throw new BusinessRuleException("Explain why the CRO filing is being treated as not delivered (5 to 1,000 characters).");
+
+        var period = await db.AccountingPeriods
+            .Include(p => p.Company)
+            .Include(p => p.CroFilingPackage)
+            .FirstOrDefaultAsync(p => p.Id == periodId && p.CompanyId == companyId)
+            ?? throw new ResourceNotFoundException($"Period {periodId} not found");
+        var pkg = period.CroFilingPackage;
+        if (pkg is null || !FilingReleaseGate.HasOpenCorrection(pkg))
+            throw new BusinessRuleException("Only a CRO filing that was sent back for correction or rejected can be treated as not delivered.");
+
+        var croDeadline = await db.FilingDeadlines
+            .FirstOrDefaultAsync(d => d.CompanyId == companyId && d.PeriodId == periodId && d.DeadlineType == DeadlineType.CRO);
+        var oldValue = new
+        {
+            Package = CroFilingAuditSnapshot(pkg),
+            CroDeadline = croDeadline is null
+                ? null
+                : new { croDeadline.DueDate, croDeadline.FiledDate, croDeadline.FilingReference, croDeadline.IsLate, croDeadline.PenaltyAmount }
+        };
+
+        FilingReleaseGate.CloseCroCorrectionAsNotDelivered(pkg);
+        // The filing was not delivered, so a CRO deadline recorded as filed is open again.
+        if (croDeadline?.FiledDate is not null)
+        {
+            croDeadline.FiledDate = null;
+            croDeadline.FilingReference = null;
+            croDeadline.IsLate = false;
+            croDeadline.PenaltyAmount = 0;
+        }
+        await db.SaveChangesAsync();
+
+        var auditUserId = AuthenticatedIdentity.AuditUserId(actor);
+        await (audit ?? new AuditService(db)).LogAsync(
+            companyId,
+            periodId,
+            "CroFilingPackage",
+            pkg.Id,
+            AuditEventCodes.CroFilingTreatedAsNotDelivered,
+            oldValue,
+            new { Reason = trimmedReason, Package = CroFilingAuditSnapshot(pkg) },
+            auditUserId);
+
+        if (period.Company.AnnualReturnDate is not null)
+        {
+            try
+            {
+                await new DeadlineService(db, audit, releaseGate: ReleaseGate).CalculateDeadlinesAsync(companyId, periodId, auditUserId);
+            }
+            catch (BusinessRuleException ex)
+            {
+                logger?.LogWarning(ex, "Deadlines were not recalculated after the CRO filing for period {PeriodId} was treated as not delivered.", periodId);
+            }
         }
         return pkg;
     }
@@ -630,6 +721,10 @@ public class FilingWorkflowService(
             db.CharityFilingPackages.Add(pkg);
         }
         var oldValue = CharityFilingAuditSnapshot(pkg);
+        // The regulator sends back or rejects a return it received: re-recording a send-back would restart
+        // its deadline, and a rejection from any other state would escape it.
+        if (status is FilingStatus.CorrectionRequired or FilingStatus.Rejected && pkg.FilingStatus != FilingStatus.Submitted)
+            throw new BusinessRuleException("A Charity annual return send-back or rejection can only be recorded for a return recorded as submitted.");
 
         if (status == FilingStatus.Approved)
         {
@@ -645,6 +740,8 @@ public class FilingWorkflowService(
         {
             if (pkg.FilingStatus != FilingStatus.Approved)
                 throw new BusinessRuleException("Approve the Charity annual return pack before marking it as submitted.");
+            if (FilingReleaseGate.HasOpenCorrection(pkg) && string.IsNullOrWhiteSpace(annualReturnReference))
+                throw new BusinessRuleException("Enter the annual return reference of the corrected return; the reference of the return that was sent back is not reused automatically.");
             await AssertCharityAnnualReturnEvidenceAsync(period, pkg);
             await statementsService.AssertFinalOutputReadinessAsync(companyId, periodId, "Charity annual return");
 
@@ -660,6 +757,9 @@ public class FilingWorkflowService(
             pkg.SubmittedBy = by;
             pkg.SubmittedAt = DateTime.UtcNow;
             pkg.Status = FilingPackageStatus.Submitted;
+            // The new submission ends any correction tracker; the audit entry keeps the old deadline and reason.
+            pkg.CorrectionDeadline = null;
+            pkg.RejectionReason = null;
         }
 
         if (status == FilingStatus.Accepted)
@@ -682,7 +782,7 @@ public class FilingWorkflowService(
         if (status == FilingStatus.CorrectionRequired)
         {
             pkg.RejectionReason = string.IsNullOrWhiteSpace(reason) ? "Charity annual return correction required." : reason.Trim();
-            pkg.CorrectionDeadline = DateTime.UtcNow.AddDays(14);
+            pkg.CorrectionDeadline = DateTime.UtcNow.AddDays(FilingReleaseGate.CorrectionWindowDays);
         }
 
         pkg.FilingStatus = status;

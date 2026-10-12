@@ -155,7 +155,7 @@ export function AccountantWorkingPaperWorkbench({
     >
       <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
         <p className="font-semibold">{pack.warning}</p>
-        <p className="mt-1">Qualified-accountant review remains required; this artifact is not a filing approval.</p>
+        <p className="mt-1">This artifact is not a filing approval; the directors&apos; s.324 approval is the filing gate and an accountant&apos;s review is optional.</p>
       </div>
 
       <section className="mt-4 grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-4 md:grid-cols-2 xl:grid-cols-4" aria-label="Working-paper artifact identity">

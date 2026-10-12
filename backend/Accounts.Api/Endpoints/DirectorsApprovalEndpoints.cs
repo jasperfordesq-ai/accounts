@@ -52,11 +52,32 @@ public sealed record DirectorsApprovalSummary(
         current.Approval.RecordSha256);
 }
 
+/// <summary>One approval or revocation in the period's verified hash chain. Reason is set on revocations only.</summary>
+public sealed record DirectorsApprovalHistoryItem(
+    int EventId,
+    string Kind,
+    DateOnly ApprovalDate,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Reason,
+    string RecordedByDisplayName,
+    DateTime RecordedAtUtc,
+    string RecordSha256)
+{
+    public static DirectorsApprovalHistoryItem From(DirectorsApprovalHistoryEntry entry) => new(
+        entry.Event.Id,
+        entry.Event.Kind.ToString(),
+        entry.Page.ApprovalDate,
+        entry.Event.RevocationReason,
+        entry.Event.RecordedByDisplayName,
+        entry.Event.RecordedAtUtc,
+        entry.Event.RecordSha256);
+}
+
 public sealed record DirectorsApprovalStateResponse(
     IReadOnlyList<DirectorOption> EligibleDirectors,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DirectorsApprovalPageSummary? LatestPage,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DirectorsApprovalSummary? Current,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateOnly? PeriodApprovalDate);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateOnly? PeriodApprovalDate,
+    IReadOnlyList<DirectorsApprovalHistoryItem> History);
 
 public sealed record CroSigningPackInput(
     int DirectorOfficerId,
@@ -124,6 +145,10 @@ public static class DirectorsApprovalEndpoints
         group.MapPost("/directors-approval", RecordApprovalEndpointAsync)
             .Produces<DirectorsApprovalSummary>();
 
+        group.MapPost("/directors-approval-withdrawal", WithdrawApprovalEndpointAsync)
+            .Produces<DirectorsApprovalHistoryItem>()
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapPost("/cro-signing-pack", RecordCroSigningPackEndpointAsync)
             .Produces<CroSigningPackSummary>();
 
@@ -159,12 +184,14 @@ public static class DirectorsApprovalEndpoints
             .OrderByDescending(p => p.Id)
             .FirstOrDefaultAsync();
         var current = await service.GetCurrentApprovalAsync(periodId);
+        var history = await service.GetVerifiedHistoryAsync(periodId);
 
         return Results.Ok(new DirectorsApprovalStateResponse(
             directors,
             latestPage is null ? null : DirectorsApprovalPageSummary.From(latestPage),
             current is null ? null : DirectorsApprovalSummary.From(current),
-            period.ApprovalDate));
+            period.ApprovalDate,
+            history.Select(DirectorsApprovalHistoryItem.From).ToList()));
     }
 
     public static async Task<IResult> GeneratePageEndpointAsync(
@@ -230,6 +257,31 @@ public static class DirectorsApprovalEndpoints
         var current = await service.GetCurrentApprovalAsync(periodId)
             ?? throw new BusinessRuleException("The approval was recorded but did not verify; contact support.");
         return Results.Ok(DirectorsApprovalSummary.From(current));
+    }
+
+    /// <summary>
+    /// Withdraws the current approval (it stays in the record, marked as withdrawn). Not limited to the
+    /// supported filing path: a mistaken approval must be correctable whatever the company's profile.
+    /// </summary>
+    public static async Task<IResult> WithdrawApprovalEndpointAsync(
+        int companyId,
+        int periodId,
+        DirectorsApprovalWithdrawalInput input,
+        DirectorsApprovalService service,
+        AccountsDbContext db,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        var revoked = await service.WithdrawAsync(companyId, periodId, input, AuthContext.RequireUser(context));
+        var entry = (await service.GetVerifiedHistoryAsync(periodId)).FirstOrDefault(h => h.Event.Id == revoked.Id)
+            ?? throw new BusinessRuleException("The withdrawal was recorded but did not verify; contact support.");
+        return Results.Ok(DirectorsApprovalHistoryItem.From(entry));
     }
 
     public static async Task<IResult> RecordCroSigningPackEndpointAsync(

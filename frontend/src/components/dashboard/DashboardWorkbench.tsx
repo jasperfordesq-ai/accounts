@@ -35,6 +35,7 @@ interface DashboardWorkbenchProps {
   onRetryDeadlines?: () => void | Promise<void>;
   canManageDeadlineRisk?: boolean;
   canRunDeadlineDelivery?: boolean;
+  canRetryDeadlineReminder?: boolean;
   deadlineRiskItems?: DeadlineRiskQueueItem[];
   deadlineRiskState?: ResourceState;
   deadlineRiskBusyKey?: string | null;
@@ -68,6 +69,7 @@ export function DashboardWorkbench({
   onRetryDeadlines,
   canManageDeadlineRisk = false,
   canRunDeadlineDelivery = false,
+  canRetryDeadlineReminder = false,
   deadlineRiskItems = [],
   deadlineRiskState = INITIAL_RESOURCE_STATE,
   deadlineRiskBusyKey = null,
@@ -122,6 +124,7 @@ export function DashboardWorkbench({
                 items={deadlineRiskItems}
                 state={deadlineRiskState}
                 canRunDelivery={canRunDeadlineDelivery}
+                canRetry={canRetryDeadlineReminder}
                 busyKey={deadlineRiskBusyKey}
                 actionMessage={deadlineRiskActionMessage}
                 onReload={onReloadDeadlineRisk}

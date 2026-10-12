@@ -93,8 +93,9 @@ public class DeadlineService(
         // ROS CT1/balance deadline: the earlier of nine months after period end and day 23
         // of that month. A period ending early in a month therefore keeps its exact day.
         // Suppressed when the company holds Revenue Charitable Tax Exemption — such bodies are
-        // exempt from CT1 and financial-statement filing to Revenue while the exemption is held.
-        if (!company.HoldsCharitableTaxExemption)
+        // exempt from CT1 and financial-statement filing to Revenue while the exemption is held —
+        // unless the period's corporation-tax liability is confirmed as due (CorporationTaxObligation).
+        if (await CorporationTaxObligation.RevenueAppliesAsync(db, periodId))
         {
             var revDueDate = CorporationTaxFilingSupportCalculator.ReturnAndBalanceDueDate(fye);
             deadlines.Add(await UpsertDeadline(
@@ -155,8 +156,8 @@ public class DeadlineService(
         return await db.FilingDeadlines
             .Where(d => d.CompanyId == companyId
                 && d.FiledDate == null
-                && !(d.DeadlineType == DeadlineType.Revenue && d.Company.HoldsCharitableTaxExemption)
                 && !(d.DeadlineType == DeadlineType.Charity && !d.Company.IsCharitableOrganisation))
+            .Where(CorporationTaxObligation.DeadlineApplies)
             .OrderBy(d => d.DueDate)
             .FirstOrDefaultAsync();
     }
@@ -168,8 +169,8 @@ public class DeadlineService(
     {
         return await db.FilingDeadlines
             .Where(d => d.CompanyId == companyId
-                && !(d.DeadlineType == DeadlineType.Revenue && d.Company.HoldsCharitableTaxExemption)
                 && !(d.DeadlineType == DeadlineType.Charity && !d.Company.IsCharitableOrganisation))
+            .Where(CorporationTaxObligation.DeadlineApplies)
             .OrderByDescending(d => d.DueDate)
             .ToListAsync();
     }
@@ -206,11 +207,12 @@ public class DeadlineService(
 
         await using var concurrencyLease = await new AccountingConcurrencyCoordinator(db)
             .AcquirePeriodAsync(companyId, periodId, cancellationToken);
-        var deadline = await db.FilingDeadlines.FirstOrDefaultAsync(candidate =>
+        var deadline = await db.FilingDeadlines
+            .Where(CorporationTaxObligation.DeadlineApplies)
+            .FirstOrDefaultAsync(candidate =>
                 candidate.CompanyId == companyId
                 && candidate.PeriodId == periodId
                 && candidate.DeadlineType == type
-                && !(candidate.DeadlineType == DeadlineType.Revenue && candidate.Company.HoldsCharitableTaxExemption)
                 && !(candidate.DeadlineType == DeadlineType.Charity && !candidate.Company.IsCharitableOrganisation),
             cancellationToken)
             ?? throw new BusinessRuleException("Deadline not found. Calculate deadlines first.");
@@ -296,10 +298,10 @@ public class DeadlineService(
         };
 
         var deadline = await db.FilingDeadlines
+            .Where(CorporationTaxObligation.DeadlineApplies)
             .FirstOrDefaultAsync(d => d.CompanyId == companyId
                 && d.PeriodId == periodId
                 && d.DeadlineType == type
-                && !(d.DeadlineType == DeadlineType.Revenue && d.Company.HoldsCharitableTaxExemption)
                 && !(d.DeadlineType == DeadlineType.Charity && !d.Company.IsCharitableOrganisation))
             ?? throw new BusinessRuleException("Deadline not found. Calculate deadlines first.");
         var oldValue = DeadlineAuditSnapshot(deadline);

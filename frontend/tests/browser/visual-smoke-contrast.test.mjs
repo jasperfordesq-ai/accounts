@@ -615,9 +615,24 @@ test("real Chromium permits only the paired anonymous session 401 and retains ot
     const expectedUnexpectedResponse = page.waitForResponse(
       (response) => response.url() === `${origin}/api/unexpected` && response.status() === 403,
     );
+    // Chromium reports a failed resource on the console after the response event, so wait for
+    // both console errors as well; otherwise the assertions below can race the console messages.
+    const expectedConsoleError = (url) =>
+      page.waitForEvent("console", {
+        predicate: (message) => message.type() === "error" && message.location().url === url,
+        timeout: 5_000,
+      });
+    const expectedSessionConsoleError = expectedConsoleError(`${origin}/api/auth/me`);
+    const expectedUnexpectedConsoleError = expectedConsoleError(`${origin}/api/unexpected`);
     const expectedPageError = page.waitForEvent("pageerror", { timeout: 5_000 });
     await page.goto(`${origin}/login`);
-    await Promise.all([expectedSessionResponse, expectedUnexpectedResponse, expectedPageError]);
+    await Promise.all([
+      expectedSessionResponse,
+      expectedUnexpectedResponse,
+      expectedSessionConsoleError,
+      expectedUnexpectedConsoleError,
+      expectedPageError,
+    ]);
     const errors = unexpectedVisualSmokeBrowserErrors({
       state: { id: "login", authMode: "anonymous" },
       consoleErrors,

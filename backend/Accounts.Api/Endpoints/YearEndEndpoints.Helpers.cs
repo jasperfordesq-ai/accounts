@@ -313,7 +313,13 @@ public static partial class YearEndEndpoints
         item.TaxType,
         item.Liability,
         item.Paid,
-        item.Balance
+        item.Balance,
+        item.ConfirmedDueBy,
+        item.ConfirmedDueAt,
+        item.ConfirmedDueReason,
+        item.ConfirmedDueLiability,
+        item.ConfirmedTaxableProfitOutsideExemption,
+        item.ConfirmedNonTradingProfitOutsideExemption
     };
 
     private static object YearEndReviewSnapshot(YearEndReviewConfirmation confirmation) => new

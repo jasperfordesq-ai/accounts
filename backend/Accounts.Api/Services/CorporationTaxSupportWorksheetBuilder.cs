@@ -98,7 +98,8 @@ public static class CorporationTaxSupportWorksheetBuilder
             Reconcile(
                 "tax-streams",
                 tax.TaxableProfit,
-                Math.Max(0m, tax.TradingProfitAfterLossRelief) + Math.Max(0m, tax.PassiveNonTradingIncome),
+                Math.Max(0m, tax.TradingProfitAfterLossRelief) + Math.Max(0m, tax.PassiveNonTradingIncome)
+                    + TaxComputationService.CharitableExemptionDeduction(tax.Adjustments),
                 "Taxable profit equals supported trading and non-trading streams."),
             Reconcile(
                 "tax-charge",
@@ -150,7 +151,7 @@ public static class CorporationTaxSupportWorksheetBuilder
             "Confirm each Trading Results and Extracts from Accounts field against the live ROS form; panel-only mappings are not field identifiers.",
             "Complete all applicable income, gains, deductions, reliefs, credits, surcharge, self-assessment and declaration panels not represented by this bounded worksheet.",
             "Complete and retain the separate Form 46G (Company) assessment where required.",
-            "Have a named qualified accountant approve the final ROS handoff and retain external validation/payment references."
+            "Have an Owner or Reviewer review the final ROS handoff in FilingBridge (an accountant's review is optional) and retain external validation/payment references."
         };
         var sources = new List<SourceReference>
         {

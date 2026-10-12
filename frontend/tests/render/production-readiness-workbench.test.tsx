@@ -313,6 +313,8 @@ describe("ProductionReadinessWorkbench", () => {
     expectText("filing-review-dark-mobile.png");
     expectText("named qualified-accountant route acceptance");
     expect(screen.getByRole("heading", { name: "Accountant acceptance criteria" })).toBeInTheDocument();
+    expectText("Scenario-by-scenario acceptance criteria for the generated packs; each company's filing gate remains its directors' s.324 approval.");
+    expect(screen.queryByText(/named qualified accountant must review/i)).not.toBeInTheDocument();
     expectText("Micro LTD accountant acceptance");
     expectText("Medium handoff accountant acceptance");
     expect(screen.getAllByText("Example Micro Limited").length).toBeGreaterThan(1);

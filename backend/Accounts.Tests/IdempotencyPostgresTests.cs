@@ -206,7 +206,8 @@ public sealed class IdempotencyPostgresTests
                 ALTER TABLE companies
                     ADD COLUMN "CharitableTaxExemptionConfirmedDate" date NULL,
                     ADD COLUMN "CharitableTaxExemptionReference" character varying(200) NULL,
-                    ADD COLUMN "HoldsCharitableTaxExemption" boolean NOT NULL DEFAULT FALSE
+                    ADD COLUMN "HoldsCharitableTaxExemption" boolean NOT NULL DEFAULT FALSE,
+                    ADD COLUMN "ChartOfAccountsVariant" text NOT NULL DEFAULT 'GenericTrading'
                 """);
             tenantId = await SeedTenantAsync(previous);
             var company = Company(tenantId, "Legacy Upgrade Limited");
@@ -261,7 +262,8 @@ public sealed class IdempotencyPostgresTests
                 ALTER TABLE companies
                     DROP COLUMN "CharitableTaxExemptionConfirmedDate",
                     DROP COLUMN "CharitableTaxExemptionReference",
-                    DROP COLUMN "HoldsCharitableTaxExemption"
+                    DROP COLUMN "HoldsCharitableTaxExemption",
+                    DROP COLUMN "ChartOfAccountsVariant"
                 """);
             await previous.Database.MigrateAsync();
         }

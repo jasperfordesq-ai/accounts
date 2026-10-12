@@ -200,6 +200,56 @@ public sealed class DashboardDeadlineBatchTests
         Assert.Null(item.OldestHistoricUnverified);
     }
 
+    // Batch B fix round: an exempt charity whose corporation-tax liability for the period is confirmed
+    // as due has a Revenue (CT1) obligation for that period, exactly as a non-exempt company does.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Batch_TreatsRevenueAsApplicableForAnExemptCharityWithCorporationTaxConfirmedDue(bool revenueCalculated)
+    {
+        await using var db = CreateDb();
+        var company = Assert.Single(await SeedCompaniesAsync(db, 1));
+        company.IsCharitableOrganisation = true;
+        company.HoldsCharitableTaxExemption = true;
+        company.CharitableTaxExemptionReference = "CHY-00000";
+        company.CharitableTaxExemptionConfirmedDate = new DateOnly(2022, 12, 16);
+        var period = AddPeriod(db, company);
+        await db.SaveChangesAsync();
+        db.TaxBalances.Add(new TaxBalance
+        {
+            PeriodId = period.Id,
+            TaxType = TaxType.CorporationTax,
+            Liability = 150m,
+            Balance = 150m,
+            ConfirmedDueBy = "Example Reviewer",
+            ConfirmedDueAt = new DateTime(2026, 7, 1, 9, 0, 0, DateTimeKind.Utc),
+            ConfirmedDueReason = "Income outside the exemption",
+            ConfirmedDueLiability = 150m,
+            ConfirmedTaxableProfitOutsideExemption = 1_200m,
+            ConfirmedNonTradingProfitOutsideExemption = 0m
+        });
+        var today = new DateOnly(2026, 7, 10);
+        db.FilingDeadlines.AddRange(
+            Deadline(period, today.AddDays(20)),
+            Deadline(period, today.AddDays(40), type: DeadlineType.Charity));
+        if (revenueCalculated)
+            db.FilingDeadlines.Add(Deadline(period, today.AddDays(5), type: DeadlineType.Revenue));
+        await db.SaveChangesAsync();
+
+        var item = Item(await CreateService(db, today).GetAsync(User("Owner")), company);
+
+        if (revenueCalculated)
+        {
+            Assert.Equal(DashboardDeadlineStates.DueSoon, item.State);
+            Assert.Equal(DeadlineType.Revenue, item.Deadline?.DeadlineType);
+        }
+        else
+        {
+            // The confirmed period is expected to carry a Revenue deadline.
+            Assert.Equal(DashboardDeadlineStates.NotConfigured, item.State);
+        }
+    }
+
     private static DashboardDeadlineItem Item(DashboardDeadlineBatch batch, Company company) =>
         Assert.Single(batch.Items, item => item.CompanyId == company.Id);
 

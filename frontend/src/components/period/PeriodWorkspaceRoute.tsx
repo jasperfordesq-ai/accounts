@@ -80,11 +80,13 @@ import {
   type TransactionRule,
   type AuditLogEntry,
 } from "@/lib/api";
+import { openingBalanceTargets } from "@/lib/accountCategoryTargets";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { ActionLink, WorkbenchHeader } from "@/components/workbench";
 import { PeriodAdjustmentsWorkspace } from "@/components/period/PeriodAdjustmentsWorkspace";
 import { PeriodWorkbenchOverview } from "@/components/period/PeriodWorkbenchOverview";
+import { PeriodFinalisePanel } from "@/components/period/PeriodFinalisePanel";
 import { PeriodCategoriseWorkspace } from "@/components/period/PeriodCategoriseWorkspace";
 import { PeriodFilingWorkspace } from "@/components/period/PeriodFilingWorkspace";
 import { PeriodImportWorkspace } from "@/components/period/PeriodImportWorkspace";
@@ -107,6 +109,8 @@ import {
   type ResourceState,
 } from "@/lib/resourceState";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
+import { initialCroSubmissionReference } from "@/lib/croCorrection";
+import { sizeClassificationLabel } from "@/lib/historicSizeFigures";
 import { InteractionAnnouncement } from "@/components/InteractionAnnouncement";
 import {
   captureInteractionFocus,
@@ -131,7 +135,7 @@ export function PeriodWorkspaceRoute({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const { canApprove, canRead, canReadInternalWorkingPapers, canReview, canWriteWorkingPapers } = useAuth();
+  const { canApprove, canRead, canReadInternalWorkingPapers, canReview, canWriteWorkingPapers, isOwner } = useAuth();
   const { announcement, announce } = useInteractionAnnouncements();
   const toast = useMemo(() => ({
     success(message: string) {
@@ -298,7 +302,7 @@ export function PeriodWorkspaceRoute({
       || ruleForm.categoryId !== ""
       || ruleForm.priority !== "100";
     const filingReferenceDraft = Object.values(filingReferences).some((value) => value.trim() !== "")
-      || croSubmissionReference !== (filingStatus?.cro.submissionReference ?? "");
+      || croSubmissionReference !== (filingStatus ? initialCroSubmissionReference(filingStatus.cro) : "");
     return bankDraft || openingBalanceDraft || ruleDraft || bulkCategoryId !== "" || filingReferenceDraft;
   }, [
     bankForm, bulkCategoryId, croSubmissionReference, filingReferences, filingStatus,
@@ -374,7 +378,7 @@ export function PeriodWorkspaceRoute({
     if (!request.isLatest()) return;
     if (result.values["filing-status"] !== undefined) {
       setFilingStatus(result.values["filing-status"]);
-      setCroSubmissionReference(result.values["filing-status"].cro.submissionReference ?? "");
+      setCroSubmissionReference(initialCroSubmissionReference(result.values["filing-status"].cro));
     }
     if (result.values["filing-readiness-profile"] !== undefined) {
       setFilingReadinessProfile(result.values["filing-readiness-profile"]);
@@ -999,13 +1003,13 @@ export function PeriodWorkspaceRoute({
   const sigPageUrl = getSignaturePageUrl(cId, pId);
   const readyToFile = filingStatus?.readyToFile ?? false;
   const periodDateRange = period ? formatPeriodRange(period.periodStart, period.periodEnd) : "Period loading";
-  const classificationLabel = period?.sizeClassification?.calculatedClass ?? "Unclassified";
+  const classificationLabel = sizeClassificationLabel(period?.sizeClassification, "Unclassified");
   const openingDebitTotal = openingBalances.reduce((sum, balance) => sum + balance.debit, 0);
   const openingCreditTotal = openingBalances.reduce((sum, balance) => sum + balance.credit, 0);
   const bankOpeningDebit = bankAccounts.filter((bank) => bank.openingBalance > 0).reduce((sum, bank) => sum + bank.openingBalance, 0);
   const bankOpeningCredit = bankAccounts.filter((bank) => bank.openingBalance < 0).reduce((sum, bank) => sum + Math.abs(bank.openingBalance), 0);
   const openingDifference = openingDebitTotal + bankOpeningDebit - openingCreditTotal - bankOpeningCredit;
-  const openingBalanceCategories = categories.filter((category) => category.type !== "Income" && category.type !== "Expense");
+  const openingBalanceCategories = openingBalanceTargets(categories);
   const visibleTransactionIds = transactions.map((tx) => tx.id);
   const allVisibleTransactionsSelected = visibleTransactionIds.length > 0
     && visibleTransactionIds.every((id) => selectedTransactionIds.includes(id));
@@ -1067,6 +1071,14 @@ export function PeriodWorkspaceRoute({
             </ActionLink>
           </>
         }
+      />
+
+      <PeriodFinalisePanel
+        companyId={cId}
+        period={period}
+        canFinalise={canApprove}
+        canReopen={isOwner}
+        onChanged={() => Promise.all([loadPeriodResources(), refreshFilingState()]).then(() => undefined)}
       />
 
       <PeriodWorkbenchOverview

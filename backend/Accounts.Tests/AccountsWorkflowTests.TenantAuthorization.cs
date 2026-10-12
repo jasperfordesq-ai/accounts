@@ -1436,6 +1436,14 @@ public partial class AccountsWorkflowTests
     [InlineData("POST", "documents/signature-page")]
     [InlineData("POST", "mark-filed")]
     [InlineData("POST", "deadlines/calculate")]
+    [InlineData("POST", "filing/directors-approval-withdrawal")]
+    [InlineData("POST", "filing/cro-not-delivered")]
+    [InlineData("PUT", "filing/revenue-status")]
+    [InlineData("PUT", "filing/charity-status")]
+    [InlineData("POST", "filing/directors-approval-page")]
+    [InlineData("POST", "filing/directors-approval")]
+    [InlineData("POST", "filing/cro-signing-pack")]
+    [InlineData("POST", "filing/accountant-review")]
     public async Task PeriodLockMiddleware_AllowsExactPostLockWorkflowWritesToFinalisedPeriod(string method, string suffix)
     {
         await using var db = CreateDbContext();
@@ -1471,6 +1479,12 @@ public partial class AccountsWorkflowTests
     [InlineData("POST", "documents/cro-filing-pack/extra")]
     [InlineData("POST", "deadlines/calculate/extra")]
     [InlineData("PUT", "filing/mark-generated")]
+    [InlineData("PUT", "filing/directors-approval-withdrawal")]
+    [InlineData("POST", "filing/cro-not-delivered/extra")]
+    [InlineData("POST", "filing/auditor-report")]
+    [InlineData("POST", "filing/revenue-external-validation")]
+    [InlineData("POST", "filing/charity-report-generated")]
+    [InlineData("POST", "filing/revenue-status")]
     public async Task PeriodLockMiddleware_BlocksPreparationAndFalsePositiveWorkflowWritesToFinalisedPeriod(string method, string suffix)
     {
         await using var db = CreateDbContext();

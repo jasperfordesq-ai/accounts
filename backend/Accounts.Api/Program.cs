@@ -171,6 +171,7 @@ builder.Services.AddScoped<FilingRegimeService>();
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<DuplicateReviewService>();
 builder.Services.AddScoped<CategoryService>();
+builder.Services.AddScoped<ChartAdoptionService>();
 builder.Services.AddScoped<CompanyOnboardingService>();
 builder.Services.AddScoped<IdempotencyService>();
 builder.Services.AddScoped<IdempotencyRetentionService>();

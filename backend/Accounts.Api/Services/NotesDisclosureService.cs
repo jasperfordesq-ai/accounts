@@ -194,8 +194,11 @@ public class NotesDisclosureService(AccountsDbContext db)
             ?? throw new ResourceNotFoundException($"Period {periodId} not found");
         var company = period.Company;
         var regime = period.FilingRegime?.ElectedRegime ?? ElectedRegime.Small;
-        var sizeClass = period.SizeClassification?.OverrideClass
-            ?? period.SizeClassification?.CalculatedClass
+        // An undecided row (inputs saved, no current decision) holds CLR defaults, not a class, and
+        // historic figures keyed in from filed accounts are never this period's class.
+        var decided = period.SizeClassification is { HasCurrentDecision: true, InputBasis: SizeInputBasis.Computed } classification ? classification : null;
+        var sizeClass = decided?.OverrideClass
+            ?? decided?.CalculatedClass
             ?? RegimeFallbackSize(regime);
         var confirmations = await db.YearEndReviewConfirmations
             .Where(review => review.PeriodId == periodId && review.Confirmed)
@@ -269,6 +272,7 @@ public class NotesDisclosureService(AccountsDbContext db)
             ? Required(StatutoryNoteCodes.LongTermCreditors, LongTermCreditorContent(balanceSheet.CreditorsAfterYear))
             : FactNotApplicable(StatutoryNoteCodes.LongTermCreditors, "No posted long-term creditor balance exists at period end."));
 
+        var charity = company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg;
         Add(company.CompanyType == CompanyType.CompanyLimitedByGuarantee
             ? FactNotApplicable(StatutoryNoteCodes.ShareCapital, "A company limited by guarantee has no share capital.")
             : balanceSheet.CapitalAndReserves.ShareCapital != 0
@@ -276,7 +280,9 @@ public class NotesDisclosureService(AccountsDbContext db)
                 StatutoryNoteCodes.ShareCapital,
                 $"Issued share capital at period end: {Money(balanceSheet.CapitalAndReserves.ShareCapital)}")
             : ExplicitReview(StatutoryNoteCodes.ShareCapital));
-        Add(Required(StatutoryNoteCodes.Reserves, ReserveContent(balanceSheet.CapitalAndReserves)));
+        Add(Required(StatutoryNoteCodes.Reserves, balanceSheet.MembersFunds is { } membersFunds
+            ? MembersFundsContent(membersFunds)
+            : ReserveContent(balanceSheet.CapitalAndReserves)));
 
         var payroll = await db.PayrollSummaries.SingleOrDefaultAsync(item => item.PeriodId == periodId);
         Add(company.IsEmployer
@@ -329,8 +335,8 @@ public class NotesDisclosureService(AccountsDbContext db)
 
         if (profitAndLoss is not null && equity is not null)
         {
-            Add(Required(StatutoryNoteCodes.Turnover, TurnoverContent(profitAndLoss)));
-            Add(Required(StatutoryNoteCodes.TaxOnProfit, TaxContent(profitAndLoss)));
+            Add(Required(StatutoryNoteCodes.Turnover, TurnoverContent(profitAndLoss, charity)));
+            Add(Required(StatutoryNoteCodes.TaxOnProfit, TaxContent(profitAndLoss, charity)));
 
             var dividends = await db.Dividends
                 .Where(item => item.PeriodId == periodId)
@@ -339,7 +345,9 @@ public class NotesDisclosureService(AccountsDbContext db)
                 .ToListAsync();
             Add(dividends.Count > 0 || equity.DividendsPaid != 0
                 ? Required(StatutoryNoteCodes.Dividends, DividendContent(equity, dividends))
-                : NotApplicableOrReview(StatutoryNoteCodes.Dividends, "dividends", reviews));
+                : charity
+                    ? FactNotApplicable(StatutoryNoteCodes.Dividends, "A charity company limited by guarantee pays no dividends.")
+                    : NotApplicableOrReview(StatutoryNoteCodes.Dividends, "dividends", reviews));
         }
 
         if (regime is ElectedRegime.Medium or ElectedRegime.Full || sizeClass >= CompanySizeClass.Medium)
@@ -350,7 +358,7 @@ public class NotesDisclosureService(AccountsDbContext db)
         }
 
         Add(ApprovalCandidate(period));
-        return new Checklist(period, candidates);
+        return new Checklist(period, charity ? candidates.Select(CharityTitle).ToList() : candidates);
     }
 
     private static NoteCandidate GoingConcernCandidate(
@@ -389,6 +397,16 @@ public class NotesDisclosureService(AccountsDbContext db)
             .OrderBy(item => item.CounterpartyName ?? item.Director!.Name)
             .ThenBy(item => item.Id)
             .ToListAsync();
+
+    // Charity chart: notes whose generic titles say profit or shareholders use income-and-expenditure
+    // and members-funds titles instead. Codes are unchanged.
+    private static NoteCandidate CharityTitle(NoteCandidate candidate) => candidate.Code switch
+    {
+        StatutoryNoteCodes.Reserves => candidate with { Title = "Members' Funds" },
+        StatutoryNoteCodes.Turnover => candidate with { Title = "Income" },
+        StatutoryNoteCodes.TaxOnProfit => candidate with { Title = "Tax on Surplus on Ordinary Activities" },
+        _ => candidate
+    };
 
     private static NoteCandidate Required(string code, string content) => new(
         code,
@@ -516,14 +534,23 @@ public class NotesDisclosureService(AccountsDbContext db)
     private static string DebtorContent(FinancialStatementsService.CurrentAssetsSection section) =>
         $"Trade and other debtors: {Money(section.Debtors)}\nPrepayments and accrued income: {Money(section.Prepayments)}\nTotal debtors and prepayments: {Money(section.Debtors + section.Prepayments)}";
 
+    // A bank overdraft line appears only on the charity chart (BankOverdraft is null otherwise) when non-zero.
     private static string CurrentCreditorContent(FinancialStatementsService.CreditorsWithinYearSection section) =>
-        $"Trade creditors: {Money(section.TradeCreditors)}\nAccruals: {Money(section.Accruals)}\nTaxation and social insurance: {Money(section.TaxCreditors)}\nOther creditors: {Money(section.OtherCreditors)}\nTotal amounts falling due within one year: {Money(section.Total)}";
+        (section.BankOverdraft is { } overdraft && overdraft != 0 ? $"Bank overdraft: {Money(overdraft)}\n" : string.Empty)
+        + $"Trade creditors: {Money(section.TradeCreditors)}\nAccruals: {Money(section.Accruals)}\nTaxation and social insurance: {Money(section.TaxCreditors)}\nOther creditors: {Money(section.OtherCreditors)}\nTotal amounts falling due within one year: {Money(section.Total)}";
 
     private static string LongTermCreditorContent(FinancialStatementsService.CreditorsAfterYearSection section) =>
         $"Loans: {Money(section.Loans)}\nOther creditors: {Money(section.Other)}\nTotal amounts falling due after more than one year: {Money(section.Total)}";
 
     private static string ReserveContent(FinancialStatementsService.CapitalSection section) =>
         $"Opening retained earnings: {Money(section.OpeningRetainedEarnings)}\nProfit for the financial year: {Money(section.ProfitForYear)}\nDividends: {Money(section.DividendsPaid)}\nOther reserve movements: {Money(section.OtherReserveMovements)}\nClosing retained earnings: {Money(section.RetainedEarnings)}";
+
+    // Charity chart: members' funds of a company limited by guarantee.
+    private static string MembersFundsContent(FinancialStatementsService.MembersFundsSection section) =>
+        $"Members' funds brought forward: {Money(section.FundsBroughtForward)}\nSurplus/(deficit) for the financial year: {Money(section.SurplusForYear)}"
+        + (section.OtherMovements != 0 ? $"\nOther movements in members' funds: {Money(section.OtherMovements)}" : string.Empty)
+        + (section.RestrictedFunds != 0 ? $"\nRestricted funds: {Money(section.RestrictedFunds)}" : string.Empty)
+        + $"\nTotal members' funds: {Money(section.Total)}";
 
     private static string EmployeeContent(PayrollSummary payroll) =>
         $"Average number of employees: {payroll.StaffCount}\nWages and salaries: {Money(payroll.GrossWages)}\nEmployer PRSI: {Money(payroll.EmployerPrsi)}\nPension costs: {Money(payroll.PensionContributions)}\nTotal staff costs: {Money(payroll.GrossWages + payroll.EmployerPrsi + payroll.PensionContributions)}";
@@ -547,11 +574,11 @@ public class NotesDisclosureService(AccountsDbContext db)
             $"{item.Description} ({item.Nature}); likelihood: {item.Likelihood}"
             + (item.EstimatedAmount is { } amount ? $"; estimated amount {Money(amount)}" : string.Empty)));
 
-    private static string TurnoverContent(FinancialStatementsService.ProfitAndLoss statement) =>
-        $"Turnover for the financial year: {Money(statement.Turnover)}\nOther operating income: {Money(statement.OtherIncome)}";
+    private static string TurnoverContent(FinancialStatementsService.ProfitAndLoss statement, bool charity) =>
+        $"{(charity ? "Income" : "Turnover")} for the financial year: {Money(statement.Turnover)}\nOther operating income: {Money(statement.OtherIncome)}";
 
-    private static string TaxContent(FinancialStatementsService.ProfitAndLoss statement) =>
-        $"Current tax charge recognised in the profit and loss account: {Money(statement.TaxCharge)}";
+    private static string TaxContent(FinancialStatementsService.ProfitAndLoss statement, bool charity) =>
+        $"Current tax charge recognised in the {(charity ? "income and expenditure" : "profit and loss")} account: {Money(statement.TaxCharge)}";
 
     private static string DividendContent(
         FinancialStatementsService.EquityChanges equity,

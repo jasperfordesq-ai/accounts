@@ -30,6 +30,9 @@ namespace Accounts.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CashFlowClass")
+                        .HasColumnType("text");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -37,6 +40,9 @@ namespace Accounts.Api.Data.Migrations
 
                     b.Property<int?>("CompanyId")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsNonTradingIncome")
                         .HasColumnType("boolean");
@@ -52,6 +58,12 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<int?>("ParentId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("StatementLine")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SystemRole")
+                        .HasColumnType("text");
+
                     b.Property<string>("TaxTreatment")
                         .IsRequired()
                         .HasColumnType("text");
@@ -65,6 +77,10 @@ namespace Accounts.Api.Data.Migrations
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("CompanyId", "SystemRole")
+                        .IsUnique()
+                        .HasFilter("\"SystemRole\" IS NOT NULL");
 
                     b.ToTable("account_categories", null, t =>
                         {
@@ -869,6 +885,10 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<string>("CharitableTaxExemptionReference")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ChartOfAccountsVariant")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("CompanyType")
                         .IsRequired()
@@ -3083,6 +3103,102 @@ namespace Accounts.Api.Data.Migrations
                     b.ToTable("fund_balances", (string)null);
                 });
 
+            modelBuilder.Entity("Accounts.Api.Entities.HistoricAnchorEvidenceRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ArchivedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ArchivedByUserId")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTime>("AttestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AttestedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("AttestedEffectiveClass")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AttestedRole")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("AvgEmployees")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("BalanceSheetTotal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("EvidenceArtifact")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("EvidenceSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RetiredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RetiredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("RetiredByUserId")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("RetiredReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateOnly?>("ThresholdElectionEffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Turnover")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PeriodId", "ArchivedAt");
+
+                    b.ToTable("historic_anchor_evidence_records", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_historic_anchor_evidence_records_evidence", "length(\"EvidenceSha256\") = 64 AND octet_length(\"EvidenceArtifact\") > 5 AND char_length(btrim(\"SourceReference\")) > 0 AND char_length(btrim(\"AttestedBy\")) > 0 AND \"AttestedRole\" IN ('Owner', 'Reviewer') AND char_length(btrim(\"ArchivedBy\")) > 0");
+
+                            t.HasCheckConstraint("CK_historic_anchor_evidence_records_retirement", "(\"Event\" = 'Replaced' AND \"RetiredAt\" IS NULL AND \"RetiredBy\" IS NULL AND \"RetiredReason\" IS NULL) OR (\"RetiredAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"RetiredBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"RetiredReason\", ''))) > 0)");
+                        });
+                });
+
             modelBuilder.Entity("Accounts.Api.Entities.IdempotencyRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -4282,6 +4398,46 @@ namespace Accounts.Api.Data.Migrations
                     b.Property<string>("ExclusionFlagsJson")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("HistoricAttestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HistoricAttestedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("HistoricAttestedEffectiveClass")
+                        .HasColumnType("text");
+
+                    b.Property<string>("HistoricAttestedRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<byte[]>("HistoricEvidenceArtifact")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("HistoricEvidenceSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("HistoricRetiredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HistoricRetiredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("HistoricRetiredReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("HistoricSourceReference")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("InputBasis")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("OverrideApprovedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -4368,7 +4524,14 @@ namespace Accounts.Api.Data.Migrations
                     b.HasIndex("PeriodId")
                         .IsUnique();
 
-                    b.ToTable("size_classifications", (string)null);
+                    b.ToTable("size_classifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_size_classifications_historic_anchor_evidence", "\"InputBasis\" <> 'HistoricAnchor' OR (\"HistoricEvidenceArtifact\" IS NOT NULL AND \"HistoricEvidenceSha256\" IS NOT NULL AND length(\"HistoricEvidenceSha256\") = 64 AND \"HistoricAttestedBy\" IS NOT NULL AND \"HistoricAttestedRole\" IN ('Owner', 'Reviewer') AND \"HistoricAttestedAt\" IS NOT NULL AND \"HistoricSourceReference\" IS NOT NULL AND length(btrim(\"HistoricSourceReference\")) > 0)");
+
+                            t.HasCheckConstraint("CK_size_classifications_historic_anchor_retirement", "(\"HistoricRetiredAt\" IS NULL AND \"HistoricRetiredBy\" IS NULL AND \"HistoricRetiredReason\" IS NULL AND \"InputBasis\" <> 'RetiredHistoricAnchor') OR (\"InputBasis\" <> 'HistoricAnchor' AND \"HistoricRetiredAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"HistoricRetiredBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"HistoricRetiredReason\", ''))) > 0 AND \"HistoricEvidenceArtifact\" IS NOT NULL AND \"HistoricEvidenceSha256\" IS NOT NULL AND length(\"HistoricEvidenceSha256\") = 64 AND \"HistoricSourceReference\" IS NOT NULL AND \"HistoricAttestedBy\" IS NOT NULL AND \"HistoricAttestedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_size_classifications_input_basis", "\"InputBasis\" IN ('Computed', 'HistoricAnchor', 'RetiredHistoricAnchor')");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.TaxBalance", b =>
@@ -4380,6 +4543,26 @@ namespace Accounts.Api.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Balance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ConfirmedDueAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfirmedDueBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("ConfirmedDueLiability")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ConfirmedDueReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<decimal?>("ConfirmedNonTradingProfitOutsideExemption")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ConfirmedTaxableProfitOutsideExemption")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("Liability")
@@ -4400,7 +4583,10 @@ namespace Accounts.Api.Data.Migrations
                     b.HasIndex("PeriodId", "TaxType")
                         .IsUnique();
 
-                    b.ToTable("tax_balances", (string)null);
+                    b.ToTable("tax_balances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tax_balances_confirmed_due", "(\"ConfirmedDueAt\" IS NULL AND \"ConfirmedDueBy\" IS NULL AND \"ConfirmedDueReason\" IS NULL AND \"ConfirmedDueLiability\" IS NULL AND \"ConfirmedTaxableProfitOutsideExemption\" IS NULL AND \"ConfirmedNonTradingProfitOutsideExemption\" IS NULL) OR (\"TaxType\" = 'CorporationTax' AND \"ConfirmedDueAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"ConfirmedDueBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"ConfirmedDueReason\", ''))) > 0 AND \"ConfirmedDueLiability\" > 0 AND (\"ConfirmedTaxableProfitOutsideExemption\" IS NULL OR \"ConfirmedTaxableProfitOutsideExemption\" >= 0) AND (\"ConfirmedNonTradingProfitOutsideExemption\" IS NULL OR \"ConfirmedNonTradingProfitOutsideExemption\" >= 0))");
+                        });
                 });
 
             modelBuilder.Entity("Accounts.Api.Entities.Tenant", b =>
@@ -5445,6 +5631,17 @@ namespace Accounts.Api.Data.Migrations
                         .WithMany("FundBalances")
                         .HasForeignKey("PeriodId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Period");
+                });
+
+            modelBuilder.Entity("Accounts.Api.Entities.HistoricAnchorEvidenceRecord", b =>
+                {
+                    b.HasOne("Accounts.Api.Entities.AccountingPeriod", "Period")
+                        .WithMany()
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Period");

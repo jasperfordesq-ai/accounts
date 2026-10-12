@@ -217,6 +217,50 @@ public sealed class DoubleEntryStatementReconciliationTests
         Assert.True(entry.ClosingNbv >= asset.ResidualValue);
     }
 
+    // A bank transaction categorised to another cash account (1400 bank -> 1410 petty cash) moves cash
+    // within cash and equivalents: it is no cash flow, and closing cash still ties to the balance sheet.
+    [Fact]
+    public async Task GenericChart_TransferBetweenTwoCashAccounts_IsNoCashFlowAndReconciles()
+    {
+        await using var db = CreateDb();
+        var fixture = await SeedBaseAsync(db);
+        var categories = await new CategoryService(db).SeedDefaultCategoriesAsync(fixture.Company.Id);
+        int Category(string code) => categories.Single(category => category.Code == code).Id;
+        var bank = new BankAccount
+        {
+            CompanyId = fixture.Company.Id,
+            Name = "Current account",
+            OpeningBalance = 1_000m,
+            OpeningBalanceDate = fixture.First.PeriodStart
+        };
+        db.BankAccounts.Add(bank);
+        db.OpeningBalances.Add(new OpeningBalance
+        {
+            PeriodId = fixture.First.Id,
+            AccountCategoryId = Category("3100"),
+            Credit = 1_000m,
+            Reviewed = true,
+            EnteredBy = "Reviewer"
+        });
+        await db.SaveChangesAsync();
+        db.ImportedTransactions.AddRange(
+            Transaction(bank, fixture.First, new DateOnly(2024, 2, 1), "Sales receipts", 3_000m, Category("4000")),
+            Transaction(bank, fixture.First, new DateOnly(2024, 3, 1), "Cash withdrawn for petty cash", -200m, Category("1410")),
+            Transaction(bank, fixture.First, new DateOnly(2024, 4, 1), "Office costs", -500m, Category("6000")));
+        await db.SaveChangesAsync();
+        var statements = new FinancialStatementsService(db);
+
+        var balanceSheet = await statements.GetBalanceSheetAsync(fixture.Company.Id, fixture.First.Id);
+        var cashFlow = await statements.GetCashFlowStatementAsync(fixture.Company.Id, fixture.First.Id);
+
+        Assert.Equal(3_500m, balanceSheet.CurrentAssets.Cash);
+        Assert.Equal(1_000m, cashFlow.OpeningCash);
+        Assert.Equal(3_500m, cashFlow.ClosingCash);
+        Assert.Equal(2_500m, cashFlow.NetIncreaseInCash);
+        Assert.Equal(2_500m, cashFlow.NetCashFromOperating);
+        Assert.DoesNotContain(cashFlow.OperatingAdjustments, adjustment => adjustment.Description == "Non-cash items and working-capital movements");
+    }
+
     private static AdjustmentInput Input(int? debit, int? credit, decimal amount) => new(
         "Journal validation",
         debit,

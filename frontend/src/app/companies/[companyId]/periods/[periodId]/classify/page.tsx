@@ -13,9 +13,21 @@ import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { PeriodWorkspaceSkeleton } from "@/components/Skeleton";
 import { useAuth } from "@/components/AuthProvider";
+import { HistoricSizeFiguresCard } from "@/components/period/HistoricSizeFiguresCard";
+import { RetireHistoricFiguresPanel } from "@/components/period/RetireHistoricFiguresPanel";
 import { ReadOnlyNotice } from "@/components/workbench";
+import {
+  HISTORIC_FIGURES_BADGE,
+  HISTORIC_FIGURES_PROVENANCE,
+  isHistoricFigures,
+  getArchivedHistoricFigures,
+  isRetiredHistoricFigures,
+  type ArchivedHistoricFigures,
+} from "@/lib/historicSizeFigures";
+import { ArchivedHistoricFiguresCard } from "@/components/period/ArchivedHistoricFiguresCard";
 import { useUnsavedChanges } from "@/lib/useUnsavedChanges";
 import {
+  getClassificationPrerequisites,
   getCompany,
   getPeriod,
   runClassification,
@@ -23,6 +35,7 @@ import {
   saveMemberAuditNotice,
   type Company,
   type AccountingPeriod,
+  type ClassificationPrerequisites,
   type ClassificationResult,
 } from "@/lib/api";
 
@@ -45,6 +58,15 @@ function parseNonNegative(value: string, integer = false): number | undefined {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0 || (integer && !Number.isInteger(parsed))) return undefined;
   return parsed;
+}
+
+function formatPeriodDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-IE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 type RegimeOption = {
@@ -82,11 +104,26 @@ export default function ClassifyPage({
   const { companyId, periodId } = use(params);
   const cId = Number(companyId);
   const pId = Number(periodId);
-  const { canWriteWorkingPapers } = useAuth();
+  const { canWriteWorkingPapers, canApprove } = useAuth();
+  // Retiring historic figures is an Owner act.
+  const { isOwner, canReadInternalWorkingPapers } = useAuth();
+  // Retired or replaced historic evidence (Owner, Reviewer and Accountant).
+  const [archivedHistoricFigures, setArchivedHistoricFigures] = useState<ArchivedHistoricFigures[]>([]);
 
   const [company, setCompany] = useState<Company | null>(null);
   const [period, setPeriod] = useState<AccountingPeriod | null>(null);
+  // s.280A: a later year's size test needs every earlier period classified, in order. Null when
+  // unavailable; the server still enforces the requirement on submit.
+  const [prerequisites, setPrerequisites] = useState<ClassificationPrerequisites | null>(null);
+  const blockedByEarlierPeriods = prerequisites !== null && !prerequisites.ready;
   const [loading, setLoading] = useState(true);
+  // Figures keyed in from this period's filed accounts (Owner/Reviewer): the root of the next
+  // period's size test, never a classification of this period.
+  const holdsHistoricFigures = isHistoricFigures(period?.sizeClassification);
+  const canRecordHistoricFigures = canApprove && prerequisites?.canRecordHistoricFigures === true;
+  // Figures an Owner retired: kept as evidence only; the period is classified from its own figures.
+  const holdsRetiredHistoricFigures = isRetiredHistoricFigures(period?.sizeClassification);
+  const [historicMode, setHistoricMode] = useState(false);
 
   // Form state
   const [turnover, setTurnover] = useState("");
@@ -121,15 +158,21 @@ export default function ClassifyPage({
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [companyData, periodData] = await Promise.all([
+      const [companyData, periodData, prerequisiteData, archiveData] = await Promise.all([
         getCompany(cId),
         getPeriod(cId, pId),
+        getClassificationPrerequisites(cId, pId).catch(() => null),
+        canReadInternalWorkingPapers
+          ? getArchivedHistoricFigures(cId, pId).catch(() => [] as ArchivedHistoricFigures[])
+          : Promise.resolve([] as ArchivedHistoricFigures[]),
       ]);
       setCompany(companyData);
       setPeriod(periodData);
+      setPrerequisites(prerequisiteData);
+      setArchivedHistoricFigures(archiveData);
 
-      // Pre-fill from existing classification if available
-      if (periodData.sizeClassification) {
+      // Pre-fill from existing classification if available (never from retired historic figures)
+      if (periodData.sizeClassification && !isRetiredHistoricFigures(periodData.sizeClassification)) {
         const sc = periodData.sizeClassification;
         setTurnover(String(sc.turnover));
         setBalanceSheetTotal(String(sc.balanceSheetTotal));
@@ -151,7 +194,7 @@ export default function ClassifyPage({
     } finally {
       setLoading(false);
     }
-  }, [cId, pId]);
+  }, [cId, pId, canReadInternalWorkingPapers]);
 
   useEffect(() => {
     loadData();
@@ -244,10 +287,75 @@ export default function ClassifyPage({
         </p>
       </div>
 
+      {blockedByEarlierPeriods && prerequisites && !holdsHistoricFigures && (
+        <div
+          role="status"
+          aria-labelledby="classification-prerequisites-title"
+          className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+        >
+          <h2 id="classification-prerequisites-title" className="mb-1 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            Earlier periods must be classified first
+          </h2>
+          <p>{prerequisites.message}</p>
+          {prerequisites.firstBlockingPeriod && (
+            <p className="mt-2">
+              Start here:{" "}
+              <Link
+                href={`/companies/${companyId}/periods/${prerequisites.firstBlockingPeriod.periodId}/classify`}
+                className="font-medium underline"
+              >
+                Classify {formatPeriodDate(prerequisites.firstBlockingPeriod.periodStart)} &ndash;{" "}
+                {formatPeriodDate(prerequisites.firstBlockingPeriod.periodEnd)}
+              </Link>{" "}
+              ({prerequisites.firstBlockingPeriod.reason})
+            </p>
+          )}
+          {prerequisites.historicFiguresPeriod && (
+            <p className="mt-2">
+              Or:{" "}
+              <Link
+                href={`/companies/${companyId}/periods/${prerequisites.historicFiguresPeriod.periodId}/classify`}
+                className="font-medium underline"
+              >
+                {`Record historic figures from the filed accounts for ${formatPeriodDate(prerequisites.historicFiguresPeriod.periodStart)} – ${formatPeriodDate(prerequisites.historicFiguresPeriod.periodEnd)}`}
+              </Link>{" "}
+              (keyed in from accounts filed elsewhere, with the PDF as evidence)
+            </p>
+          )}
+        </div>
+      )}
+
       {!canWriteWorkingPapers && <ReadOnlyNotice subject="classification and filing-regime decisions" />}
 
+      {canRecordHistoricFigures && !historicMode && (
+        <div className="mb-6 flex flex-col gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[var(--muted-foreground)]">
+            {holdsHistoricFigures
+              ? "Replace these figures with a corrected set from the filed accounts."
+              : "No system classification for this period? Key in its figures from the accounts filed for it."}
+          </p>
+          <Button size="sm" variant="outline" onPress={() => setHistoricMode(true)}>
+            {holdsHistoricFigures ? "Replace the historic figures" : "Enter figures from the filed accounts instead"}
+          </Button>
+        </div>
+      )}
+
+      {canRecordHistoricFigures && historicMode && (
+        <HistoricSizeFiguresCard
+          companyId={cId}
+          periodId={pId}
+          initialElection={prerequisites?.suggestedThresholdElection === "2023-01-01" ? "2023-01-01" : prerequisites?.suggestedThresholdElection === "2024-01-01" ? "2024-01-01" : null}
+          onCancel={() => setHistoricMode(false)}
+          onRecorded={async () => {
+            setHistoricMode(false);
+            await loadData();
+          }}
+        />
+      )}
+
       {/* Input Form */}
-      {canWriteWorkingPapers && <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
+      {canWriteWorkingPapers && !holdsHistoricFigures && <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
         <Card.Header>
           <Card.Title className="flex items-center gap-2">
             <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -332,7 +440,8 @@ export default function ClassifyPage({
             <Button
               variant="primary"
               onPress={handleClassify}
-              isDisabled={classifying || !inputsValid}
+              isDisabled={classifying || !inputsValid || blockedByEarlierPeriods}
+              aria-describedby={blockedByEarlierPeriods ? "classification-prerequisites-hint" : undefined}
             >
               {classifying ? (
                 <>
@@ -346,6 +455,11 @@ export default function ClassifyPage({
                 </>
               )}
             </Button>
+            {blockedByEarlierPeriods && (
+              <p id="classification-prerequisites-hint" className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
+                Classification is unavailable until the earlier periods have been classified, in order (see the notice above).
+              </p>
+            )}
           </div>
 
           {classifyError && (
@@ -564,8 +678,74 @@ export default function ClassifyPage({
         </>
       )}
 
+      {/* Historic figures keyed in from filed accounts: provenance, never a computed class */}
+      {isHistoricFigures(period?.sizeClassification) && (
+        <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
+          <Card.Header>
+            <Card.Title className="flex flex-wrap items-center gap-2">
+              Preceding-year evidence
+              <Chip color="warning" variant="soft" size="sm">{HISTORIC_FIGURES_BADGE}</Chip>
+            </Card.Title>
+          </Card.Header>
+          <Card.Content>
+            <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+              <p className="font-medium">{HISTORIC_FIGURES_PROVENANCE}</p>
+              <p>
+                Source: {period.sizeClassification.historicSourceReference ?? "not recorded"}
+                {period.sizeClassification.historicAttestedBy
+                  ? ` (recorded by ${period.sizeClassification.historicAttestedBy}${period.sizeClassification.historicAttestedRole ? `, ${period.sizeClassification.historicAttestedRole}` : ""})`
+                  : ""}
+              </p>
+              <p>
+                {period.sizeClassification.historicAttestedEffectiveClass
+                  ? `Size class stated in the filed accounts: ${period.sizeClassification.historicAttestedEffectiveClass}. The following year may rely on it for the consecutive-year rule.`
+                  : "No size class is attested: the following year treats this year as not qualified, so both years' figures must meet the size conditions."}
+              </p>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
+                  <p className="text-xs text-[var(--muted-foreground)]">Turnover</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(period.sizeClassification.turnover)}</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
+                  <p className="text-xs text-[var(--muted-foreground)]">Balance Sheet</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(period.sizeClassification.balanceSheetTotal)}</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-3">
+                  <p className="text-xs text-[var(--muted-foreground)]">Avg Employees</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{period.sizeClassification.avgEmployees}</p>
+                </div>
+              </div>
+              <p className="text-xs leading-5 text-[var(--muted-foreground)]">
+                These figures are evidence for the following year&apos;s size test only. This period is not classified, and no
+                filing regime or filing is produced from them here.
+              </p>
+              {isOwner && (
+                <RetireHistoricFiguresPanel
+                  companyId={cId}
+                  periodId={pId}
+                  onRetired={async () => {
+                    setHistoricMode(false);
+                    await loadData();
+                  }}
+                />
+              )}
+            </div>
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* Historic figures an Owner retired: their evidence is in the archive below */}
+      {holdsRetiredHistoricFigures && (
+        <p role="status" className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-gray-300">
+          The historic figures recorded for this period were retired. Enter this period&apos;s own figures to classify it.
+        </p>
+      )}
+
+      {/* Retired or replaced historic figures: kept as evidence, visible after the period is classified again */}
+      <ArchivedHistoricFiguresCard companyId={cId} periodId={pId} records={archivedHistoricFigures} />
+
       {/* Pre-existing classification display (when loaded from period data) */}
-      {!result && period?.sizeClassification && (
+      {!result && period?.sizeClassification && !holdsHistoricFigures && !holdsRetiredHistoricFigures && (
         <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 mb-6">
           <Card.Header>
             <Card.Title>

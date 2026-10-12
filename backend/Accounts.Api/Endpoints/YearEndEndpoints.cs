@@ -167,6 +167,9 @@ public static partial class YearEndEndpoints
 
         taxes.MapPut("/{taxType}", UpsertTaxBalanceEndpointAsync);
 
+        // An exempt company's corporation-tax liability confirmed as due (Owner/Reviewer, recent MFA).
+        taxes.MapPost("/CorporationTax/confirm-due", ConfirmCorporationTaxDueEndpointAsync);
+
         // ===== DIVIDENDS =====
         var dividends = app.MapGroup($"{basePath}/dividends").WithTags("Dividends");
 

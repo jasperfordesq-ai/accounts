@@ -598,6 +598,12 @@ public sealed partial class PrivacyGovernanceService
             .Select(item => new SubjectEvidenceReference(nameof(ExternalFilingOutcomeEvent), item.Id.ToString(),
                 nameof(ExternalFilingOutcomeEvent.RecordedByUserId), item.CompanyId, item.PeriodId, item.RecordedAtUtc))
             .ToListAsync(cancellationToken));
+        evidence.AddRange(await db.HistoricAnchorEvidenceRecords.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.Period.Company.TenantId == tenantId
+                && (actorKeys.Contains(item.ArchivedByUserId) || actorKeys.Contains(item.RetiredByUserId)))
+            .Select(item => new SubjectEvidenceReference(nameof(HistoricAnchorEvidenceRecord), item.Id.ToString(),
+                "ArchivedByUserId|RetiredByUserId", item.Period.CompanyId, item.PeriodId, item.ArchivedAt))
+            .ToListAsync(cancellationToken));
         evidence.AddRange(await db.AnnualReturnDateRecords.IgnoreQueryFilters().AsNoTracking()
             .Where(item => item.Company.TenantId == tenantId && actorKeys.Contains(item.RecordedByUserId))
             .Select(item => new SubjectEvidenceReference(nameof(AnnualReturnDateRecord), item.Id.ToString(),

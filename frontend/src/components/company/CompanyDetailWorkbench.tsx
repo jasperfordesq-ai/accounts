@@ -6,6 +6,7 @@ import type { CharityInfo, Company, Officer } from "@/lib/api";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ShareCapitalCard } from "@/components/ShareCapitalCard";
 import { CompanyCharityInfoPanel } from "@/components/company/CompanyCharityInfoPanel";
+import { CompanyChartOfAccountsPanel } from "@/components/company/CompanyChartOfAccountsPanel";
 import { CompanyIdentityEditPanel, type CompanyEditFormValues } from "@/components/company/CompanyIdentityEditPanel";
 import { CompanyOfficersPanel } from "@/components/company/CompanyOfficersPanel";
 import { CompanyPeriodsWorkbench } from "@/components/company/CompanyPeriodsWorkbench";
@@ -20,6 +21,9 @@ interface CompanyDetailWorkbenchProps {
   company: Company;
   canWriteWorkingPapers: boolean;
   canDeleteCompany: boolean;
+  /** Owner only: adopting the charity / CLG chart of accounts. */
+  canAdoptChart?: boolean;
+  onChartAdopted?: () => void | Promise<void>;
   editing: boolean;
   editForm: CompanyEditFormValues;
   savingCompany: boolean;
@@ -88,6 +92,8 @@ export function CompanyDetailWorkbench({
   company,
   canWriteWorkingPapers,
   canDeleteCompany,
+  canAdoptChart = false,
+  onChartAdopted,
   editing,
   editForm,
   savingCompany,
@@ -193,6 +199,8 @@ export function CompanyDetailWorkbench({
         <CompanyWorkspaceOverview company={company} />
 
         <CompanyStatutoryProfile company={company} />
+
+        <CompanyChartOfAccountsPanel company={company} canAdopt={canAdoptChart} onAdopted={onChartAdopted} />
 
         <CompanyAnnualReturnDatePanel
           company={company}

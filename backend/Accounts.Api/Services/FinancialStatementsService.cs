@@ -46,15 +46,9 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         && issueDate <= date
         && (share.CancelledDate is null || share.CancelledDate > date);
 
-    private static string FixedAssetCode(string assetCategory) => assetCategory switch
-    {
-        "Land & Buildings" or "Property" => "0010",
-        "Plant & Machinery" => "0020",
-        "Motor Vehicles" or "Vehicles" => "0030",
-        "Office Equipment" or "Equipment" or "Furniture" => "0040",
-        "Computer Equipment" or "IT" => "0050",
-        _ => "0040"
-    };
+    // The register class -> asset account mapping automatic adjustments post to, per chart variant.
+    private static string FixedAssetCode(ChartOfAccountsVariant variant, string assetCategory) =>
+        ChartAccountDefaults.FixedAssetAccount(variant, assetCategory).Code;
 
     private async Task<List<Loan>> GetLoansAtPeriodEndAsync(int companyId, DateOnly periodStart, DateOnly periodEnd) =>
         (await db.Loans
@@ -157,34 +151,37 @@ public partial class FinancialStatementsService(AccountsDbContext db)
 
         static decimal ExpenseAmount(AccountingLedgerService.LedgerLine line) => line.Debit - line.Credit;
 
-        decimal GetExpenseTotal(string codePrefix) =>
-            lines.Where(line => line.Category.Type == AccountCategoryType.Expense && line.Category.Code.StartsWith(codePrefix))
+        static AccountStatementLine Line(AccountingLedgerService.LedgerLine line) => CategoryClassification.Line(line.Category);
+
+        decimal GetExpenseTotal(AccountStatementLine statementLine) =>
+            lines.Where(line => line.Category.Type == AccountCategoryType.Expense && Line(line) == statementLine)
                 .Sum(ExpenseAmount);
 
-        // A 4xxx bookkeeping code is not, by itself, evidence that income arose from the trade.
-        // Explicitly reviewed passive/non-trading income must stay out of turnover and be presented
-        // as other income, while remaining in profit before tax and the 25% tax-rate support bucket.
+        // An income account's statement line is not, by itself, evidence that income arose from the
+        // trade. Explicitly reviewed passive/non-trading income must stay out of turnover and be
+        // presented as other income (CategoryClassification.Line applies the flag), while remaining in
+        // profit before tax and the 25% tax-rate support bucket.
         var turnover = lines
             .Where(line => line.Category.Type == AccountCategoryType.Income
-                && line.Category.Code.StartsWith("4", StringComparison.Ordinal)
-                && !line.Category.IsNonTradingIncome)
+                && Line(line) == AccountStatementLine.Turnover)
             .Sum(IncomeAmount);
-        var costOfSales = GetExpenseTotal("5");
+        var costOfSales = GetExpenseTotal(AccountStatementLine.CostOfSales);
         var grossProfit = turnover - costOfSales;
 
         // Income earned outside turnover, including any category explicitly classified as
         // non-trading, is reported as other income rather than netted into overheads or dropped.
         var otherIncome = lines
             .Where(line => line.Category.Type == AccountCategoryType.Income
-                && (line.Category.IsNonTradingIncome
-                    || !line.Category.Code.StartsWith("4", StringComparison.Ordinal)))
+                && Line(line) != AccountStatementLine.Turnover)
             .Sum(IncomeAmount);
 
+        // Administrative expenses and depreciation: every expense line that is not cost of sales,
+        // interest payable or tax on profit, so no expense is ever dropped.
         var overheads = lines
             .Where(line => line.Category.Type == AccountCategoryType.Expense
-                && !line.Category.Code.StartsWith("5")
-                && !line.Category.Code.StartsWith("69")
-                && !line.Category.Code.StartsWith("8"))
+                && Line(line) is not (AccountStatementLine.CostOfSales
+                    or AccountStatementLine.InterestPayable
+                    or AccountStatementLine.TaxOnProfit))
             .Select(line => new ExpenseLine(line.Category.Code, line.Category.Name, ExpenseAmount(line)))
             .Where(e => e.Amount != 0)
             .ToList();
@@ -192,7 +189,7 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var totalOverheads = overheads.Sum(o => o.Amount);
         var operatingProfit = grossProfit + otherIncome - totalOverheads;
 
-        var interestPayable = GetExpenseTotal("69"); // Bank charges & interest
+        var interestPayable = GetExpenseTotal(AccountStatementLine.InterestPayable); // Bank charges & interest
 
         var postedAdjustments = await db.Adjustments
             .Where(a => a.PeriodId == periodId && a.ImpactOnProfit != 0)
@@ -208,7 +205,7 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         // Posted journals are already in the ledger-derived income and expense totals; this list is
         // explanatory only and must never be added a second time.
         var profitBeforeTax = operatingProfit - interestPayable;
-        var corpTax = GetExpenseTotal("8");
+        var corpTax = GetExpenseTotal(AccountStatementLine.TaxOnProfit);
 
         var profitAfterTax = profitBeforeTax - corpTax;
 
@@ -220,7 +217,8 @@ public partial class FinancialStatementsService(AccountsDbContext db)
     private async Task<Dictionary<int, AccountMovement>> GetAccountMovementsAsync(int periodId, List<AccountCategory> categories)
     {
         var movements = new Dictionary<int, AccountMovement>();
-        var bankCategory = categories.FirstOrDefault(c => c.Code == "1400");
+        var companyId = await db.AccountingPeriods.Where(p => p.Id == periodId).Select(p => p.CompanyId).FirstAsync();
+        var bankCategory = CategoryClassification.PreferredByRole(categories, companyId, AccountSystemRole.BankControl);
         var categoryById = categories.ToDictionary(c => c.Id);
 
         void Debit(int categoryId, decimal amount)
@@ -494,8 +492,10 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var ledger = await new AccountingLedgerService(db).BuildAsync(companyId, periodId);
         var lines = ledger.Lines.Values.ToList();
 
+        static AccountStatementLine Line(AccountingLedgerService.LedgerLine line) => CategoryClassification.Line(line.Category);
         static bool FixedAsset(AccountCategory category) =>
-            category.Type == AccountCategoryType.Asset && category.Code.StartsWith("00", StringComparison.Ordinal);
+            category.Type == AccountCategoryType.Asset
+            && CategoryClassification.Line(category) == AccountStatementLine.TangibleFixedAssets;
         static bool Cash(AccountCategory category) => AccountingLedgerService.IsCash(category);
         static decimal AssetBalance(AccountingLedgerService.LedgerLine line) => line.NetDebit;
         static decimal LiabilityBalance(AccountingLedgerService.LedgerLine line) => -line.NetDebit;
@@ -506,13 +506,20 @@ public partial class FinancialStatementsService(AccountsDbContext db)
                 && asset.AcquisitionDate <= ledger.Period.PeriodEnd
                 && (asset.DisposalDate == null || asset.DisposalDate > ledger.Period.PeriodEnd))
             .ToListAsync();
+        var companyVariant = await CompanyVariantAsync(companyId);
+        var variant = activeAssets.Count == 0
+            ? ChartOfAccountsVariant.GenericTrading
+            : companyVariant ?? throw new ResourceNotFoundException($"Company {companyId} not found");
+        // The charity chart presents members' funds and a bank overdraft within creditors; every other
+        // company keeps the presentation below unchanged.
+        var charityPresentation = companyVariant == ChartOfAccountsVariant.CharityClg;
         var fixedAssetLines = lines.Where(line => FixedAsset(line.Category)).ToList();
         var assetCategories = fixedAssetLines
             .Select(line =>
             {
                 var netBookValue = AssetBalance(line);
                 var registerCost = activeAssets
-                    .Where(asset => FixedAssetCode(asset.Category) == line.Category.Code)
+                    .Where(asset => FixedAssetCode(variant, asset.Category) == line.Category.Code)
                     .Sum(asset => asset.Cost);
                 var cost = registerCost == 0m ? Math.Max(0m, netBookValue) : registerCost;
                 return new AssetCategoryLine(line.Category.Name, cost, cost - netBookValue, netBookValue);
@@ -524,36 +531,53 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var currentAssetLines = lines
             .Where(line => line.Category.Type == AccountCategoryType.Asset && !FixedAsset(line.Category))
             .ToList();
-        var stock = currentAssetLines.Where(line => line.Category.Code == "1000").Sum(AssetBalance);
-        var prepayments = currentAssetLines.Where(line => line.Category.Code == "1200").Sum(AssetBalance);
+        var stock = currentAssetLines.Where(line => Line(line) == AccountStatementLine.Stocks).Sum(AssetBalance);
+        var prepayments = currentAssetLines.Where(line => Line(line) == AccountStatementLine.Prepayments).Sum(AssetBalance);
         var cash = currentAssetLines.Where(line => Cash(line.Category)).Sum(AssetBalance);
         var debtors = currentAssetLines
-            .Where(line => line.Category.Code != "1000" && line.Category.Code != "1200" && !Cash(line.Category))
+            .Where(line => Line(line) is not (AccountStatementLine.Stocks or AccountStatementLine.Prepayments) && !Cash(line.Category))
             .Sum(AssetBalance);
         var totalCurrentAssets = currentAssetLines.Sum(AssetBalance);
 
         var liabilityLines = lines.Where(line => line.Category.Type == AccountCategoryType.Liability).ToList();
+        // Charity chart: each cash or bank overdraft account is presented by the sign of its own balance,
+        // never netted against another: a debit is cash at bank and in hand, a credit is a bank overdraft
+        // within creditors due within one year. Net assets are unchanged.
+        decimal? bankOverdraft = null;
+        if (charityPresentation)
+        {
+            var cashOrOverdraftLines = lines.Where(line => CategoryClassification.IsCashOrBankOverdraft(line.Category)).ToList();
+            var debitCash = cashOrOverdraftLines.Where(line => line.NetDebit > 0).Sum(line => line.NetDebit);
+            bankOverdraft = cashOrOverdraftLines.Where(line => line.NetDebit < 0).Sum(line => -line.NetDebit);
+            totalCurrentAssets += debitCash - cash;
+            cash = debitCash;
+            liabilityLines = liabilityLines.Where(line => !CategoryClassification.IsCashOrBankOverdraft(line.Category)).ToList();
+        }
         var longTermLines = liabilityLines.Where(line =>
-            line.Category.Code.StartsWith("27", StringComparison.Ordinal)
-            || line.Category.Code.StartsWith("29", StringComparison.Ordinal)).ToList();
+            Line(line) is AccountStatementLine.LoansAfterYear or AccountStatementLine.OtherCreditorsAfterYear).ToList();
         var currentLiabilityLines = liabilityLines.Except(longTermLines).ToList();
-        var tradeCreditors = currentLiabilityLines.Where(line => line.Category.Code == "2000").Sum(LiabilityBalance);
-        var accruals = currentLiabilityLines.Where(line => line.Category.Code == "2100").Sum(LiabilityBalance);
+        var tradeCreditors = currentLiabilityLines.Where(line => Line(line) == AccountStatementLine.TradeCreditors).Sum(LiabilityBalance);
+        var accruals = currentLiabilityLines.Where(line => Line(line) == AccountStatementLine.Accruals).Sum(LiabilityBalance);
         var taxCreditors = currentLiabilityLines
-            .Where(line => line.Category.Code.StartsWith("22", StringComparison.Ordinal)
-                || line.Category.Code.StartsWith("23", StringComparison.Ordinal)
-                || line.Category.Code.StartsWith("24", StringComparison.Ordinal))
+            .Where(line => Line(line) == AccountStatementLine.TaxCreditors)
             .Sum(LiabilityBalance);
         var otherCreditorsWithin = currentLiabilityLines
-            .Where(line => line.Category.Code != "2000"
-                && line.Category.Code != "2100"
-                && !line.Category.Code.StartsWith("22", StringComparison.Ordinal)
-                && !line.Category.Code.StartsWith("23", StringComparison.Ordinal)
-                && !line.Category.Code.StartsWith("24", StringComparison.Ordinal))
+            .Where(line => Line(line) is not (AccountStatementLine.TradeCreditors
+                or AccountStatementLine.Accruals
+                or AccountStatementLine.TaxCreditors))
             .Sum(LiabilityBalance);
-        var totalCreditorsWithin = currentLiabilityLines.Sum(LiabilityBalance);
-        var loansAfterYear = longTermLines.Where(line => line.Category.Code == "2700").Sum(LiabilityBalance);
-        var otherCreditorsAfter = longTermLines.Where(line => line.Category.Code != "2700").Sum(LiabilityBalance);
+        var totalCreditorsWithin = currentLiabilityLines.Sum(LiabilityBalance) + (bankOverdraft ?? 0m);
+        // Suspense (a readiness blocker while non-nil): a credit balance stays in other creditors due
+        // within one year and a debit balance is presented in debtors, so the sheet still balances.
+        var suspenseDebit = currentLiabilityLines
+            .Where(line => Line(line) == AccountStatementLine.Suspense && line.NetDebit > 0)
+            .Sum(line => line.NetDebit);
+        debtors += suspenseDebit;
+        totalCurrentAssets += suspenseDebit;
+        otherCreditorsWithin += suspenseDebit;
+        totalCreditorsWithin += suspenseDebit;
+        var loansAfterYear = longTermLines.Where(line => Line(line) == AccountStatementLine.LoansAfterYear).Sum(LiabilityBalance);
+        var otherCreditorsAfter = longTermLines.Where(line => Line(line) != AccountStatementLine.LoansAfterYear).Sum(LiabilityBalance);
         var totalCreditorsAfter = longTermLines.Sum(LiabilityBalance);
 
         var netCurrentAssets = totalCurrentAssets - totalCreditorsWithin;
@@ -562,21 +586,37 @@ public partial class FinancialStatementsService(AccountsDbContext db)
 
         var profitForYear = (await GetProfitAndLossForPeriodAsync(periodId)).ProfitAfterTax;
         var equityLines = lines.Where(line => line.Category.Type == AccountCategoryType.Equity).ToList();
-        var shareCapital = -equityLines.Where(line => line.Category.Code == "3000").Sum(line => line.NetDebit);
-        var dividendsPaid = equityLines.Where(line => line.Category.Code == "3200").Sum(line => line.CurrentNetDebit);
+        var shareCapital = -equityLines.Where(line => Line(line) == AccountStatementLine.ShareCapital).Sum(line => line.NetDebit);
+        var dividendsPaid = equityLines.Where(line => Line(line) == AccountStatementLine.DividendsPaid).Sum(line => line.CurrentNetDebit);
         var otherReserveMovements = -equityLines
-            .Where(line => line.Category.Code is not "3000" and not "3200")
+            .Where(line => Line(line) is not (AccountStatementLine.ShareCapital or AccountStatementLine.DividendsPaid))
             .Sum(line => line.CurrentNetDebit);
-        var equityExcludingShare = -equityLines.Where(line => line.Category.Code != "3000").Sum(line => line.NetDebit);
+        var equityExcludingShare = -equityLines.Where(line => Line(line) != AccountStatementLine.ShareCapital).Sum(line => line.NetDebit);
         var retainedEarnings = equityExcludingShare + profitForYear;
         var openingRetainedEarnings = retainedEarnings - profitForYear + dividendsPaid - otherReserveMovements;
         var totalCapital = shareCapital + retainedEarnings;
         var unexplainedDifference = netAssets - totalCapital;
 
+        // Members' funds: opening and posted movements on unrestricted funds (every equity line except
+        // share capital and restricted funds), the surplus or deficit, and closing restricted funds.
+        MembersFundsSection? membersFunds = null;
+        if (charityPresentation)
+        {
+            var unrestrictedLines = equityLines
+                .Where(line => Line(line) is not (AccountStatementLine.ShareCapital or AccountStatementLine.RestrictedFunds))
+                .ToList();
+            membersFunds = new MembersFundsSection(
+                -unrestrictedLines.Sum(line => line.OpeningNetDebit),
+                profitForYear,
+                -unrestrictedLines.Sum(line => line.CurrentNetDebit),
+                -equityLines.Where(line => Line(line) == AccountStatementLine.RestrictedFunds).Sum(line => line.NetDebit),
+                totalCapital);
+        }
+
         return new BalanceSheet(
             new FixedAssetsSection(assetCategories, fixedAssetsTotal),
             new CurrentAssetsSection(stock, debtors, prepayments, cash, totalCurrentAssets),
-            new CreditorsWithinYearSection(tradeCreditors, accruals, taxCreditors, otherCreditorsWithin, totalCreditorsWithin),
+            new CreditorsWithinYearSection(tradeCreditors, accruals, taxCreditors, otherCreditorsWithin, totalCreditorsWithin, bankOverdraft),
             netCurrentAssets,
             totalAssetsLessCurrentLiabilities,
             new CreditorsAfterYearSection(loansAfterYear, otherCreditorsAfter, totalCreditorsAfter),
@@ -590,8 +630,15 @@ public partial class FinancialStatementsService(AccountsDbContext db)
                 retainedEarnings,
                 totalCapital,
                 unexplainedDifference),
-            Math.Abs(unexplainedDifference) < 0.01m);
+            Math.Abs(unexplainedDifference) < 0.01m,
+            membersFunds);
     }
+
+    private async Task<ChartOfAccountsVariant?> CompanyVariantAsync(int companyId) =>
+        await db.Companies
+            .Where(company => company.Id == companyId)
+            .Select(company => (ChartOfAccountsVariant?)company.ChartOfAccountsVariant)
+            .FirstOrDefaultAsync();
 
     private async Task<BalanceSheet> GetLegacyBalanceSheetForPeriodAsync(int periodId)
     {
@@ -746,6 +793,18 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         return earlierOpening + priorProfit - priorDividends;
     }
 
+    private async Task<decimal> GetOpeningShareCapitalBalanceAsync(int periodId)
+    {
+        var balances = await db.OpeningBalances
+            .Include(o => o.AccountCategory)
+            .Where(o => o.PeriodId == periodId)
+            .ToListAsync();
+
+        return balances
+            .Where(o => CategoryClassification.Line(o.AccountCategory) == AccountStatementLine.ShareCapital)
+            .Sum(o => o.Credit - o.Debit);
+    }
+
     private async Task<decimal> GetOpeningEquityBalanceAsync(int periodId, string code)
     {
         var balances = await db.OpeningBalances
@@ -782,7 +841,10 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var reviewed = reviewedSections.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // 1. Size classification done?
-        if (period.SizeClassification != null) completedChecks++; else missing.Add("Size classification not completed");
+        // A saved-but-undecided row (inputs only, no current decision) is not a classification.
+        if (period.SizeClassification is { HasCurrentDecision: true, InputBasis: SizeInputBasis.Computed }) completedChecks++;
+        // Historic figures keyed in from filed accounts are evidence for the next year, not this period's classification.
+        else missing.Add(period.SizeClassification is { InputBasis: SizeInputBasis.HistoricAnchor } ? "Historic figures only — not classified here" : "Size classification not completed");
 
         // 2. Filing regime determined?
         if (period.FilingRegime != null) completedChecks++; else missing.Add("Filing regime not determined");
@@ -795,6 +857,31 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var uncategorised = await db.ImportedTransactions.CountAsync(t => t.PeriodId == periodId && t.CategoryId == null && !t.IsDuplicate);
         if (uncategorised == 0 && txnCount > 0) completedChecks++;
         else if (uncategorised > 0) warnings.Add($"{uncategorised} transactions not yet categorised");
+
+        // Suspense must be nil before the statements are approved. Evaluated only when the company has a
+        // suspense account, and not counted in totalChecks, so other companies' scores are unchanged.
+        var suspenseCategoryIds = await db.AccountCategories
+            .Where(c => (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
+                && c.StatementLine == AccountStatementLine.Suspense)
+            .Select(c => c.Id)
+            .ToListAsync();
+        if (suspenseCategoryIds.Count > 0)
+        {
+            try
+            {
+                var suspenseLedger = await new AccountingLedgerService(db).BuildAsync(companyId, periodId);
+                foreach (var line in suspenseLedger.Lines.Values
+                    .Where(line => suspenseCategoryIds.Contains(line.Category.Id) && line.NetDebit != 0)
+                    .OrderBy(line => line.Category.Code, StringComparer.Ordinal))
+                {
+                    missing.Add($"Suspense account {line.Category.Code} has a balance of €{Math.Abs(line.NetDebit).ToString("N2", System.Globalization.CultureInfo.InvariantCulture)}; clear it before the statements are approved.");
+                }
+            }
+            catch (BusinessRuleException)
+            {
+                // The ledger cannot be built; the balance-sheet check below already reports that.
+            }
+        }
 
         // Candidate rows remain provisionally included. Final outputs fail closed until a reviewer
         // explicitly keeps or discards each one, so a re-import can never be silently lost.
@@ -886,6 +973,15 @@ public partial class FinancialStatementsService(AccountsDbContext db)
             }
         }
 
+        // A company holding a charitable tax exemption gets no automatic CT provision; an entered CT
+        // liability must be confirmed or removed before final outputs (a blocking warning, not counted).
+        // Once an Owner or Reviewer confirms it is due, it is provided for like a non-exempt company's.
+        if (period.Company.HoldsCharitableTaxExemption
+            && enteredCorporationTax is > 0m
+            && !await CorporationTaxObligation.IsConfirmedDueAsync(db, periodId))
+            warnings.Add(
+                $"This company holds a charitable tax exemption, but a corporation tax liability of €{enteredCorporationTax.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)} is entered; confirm it is due (for example on income outside the exemption) or remove it.");
+
         // accounting-vat-paye-reconciliation [HUMAN DECISION flagged — assumes VAT is posted to the VAT
         // control accounts (1300 VAT Receivable / 2200 VAT Payable); needs a real VAT-return spec to
         // confirm the convention]. When a VAT figure is entered, reconcile it to the source: net output
@@ -901,13 +997,13 @@ public partial class FinancialStatementsService(AccountsDbContext db)
                 .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
                 .ToListAsync();
             var vatMovements = await GetAccountMovementsAsync(periodId, vatCategories);
-            decimal CategoryNetCredit(string code)
+            decimal CategoryNetCredit(AccountSystemRole role)
             {
-                var cat = vatCategories.FirstOrDefault(c => c.Code == code);
+                var cat = CategoryClassification.PreferredByRole(vatCategories, companyId, role);
                 return cat != null && vatMovements.TryGetValue(cat.Id, out var m) ? m.Credit - m.Debit : 0m;
             }
             // Output VAT = net credit on VAT Payable; input VAT = net debit on VAT Receivable.
-            var vatFromSource = CategoryNetCredit("2200") + CategoryNetCredit("1300");
+            var vatFromSource = CategoryNetCredit(AccountSystemRole.VatPayable) + CategoryNetCredit(AccountSystemRole.VatReceivable);
             if (Math.Abs(vat - vatFromSource) > 1m)
                 warnings.Add(
                     $"Entered VAT ({vat:C}) does not reconcile to the VAT control accounts ({vatFromSource:C}). Reconcile VAT to the underlying transactions before filing.");
@@ -930,7 +1026,7 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         {
             var recordedShareCapital = await GetShareCapitalAtAsync(companyId, period.PeriodEnd);
             if (recordedShareCapital == 0)
-                recordedShareCapital = await GetOpeningEquityBalanceAsync(periodId, "3000");
+                recordedShareCapital = await GetOpeningShareCapitalBalanceAsync(periodId);
             if (recordedShareCapital == 0)
                 missing.Add("Share capital not recorded");
         }
@@ -1176,38 +1272,40 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var ledger = await new AccountingLedgerService(db).BuildAsync(companyId, periodId);
         var profitAndLoss = await GetProfitAndLossForPeriodAsync(periodId);
         var operatingProfit = profitAndLoss.OperatingProfit;
+        // Charity chart: cash and cash equivalents are the cash accounts less the bank overdraft accounts,
+        // so movements between them are no cash flow and a movement on the bank control (whatever its
+        // sign) is the change in cash. Every other company is unchanged.
+        var charityPresentation = await CompanyVariantAsync(companyId) == ChartOfAccountsVariant.CharityClg;
+        var cashMovements = charityPresentation ? ledger.CashOrOverdraftMovements : ledger.CashMovements;
+        Func<AccountCategory, bool> isCash = charityPresentation
+            ? CategoryClassification.IsCashOrBankOverdraft
+            : AccountingLedgerService.IsCash;
 
-        static bool IsFixedAsset(AccountCategory category) =>
-            category.Type == AccountCategoryType.Asset && category.Code.StartsWith("00", StringComparison.Ordinal);
-        static bool IsTax(AccountCategory category) =>
-            category.Code.StartsWith("24", StringComparison.Ordinal)
-            || category.Code.StartsWith("8", StringComparison.Ordinal);
-        static bool IsDividend(AccountCategory category) => category.Code is "2800" or "3200";
-        static bool IsLoan(AccountCategory category) =>
-            category.Code.StartsWith("26", StringComparison.Ordinal)
-            || category.Code.StartsWith("27", StringComparison.Ordinal);
-        static bool IsShareIssue(AccountCategory category) => category.Code == "3000";
-        static bool IsOtherFinancing(AccountCategory category) =>
-            category.Code.StartsWith("25", StringComparison.Ordinal)
-            || (category.Type == AccountCategoryType.Equity && category.Code is not "3000" and not "3200");
+        // Each cash movement is classified once, by its contra account's explicit cash-flow class.
+        static bool IsFixedAsset(AccountCategory category) => CategoryClassification.CashFlow(category) == AccountCashFlowClass.Investing;
+        static bool IsTax(AccountCategory category) => CategoryClassification.CashFlow(category) == AccountCashFlowClass.Tax;
+        static bool IsDividend(AccountCategory category) => CategoryClassification.CashFlow(category) == AccountCashFlowClass.Dividend;
+        static bool IsLoan(AccountCategory category) => CategoryClassification.CashFlow(category) == AccountCashFlowClass.Loan;
+        static bool IsShareIssue(AccountCategory category) => CategoryClassification.CashFlow(category) == AccountCashFlowClass.ShareIssue;
+        static bool IsOtherFinancing(AccountCategory category) => CategoryClassification.CashFlow(category) == AccountCashFlowClass.OtherFinancing;
 
-        var investing = ledger.CashMovements.Where(movement => IsFixedAsset(movement.ContraCategory)).ToList();
-        var tax = ledger.CashMovements.Where(movement => IsTax(movement.ContraCategory)).ToList();
-        var dividends = ledger.CashMovements.Where(movement => IsDividend(movement.ContraCategory)).ToList();
-        var loans = ledger.CashMovements.Where(movement => IsLoan(movement.ContraCategory)).ToList();
-        var shareIssues = ledger.CashMovements.Where(movement => IsShareIssue(movement.ContraCategory)).ToList();
-        var otherFinancing = ledger.CashMovements.Where(movement => IsOtherFinancing(movement.ContraCategory)).ToList();
+        var investing = cashMovements.Where(movement => IsFixedAsset(movement.ContraCategory)).ToList();
+        var tax = cashMovements.Where(movement => IsTax(movement.ContraCategory)).ToList();
+        var dividends = cashMovements.Where(movement => IsDividend(movement.ContraCategory)).ToList();
+        var loans = cashMovements.Where(movement => IsLoan(movement.ContraCategory)).ToList();
+        var shareIssues = cashMovements.Where(movement => IsShareIssue(movement.ContraCategory)).ToList();
+        var otherFinancing = cashMovements.Where(movement => IsOtherFinancing(movement.ContraCategory)).ToList();
         var excluded = investing.Concat(tax).Concat(dividends).Concat(loans).Concat(shareIssues).Concat(otherFinancing)
             .Select(movement => movement.SourceReference)
             .ToHashSet(StringComparer.Ordinal);
-        var operating = ledger.CashMovements.Where(movement => !excluded.Contains(movement.SourceReference)).ToList();
+        var operating = cashMovements.Where(movement => !excluded.Contains(movement.SourceReference)).ToList();
 
         var operatingCashBeforeTax = operating.Sum(movement => movement.Amount);
         var interestCashMovement = operating
-            .Where(movement => movement.ContraCategory.Code.StartsWith("69", StringComparison.Ordinal))
+            .Where(movement => CategoryClassification.Line(movement.ContraCategory) == AccountStatementLine.InterestPayable)
             .Sum(movement => movement.Amount);
         var depreciation = ledger.Lines.Values
-            .Where(line => line.Category.Code == "7000")
+            .Where(line => CategoryClassification.Line(line.Category) == AccountStatementLine.Depreciation)
             .Sum(line => line.CurrentNetDebit);
         var operatingAdjustments = new List<CashFlowAdjustment>();
         if (depreciation != 0)
@@ -1231,8 +1329,8 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var otherFinancingCash = otherFinancing.Sum(movement => movement.Amount);
         var netCashFromFinancing = loanDrawdowns - loanRepayments - dividendsPaid + shareIssueCash + otherFinancingCash;
         var netIncreaseInCash = netCashFromOperating + netCashFromInvesting + netCashFromFinancing;
-        var openingCash = ledger.OpeningNetDebit(AccountingLedgerService.IsCash);
-        var closingCash = ledger.NetDebit(AccountingLedgerService.IsCash);
+        var openingCash = ledger.OpeningNetDebit(isCash);
+        var closingCash = ledger.NetDebit(isCash);
 
         // All cash-flow sections are classifications of the same posted cash movements. Any future
         // category added to the ledger is therefore included exactly once and closing cash ties to the
@@ -1412,9 +1510,10 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         var equityLines = ledger.Lines.Values
             .Where(line => line.Category.Type == AccountCategoryType.Equity)
             .ToList();
-        var shareLines = equityLines.Where(line => line.Category.Code == "3000").ToList();
-        var dividendLines = equityLines.Where(line => line.Category.Code == "3200").ToList();
-        var reserveLines = equityLines.Where(line => line.Category.Code is not "3000" and not "3200").ToList();
+        var shareLines = equityLines.Where(line => CategoryClassification.Line(line.Category) == AccountStatementLine.ShareCapital).ToList();
+        var dividendLines = equityLines.Where(line => CategoryClassification.Line(line.Category) == AccountStatementLine.DividendsPaid).ToList();
+        var reserveLines = equityLines.Where(line => CategoryClassification.Line(line.Category)
+            is not (AccountStatementLine.ShareCapital or AccountStatementLine.DividendsPaid)).ToList();
 
         var openingShareCapital = -shareLines.Sum(line => line.OpeningNetDebit);
         var sharesIssued = -shareLines.Sum(line => line.CurrentNetDebit);

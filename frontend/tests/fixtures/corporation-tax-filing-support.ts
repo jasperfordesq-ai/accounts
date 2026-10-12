@@ -153,7 +153,7 @@ export function corporationTaxFilingSupportFixture(): CorporationTaxFilingSuppor
       blockingReasons: ["Preliminary Tax: safe harbour was not met."],
       manualCompletionItems: [
         "Complete every mandatory declaration in the year-specific ROS CT1.",
-        "Have a named qualified accountant approve the final ROS handoff.",
+        "Have an Owner or Reviewer review the final ROS handoff in FilingBridge (an accountant's review is optional).",
       ],
       sources: [{
         code: "revenue-ct1-2025",

@@ -61,11 +61,38 @@ public class PeriodLockMiddleware(RequestDelegate next)
         if (HttpMethods.IsPut(method) && IsPeriodAction(segments, "status"))
             return true;
 
-        if (HttpMethods.IsPut(method) && IsPeriodFilingAction(segments, "cro-status"))
+        // Filing status: approval and submission require a finalised, locked period (FilingReleaseGate).
+        if (HttpMethods.IsPut(method)
+            && (IsPeriodFilingAction(segments, "cro-status")
+                || IsPeriodFilingAction(segments, "revenue-status")
+                || IsPeriodFilingAction(segments, "charity-status")))
+        {
             return true;
+        }
 
         if (HttpMethods.IsPost(method) && IsPeriodFilingAction(segments, "cro-payment"))
             return true;
+
+        // Withdrawing the s.324 approval and treating a CRO filing as not delivered act on the
+        // finalised period's filing state; their role, recent-MFA and filing-state checks still apply.
+        if (HttpMethods.IsPost(method)
+            && (IsPeriodFilingAction(segments, "directors-approval-withdrawal")
+                || IsPeriodFilingAction(segments, "cro-not-delivered")))
+        {
+            return true;
+        }
+
+        // The s.324 approval page and record, the executed CRO signing pack and the optional accountant
+        // review are bound to the CRO accounts generated after finalisation (their source includes the
+        // board approval date set by finalising). The auditor report, an input to those accounts, is not.
+        if (HttpMethods.IsPost(method)
+            && (IsPeriodFilingAction(segments, "directors-approval-page")
+                || IsPeriodFilingAction(segments, "directors-approval")
+                || IsPeriodFilingAction(segments, "cro-signing-pack")
+                || IsPeriodFilingAction(segments, "accountant-review")))
+        {
+            return true;
+        }
 
         if (HttpMethods.IsPost(method)
             && (IsPeriodDocumentAction(segments, "cro-filing-pack")

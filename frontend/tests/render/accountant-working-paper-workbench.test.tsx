@@ -25,6 +25,10 @@ describe("AccountantWorkingPaperWorkbench", () => {
 
     expect(screen.getByRole("heading", { name: "Accountant working papers" })).toBeInTheDocument();
     expect(screen.getByText(/NOT A CRO OR CT1 RETURN/)).toBeInTheDocument();
+    expect(screen.getByText(/this artifact is not a filing approval/i)).toHaveTextContent(
+      "the directors' s.324 approval is the filing gate and an accountant's review is optional",
+    );
+    expect(screen.queryByText(/Qualified-accountant review remains required/)).not.toBeInTheDocument();
     expect(screen.getByText("Fixture Accountant (Accountant)")).toBeInTheDocument();
     expect(screen.getByText("fixture-candidate")).toBeInTheDocument();
     expect(screen.getByText("7 / 1 / 3")).toBeInTheDocument();
