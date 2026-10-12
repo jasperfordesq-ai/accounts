@@ -300,3 +300,284 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
     }
   }
 }
+
+// --- Remote MCP endpoint (/mcp) and OAuth discovery (/.well-known/*) route handlers ---
+{
+  const {
+    buildMcpUpstreamHeaders,
+    mcpResponseHeaders,
+    mcpUpstreamUrl,
+    proxyMcpRequest,
+  } = await import("../src/lib/mcpProxy.ts");
+  const { OAUTH_METADATA_API_PATHS, proxyOAuthMetadata } = await import("../src/lib/oauthMetadataProxy.ts");
+  const { boundedRequestBody, contentLengthExceedsLimit, maxProxyBodyBytes, PayloadTooLargeError } = await import("../src/lib/apiProxyBody.ts");
+
+  const realFetch = globalThis.fetch;
+  const realConsoleError = console.error;
+  const withFetch = async (handler, run) => {
+    const calls = [];
+    globalThis.fetch = async (input, init = {}) => {
+      calls.push({ url: String(input), init, headers: new Headers(init.headers) });
+      return handler(calls.at(-1));
+    };
+    console.error = () => {};
+    try {
+      await run(calls);
+    } finally {
+      globalThis.fetch = realFetch;
+      console.error = realConsoleError;
+    }
+  };
+
+  // Shared body bounding.
+  assert.equal(maxProxyBodyBytes({}), 5 * 1024 * 1024);
+  assert.equal(maxProxyBodyBytes({ API_PROXY_MAX_BODY_BYTES: "10" }), 10);
+  assert.equal(maxProxyBodyBytes({ API_PROXY_MAX_BODY_BYTES: "nonsense" }), 5 * 1024 * 1024);
+  assert.equal(contentLengthExceedsLimit(new Headers({ "Content-Length": "11" }), 10), true);
+  assert.equal(contentLengthExceedsLimit(new Headers({ "Content-Length": "10" }), 10), false);
+  const bounded = boundedRequestBody(new Response("x".repeat(20)).body, 10);
+  await assert.rejects(new Response(bounded).text(), (error) => error instanceof PayloadTooLargeError);
+
+  // Request headers: an explicit MCP allowlist; no cookies, API key, Origin or forwarding headers.
+  const inbound = new Headers({
+    Authorization: "Bearer fbc1.agent-token",
+    Accept: "application/json, text/event-stream",
+    "Content-Type": "application/json",
+    "Mcp-Session-Id": "session-1",
+    "Mcp-Protocol-Version": "2025-06-18",
+    "Last-Event-ID": "event-7",
+    Cookie: "accounts_session=browser-session; accounts_csrf=csrf",
+    "X-CSRF-Token": "csrf",
+    "X-Accounts-Api-Key": "client-supplied-key",
+    Origin: "https://evil.example",
+    Referer: "https://evil.example/page",
+    "Sec-Fetch-Site": "cross-site",
+    "X-Forwarded-For": "198.51.100.1",
+    "Tailscale-User-Login": "attacker@example.invalid",
+    Host: "fb.example",
+  });
+  const upstreamHeaders = buildMcpUpstreamHeaders(inbound);
+  assert.deepEqual([...upstreamHeaders.keys()].sort(), [
+    "accept",
+    "authorization",
+    "content-type",
+    "last-event-id",
+    "mcp-protocol-version",
+    "mcp-session-id",
+  ]);
+  assert.equal(upstreamHeaders.get("Authorization"), "Bearer fbc1.agent-token");
+
+  // Response headers: only the MCP pass-back allowlist.
+  const passedBack = mcpResponseHeaders(new Headers({
+    "Content-Type": "text/event-stream",
+    "Mcp-Session-Id": "session-1",
+    "Mcp-Protocol-Version": "2025-06-18",
+    "WWW-Authenticate": "Bearer resource_metadata=\"https://fb.example/.well-known/oauth-protected-resource/mcp\"",
+    "Cache-Control": "no-cache",
+    "Retry-After": "3",
+    "Set-Cookie": "stolen=1",
+    "X-Internal-Trace": "secret",
+    Location: "http://mcp:3100/internal",
+  }));
+  assert.deepEqual([...passedBack.keys()].sort(), [
+    "cache-control",
+    "content-type",
+    "mcp-protocol-version",
+    "mcp-session-id",
+    "retry-after",
+    "www-authenticate",
+  ]);
+
+  const mcpEnv = { MCP_URL: "http://mcp:3100/mcp" };
+
+  // MCP_URL unset (or invalid) answers 404 JSON and never calls anything.
+  assert.equal(mcpUpstreamUrl({}), null);
+  assert.equal(mcpUpstreamUrl({ MCP_URL: "ftp://mcp/mcp" }), null);
+  await withFetch(() => { throw new Error("must not be called"); }, async (calls) => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", { method: "POST", body: "{}" }), {});
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error, "not_found");
+    assert.equal(calls.length, 0);
+  });
+
+  // POST streams the body to MCP_URL with allowlisted headers and passes the response back untouched.
+  await withFetch(
+    () => new Response("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}", {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Mcp-Session-Id": "session-2", "Set-Cookie": "x=1" },
+    }),
+    async (calls) => {
+      const response = await proxyMcpRequest(new Request("https://fb.example/mcp?ignored=1", {
+        method: "POST",
+        headers: inbound,
+        body: "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}",
+      }), mcpEnv);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, "http://mcp:3100/mcp");
+      assert.equal(calls[0].init.method, "POST");
+      assert.equal(calls[0].init.redirect, "manual");
+      assert.equal(calls[0].headers.get("cookie"), null);
+      assert.equal(calls[0].headers.get("x-accounts-api-key"), null);
+      assert.equal(calls[0].headers.get("origin"), null);
+      assert.equal(await new Response(calls[0].init.body).text(), "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}");
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("Mcp-Session-Id"), "session-2");
+      assert.equal(response.headers.get("Set-Cookie"), null);
+      assert.equal(await response.text(), "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}");
+    },
+  );
+
+  // 401 keeps WWW-Authenticate so clients can discover the authorization server.
+  await withFetch(
+    () => new Response("{\"error\":\"invalid_token\"}", {
+      status: 401,
+      headers: { "Content-Type": "application/json", "WWW-Authenticate": "Bearer error=\"invalid_token\"" },
+    }),
+    async () => {
+      const response = await proxyMcpRequest(new Request("https://fb.example/mcp", { method: "GET" }), mcpEnv);
+      assert.equal(response.status, 401);
+      assert.equal(response.headers.get("WWW-Authenticate"), "Bearer error=\"invalid_token\"");
+    },
+  );
+
+  // DELETE without a body is forwarded without one.
+  await withFetch(() => new Response(null, { status: 204 }), async (calls) => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", {
+      method: "DELETE",
+      headers: { "Mcp-Session-Id": "session-3" },
+    }), mcpEnv);
+    assert.equal(response.status, 204);
+    assert.equal(calls[0].init.method, "DELETE");
+    assert.equal(calls[0].init.body, undefined);
+    assert.equal(calls[0].headers.get("mcp-session-id"), "session-3");
+  });
+
+  // An SSE body keeps streaming after the connect timeout has elapsed: the timer covers headers only.
+  await withFetch(() => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      async start(controller) {
+        controller.enqueue(encoder.encode("event: message\ndata: 1\n\n"));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        controller.enqueue(encoder.encode("event: message\ndata: 2\n\n"));
+        controller.close();
+      },
+    });
+    return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  }, async () => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", { method: "GET" }), {
+      ...mcpEnv,
+      API_PROXY_MCP_TIMEOUT_MS: "20",
+    });
+    assert.equal(response.headers.get("Content-Type"), "text/event-stream");
+    assert.equal(await response.text(), "event: message\ndata: 1\n\nevent: message\ndata: 2\n\n");
+  });
+
+  // No response headers before the connect timeout: 504.
+  await withFetch(({ init }) => new Promise((_, reject) => {
+    init.signal.addEventListener("abort", () => reject(init.signal.reason));
+  }), async () => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", { method: "GET" }), {
+      ...mcpEnv,
+      API_PROXY_MCP_TIMEOUT_MS: "10",
+    });
+    assert.equal(response.status, 504);
+  });
+
+  // Unreachable service, upstream redirect and oversize body.
+  await withFetch(() => { throw new TypeError("fetch failed"); }, async () => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", { method: "GET" }), mcpEnv);
+    assert.equal(response.status, 502);
+  });
+  await withFetch(() => new Response(null, { status: 302, headers: { Location: "http://mcp:3100/internal" } }), async () => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", { method: "GET" }), mcpEnv);
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get("Location"), null);
+  });
+  await withFetch(() => { throw new Error("must not be called"); }, async (calls) => {
+    const response = await proxyMcpRequest(new Request("https://fb.example/mcp", {
+      method: "POST",
+      headers: { "Content-Length": "100" },
+      body: "x".repeat(100),
+    }), { ...mcpEnv, API_PROXY_MCP_MAX_BODY_BYTES: "10" });
+    assert.equal(response.status, 413);
+    assert.equal(calls.length, 0);
+  });
+
+  // OAuth discovery: server-side GET to the API with the service key, no caller credentials, cached publicly.
+  const metadataEnv = { API_URL: "http://api:8080", ACCOUNTS_API_KEY: "server-side-secret", NODE_ENV: "production" };
+  await withFetch(
+    () => new Response("{\"issuer\":\"https://fb.example\"}", {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8", "X-Internal": "1" },
+    }),
+    async (calls) => {
+      const response = await proxyOAuthMetadata(new Request("https://fb.example/.well-known/oauth-authorization-server", {
+        headers: { Cookie: "accounts_session=s", Authorization: "Bearer fbc1.x", "X-Accounts-Api-Key": "client" },
+      }), OAUTH_METADATA_API_PATHS.authorizationServer, metadataEnv);
+      assert.equal(calls[0].url, "http://api:8080/api/oauth/metadata/authorization-server");
+      assert.equal(calls[0].init.method, "GET");
+      assert.equal(calls[0].headers.get("X-Accounts-Api-Key"), "server-side-secret");
+      assert.equal(calls[0].headers.get("Cookie"), null);
+      assert.equal(calls[0].headers.get("Authorization"), null);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("Cache-Control"), "public, max-age=300");
+      assert.equal(response.headers.get("Content-Type"), "application/json; charset=utf-8");
+      assert.equal(response.headers.get("X-Internal"), null);
+      assert.deepEqual(await response.json(), { issuer: "https://fb.example" });
+    },
+  );
+  await withFetch(() => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }), async (calls) => {
+    await proxyOAuthMetadata(
+      new Request("https://fb.example/.well-known/oauth-protected-resource/mcp"),
+      OAUTH_METADATA_API_PATHS.protectedResource,
+      metadataEnv,
+    );
+    assert.equal(calls[0].url, "http://api:8080/api/oauth/metadata/protected-resource");
+  });
+  await withFetch(() => new Response(null, { status: 404 }), async () => {
+    const response = await proxyOAuthMetadata(
+      new Request("https://fb.example/.well-known/oauth-protected-resource"),
+      OAUTH_METADATA_API_PATHS.protectedResource,
+      metadataEnv,
+    );
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+  });
+  await withFetch(() => new Response("Npgsql failure", { status: 500 }), async () => {
+    const response = await proxyOAuthMetadata(
+      new Request("https://fb.example/.well-known/oauth-authorization-server"),
+      OAUTH_METADATA_API_PATHS.authorizationServer,
+      metadataEnv,
+    );
+    assert.equal(response.status, 502);
+    assert.doesNotMatch(await response.text(), /Npgsql/);
+  });
+  await withFetch(() => { throw new Error("must not be called"); }, async (calls) => {
+    const response = await proxyOAuthMetadata(
+      new Request("https://fb.example/.well-known/oauth-authorization-server"),
+      OAUTH_METADATA_API_PATHS.authorizationServer,
+      { NODE_ENV: "production", API_URL: "http://api:8080" },
+    );
+    assert.equal(response.status, 500);
+    assert.equal(calls.length, 0);
+  });
+}
+
+// The CSP proxy matcher keeps nonces on every page (including the OAuth consent page) but skips the
+// JSON / event-stream route handlers.
+{
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
+  const pattern = /source: "\/\(\(\?!(.*?)\)\.\*\)"/.exec(source);
+  assert.ok(pattern, "proxy matcher source must remain a negative-lookahead pattern");
+  const matcher = new RegExp(`^/(?!${pattern[1].replaceAll("\\\\", "\\")}).*$`);
+  for (const path of ["/", "/login", "/oauth/authorize", "/settings/approvals", "/settings/agents", "/mcpx", "/apiary"]) {
+    assert.ok(matcher.test(path), `${path} must receive the CSP nonce`);
+  }
+  for (const path of ["/api/auth/me", "/mcp", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp", "/_next/static/x.js"]) {
+    assert.ok(!matcher.test(path), `${path} must skip the CSP proxy`);
+  }
+}
+
+console.log("API proxy, MCP proxy and OAuth discovery checks passed.");

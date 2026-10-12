@@ -95,7 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isLoginPage = pathname === "/login";
   const isPasswordChangePage = pathname === "/change-password";
   const isActionTokenPage = pathname === "/accept-invite" || pathname === "/reset-password";
-  const isPublicPage = isLoginPage || isActionTokenPage || pathname === "/about";
+  // The OAuth consent page authenticates the agent's grant with its own credentials form and never
+  // uses (or creates) the browser session, so it must not redirect to sign-in or password change.
+  const isOAuthConsentPage = pathname === "/oauth/authorize";
+  const isPublicPage = isLoginPage || isActionTokenPage || isOAuthConsentPage || pathname === "/about";
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (refreshInFlightRef.current) return;
@@ -186,12 +189,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (user?.mustChangePassword && !isPasswordChangePage) {
+    if (user?.mustChangePassword && !isPasswordChangePage && !isOAuthConsentPage) {
       router.replace(changePasswordRouteForReturnTo(currentPathWithSearch()));
       return;
     }
 
-  }, [authServiceError, isLoginPage, isPasswordChangePage, isPublicPage, loading, router, user]);
+  }, [authServiceError, isLoginPage, isOAuthConsentPage, isPasswordChangePage, isPublicPage, loading, router, user]);
 
   const login = useCallback(async (tenantSlug: string, email: string, password: string) => {
     const transitionId = ++authTransitionRef.current;
@@ -356,7 +359,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  if (user?.mustChangePassword && !isPasswordChangePage) {
+  if (user?.mustChangePassword && !isPasswordChangePage && !isOAuthConsentPage) {
     return (
       <AuthContext.Provider value={value}>
         <FullPageSpinner />

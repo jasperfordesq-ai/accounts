@@ -157,6 +157,18 @@ export const authenticatedRoutePolicies: readonly AuthenticatedRoutePolicy[] = [
     matches: (pathname) => pathname === "/settings/users",
   },
   {
+    id: "connector-approvals",
+    pathTemplate: "/settings/approvals",
+    requiredPermission: "canRead",
+    matches: (pathname) => pathname === "/settings/approvals",
+  },
+  {
+    id: "connector-agents",
+    pathTemplate: "/settings/agents",
+    requiredPermission: "canRead",
+    matches: (pathname) => pathname === "/settings/agents",
+  },
+  {
     id: "workbench-preview",
     pathTemplate: "/workbench-preview",
     requiredPermission: "canRead",

@@ -2363,3 +2363,75 @@ export function parseUserAdministrationSummary(payload: unknown) {
 export function parseUserProvisioningResult(payload: unknown) {
   return parseApiContract(userProvisioningResultSchema, payload, "user provisioning result");
 }
+
+// --- MCP connector: approvals, connected agents, activity and the OAuth consent page ---
+
+const connectorIntegerSchema = z.number().int();
+export const connectorAccessLevelSchema = z.enum(["Read", "Write", "Admin"]);
+export const connectorDataScopeSchema = z.enum(["Withheld", "Full"]);
+const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Expected a UUID");
+
+export const connectorApprovalViewSchema = z.object({
+  approvalId: uuidSchema,
+  summary: z.string(),
+  method: z.string().min(1),
+  routePattern: z.string().min(1),
+  resourceId: z.string().nullable(),
+  createdAtUtc: isoDateTimeSchema,
+  expiresAtUtc: isoDateTimeSchema,
+  approvedAtUtc: isoDateTimeSchema.nullable(),
+  consumedAtUtc: isoDateTimeSchema.nullable(),
+});
+
+export const connectorApprovalGrantSchema = z.object({
+  ok: z.boolean(),
+  approvalId: uuidSchema,
+  summary: z.string(),
+  expiresAtUtc: isoDateTimeSchema,
+});
+
+export const connectorSessionSummarySchema = z.object({
+  familyId: uuidSchema,
+  userId: positiveIdSchema,
+  accessLevel: connectorAccessLevelSchema,
+  dataScope: connectorDataScopeSchema,
+  deviceLabel: z.string().nullable(),
+  clientVersion: z.string().nullable(),
+  connectedAtUtc: isoDateTimeSchema,
+  lastUsedAtUtc: isoDateTimeSchema.nullable(),
+  expiresAtUtc: isoDateTimeSchema,
+});
+
+export const connectorActivityRowSchema = z.object({
+  id: connectorIntegerSchema.positive(),
+  sessionFamilyId: uuidSchema,
+  accessLevel: z.string(),
+  dataScope: z.string(),
+  method: z.string(),
+  routePattern: z.string(),
+  resourceId: z.string().nullable(),
+  companyId: positiveIdSchema.nullable(),
+  statusCode: connectorIntegerSchema,
+  reason: z.string().nullable(),
+  occurredAtUtc: isoDateTimeSchema,
+});
+
+export const connectorActivityPageSchema = z.object({
+  data: z.array(connectorActivityRowSchema),
+  page: connectorIntegerSchema.positive(),
+  pageSize: connectorIntegerSchema.positive(),
+  hasMore: z.boolean(),
+});
+
+export const oauthAuthorizeDescriptionSchema = z.object({
+  clientName: z.string().min(1),
+  redirectUri: z.string().url(),
+  redirectHost: z.string().min(1),
+  requestedAccessLevel: connectorAccessLevelSchema,
+  requestedDataScope: connectorDataScopeSchema,
+  resource: z.string().min(1),
+});
+
+export const oauthAuthorizeResponseSchema = z.object({
+  redirectTo: z.string().url(),
+});
