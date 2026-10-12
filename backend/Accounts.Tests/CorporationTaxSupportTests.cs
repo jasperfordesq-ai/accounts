@@ -374,6 +374,300 @@ public sealed class CorporationTaxSupportTests
             reason => reason.Contains("chargeable-gain/loss review", StringComparison.Ordinal));
     }
 
+    // The auto depreciation journal debits the NonDeductible depreciation account (generic 7000). The
+    // computation already adds back depreciation from the depreciation entries, so the journal must not
+    // be added back a second time through the non-deductible stream.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(500)]
+    public async Task AutoDepreciationJournal_IsAddedBackOnce_AndGenuineNonDeductibleExpensesStillAre(int entertainmentSpend)
+    {
+        await using var db = CreateDbContext();
+        var fixture = await SeedPeriodAsync(db, "Depreciation add-back fixture");
+        var sales = AddCategory(db, fixture.Company.Id, "4000", "Sales", AccountCategoryType.Income);
+        var entertainment = AddCategory(
+            db,
+            fixture.Company.Id,
+            "6200",
+            "Business entertainment",
+            AccountCategoryType.Expense,
+            TaxTreatment.NonDeductible);
+        db.ImportedTransactions.Add(Tx(fixture, sales.Id, 50_000m, "Trading sales", 1));
+        if (entertainmentSpend > 0)
+            db.ImportedTransactions.Add(Tx(fixture, entertainment.Id, -entertainmentSpend, "Entertainment expense", 2));
+        var machine = ReviewedPlant(fixture.Company.Id, "Workshop machine", 8_000m, fixture.Period.PeriodStart);
+        machine.UsefulLifeYears = 5; // 1,600 straight-line depreciation; 1,000 wear and tear (12.5%)
+        db.FixedAssets.Add(machine);
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(fixture.Company.Id, fixture.Period.Id);
+        var service = new TaxComputationService(db, new FinancialStatementsService(db));
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        Assert.Single(await db.Adjustments.Where(item => item.Description.StartsWith("Depreciation —")).ToListAsync());
+        var accountingProfit = 50_000m - entertainmentSpend - 1_600m;
+        Assert.Equal(accountingProfit, computation.AccountingProfit);
+        Assert.Equal(1_600m, Assert.Single(computation.Adjustments, item => item.Description == "Add back: depreciation").Amount);
+        Assert.Equal(1_000m, computation.CapitalAllowances);
+        if (entertainmentSpend > 0)
+            Assert.Equal(entertainmentSpend, Assert.Single(computation.Adjustments, item => item.Description == "Add back: non-deductible expenses").Amount);
+        else
+            Assert.DoesNotContain(computation.Adjustments, item => item.Description.Contains("non-deductible", StringComparison.OrdinalIgnoreCase));
+        // Taxable = accounting profit + depreciation (once) + genuine non-deductibles - capital allowances.
+        Assert.Equal(accountingProfit + 1_600m + entertainmentSpend - 1_000m, computation.TradingProfitBeforeLossRelief);
+        Assert.Equal(49_000m, computation.TaxableProfit);
+        Assert.True(computation.FinalTaxChargeSupported, string.Join(" | ", computation.BlockingReasons));
+    }
+
+    public enum DepreciationJournalState { Generated, NotGeneratedYet, EditedUpwards, EditedDownwards, Deleted }
+
+    // The depreciation add-back equals the depreciation actually charged in accounting profit: the
+    // posted auto depreciation journal, whatever a reviewer did to it after generation.
+    [Theory]
+    [InlineData(DepreciationJournalState.Generated, 1_600)]
+    [InlineData(DepreciationJournalState.NotGeneratedYet, 0)]
+    [InlineData(DepreciationJournalState.EditedUpwards, 2_000)]
+    [InlineData(DepreciationJournalState.EditedDownwards, 1_200)]
+    [InlineData(DepreciationJournalState.Deleted, 0)]
+    public async Task DepreciationAddBack_EqualsTheDepreciationChargedInProfit(DepreciationJournalState state, int charged)
+    {
+        await using var db = CreateDbContext();
+        var fixture = await SeedPeriodAsync(db, "Depreciation journal state fixture");
+        var sales = AddCategory(db, fixture.Company.Id, "4000", "Sales", AccountCategoryType.Income);
+        db.ImportedTransactions.Add(Tx(fixture, sales.Id, 50_000m, "Trading sales", 1));
+        var machine = ReviewedPlant(fixture.Company.Id, "Workshop machine", 8_000m, fixture.Period.PeriodStart);
+        machine.UsefulLifeYears = 5; // generated charge 1,600; wear and tear 1,000
+        db.FixedAssets.Add(machine);
+        await db.SaveChangesAsync();
+
+        if (state != DepreciationJournalState.NotGeneratedYet)
+        {
+            await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(fixture.Company.Id, fixture.Period.Id);
+            var journal = await db.Adjustments.SingleAsync(item => item.Description.StartsWith("Depreciation —"));
+            Assert.True(journal.IsAuto);
+            if (state == DepreciationJournalState.Deleted)
+                db.Adjustments.Remove(journal);
+            else if (state != DepreciationJournalState.Generated)
+                journal.Amount = charged; // a reviewer's edit keeps IsAuto (UpdateAdjustmentEndpointAsync)
+            await db.SaveChangesAsync();
+        }
+
+        var statements = new FinancialStatementsService(db);
+        var service = new TaxComputationService(db, statements);
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        Assert.Equal(50_000m - charged, computation.AccountingProfit);
+        if (charged == 0)
+            Assert.DoesNotContain(computation.Adjustments, item => item.Description == "Add back: depreciation");
+        else
+            Assert.Equal(charged, Assert.Single(computation.Adjustments, item => item.Description == "Add back: depreciation").Amount);
+        Assert.DoesNotContain(computation.Adjustments, item => item.Description.Contains("non-deductible", StringComparison.OrdinalIgnoreCase));
+        // Profit + depreciation charged - wear and tear 1,000 is the same taxable profit in every state.
+        Assert.Equal(49_000m, computation.TaxableProfit);
+        // The CT1 support pack reports the same depreciation figure as the add-back.
+        Assert.Equal(charged, (await service.GetCt1SupportDataAsync(fixture.Company.Id, fixture.Period.Id)).DepreciationCharged);
+    }
+
+    // The charity chart's owned (8000) and leased (8010) depreciation accounts are NonDeductible on the
+    // Depreciation line: each auto journal is added back once, through the depreciation line only.
+    [Fact]
+    public async Task CharityChart_OwnedAndLeasedDepreciation_IsAddedBackOnce()
+    {
+        await using var db = CreateDbContext();
+        var fixture = await SeedCharityPeriodAsync(db, "Charity depreciation fixture");
+        db.ImportedTransactions.Add(Tx(fixture, fixture.Ids["4000"], 30_000m, "Unrestricted donations", 1));
+        var owned = ReviewedPlant(fixture.Company.Id, "Office equipment", 5_000m, fixture.Period.PeriodStart);
+        owned.Category = "Computer Equipment";
+        owned.UsefulLifeYears = 5; // 1,000 to 8000; wear and tear 625
+        var leased = ReviewedPlant(fixture.Company.Id, "Leased printer", 4_000m, fixture.Period.PeriodStart);
+        leased.Category = ChartDefinitions.LeasedEquipmentClass;
+        leased.UsefulLifeYears = 4; // 1,000 to 8010; wear and tear 500
+        db.FixedAssets.AddRange(owned, leased);
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(fixture.Company.Id, fixture.Period.Id);
+        var service = new TaxComputationService(db, new FinancialStatementsService(db));
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        var journals = await db.Adjustments.Where(item => item.Description.StartsWith("Depreciation —")).ToListAsync();
+        Assert.Equal(
+            [fixture.Ids["8000"], fixture.Ids["8010"]],
+            journals.Select(item => item.DebitCategoryId!.Value).Order());
+        Assert.Equal(28_000m, computation.AccountingProfit);
+        Assert.Equal(2_000m, Assert.Single(computation.Adjustments, item => item.Description == "Add back: depreciation").Amount);
+        Assert.DoesNotContain(computation.Adjustments, item => item.Description.Contains("non-deductible", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(1_125m, computation.CapitalAllowances);
+        Assert.Equal(28_000m + 2_000m - 1_125m, computation.TaxableProfit);
+    }
+
+    // A loss on disposal (7050) is a genuine non-deductible charge in profit and stays on the flag-driven
+    // non-deductible add-back. A manual (non-auto) journal to the depreciation account is depreciation
+    // charged in profit, so it joins the auto depreciation in the depreciation add-back (once).
+    [Fact]
+    public async Task DisposalLossAndManualDepreciationJournal_AreStillAddedBack()
+    {
+        await using var db = CreateDbContext();
+        var fixture = await SeedPeriodAsync(db, "Disposal loss fixture");
+        var sales = AddCategory(db, fixture.Company.Id, "4000", "Sales", AccountCategoryType.Income);
+        db.ImportedTransactions.Add(Tx(fixture, sales.Id, 50_000m, "Trading sales", 1));
+        var machine = ReviewedPlant(fixture.Company.Id, "Sold machine", 8_000m, fixture.Period.PeriodStart);
+        machine.DisposalDate = new DateOnly(2025, 7, 1);
+        machine.DisposalProceeds = 5_000m;
+        db.FixedAssets.Add(machine);
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(fixture.Company.Id, fixture.Period.Id);
+        var depreciationAccount = await db.AccountCategories.SingleAsync(item => item.CompanyId == fixture.Company.Id && item.Code == "7000");
+        db.Adjustments.Add(new Adjustment
+        {
+            PeriodId = fixture.Period.Id,
+            Description = "Manual impairment top-up",
+            DebitCategoryId = depreciationAccount.Id,
+            CreditCategoryId = (await db.Adjustments.SingleAsync(item => item.Description.StartsWith("Depreciation —"))).CreditCategoryId,
+            Amount = 100m,
+            ImpactOnProfit = -100m,
+            Source = AdjustmentSource.Manual,
+            CreatedBy = "Automated fixture"
+        });
+        await db.SaveChangesAsync();
+        var service = new TaxComputationService(db, new FinancialStatementsService(db));
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        // 8,000 over 8 years for 182/365 of a year = 498.63; loss = 8,000 - 498.63 - 5,000 = 2,501.37.
+        Assert.Equal(2_501.37m, (await db.Adjustments.SingleAsync(item => item.Description.StartsWith("Fixed asset disposal loss"))).Amount);
+        Assert.Equal(498.63m + 100m, Assert.Single(computation.Adjustments, item => item.Description == "Add back: depreciation").Amount);
+        Assert.Equal(2_501.37m, Assert.Single(computation.Adjustments, item => item.Description == "Add back: non-deductible expenses").Amount);
+        Assert.Equal(50_000m - 498.63m - 2_501.37m - 100m, computation.AccountingProfit);
+    }
+
+    // Accounting depreciation is never deductible (capital allowances replace it), so every movement on
+    // the Depreciation line is added back whatever the account's tax flag: here a custom charity 8020
+    // account created with the default Deductible treatment, charged by a manual journal and a bank item.
+    [Fact]
+    public async Task CustomDeductibleDepreciationAccount_ManualJournalAndBankItem_AreAddedBack()
+    {
+        await using var db = CreateDbContext();
+        var fixture = await SeedCharityPeriodAsync(db, "Charity custom depreciation fixture");
+        db.ImportedTransactions.Add(Tx(fixture, fixture.Ids["4000"], 30_000m, "Donations", 1));
+        var vehicles = new AccountCategory
+        {
+            CompanyId = fixture.Company.Id,
+            Code = "8020",
+            Name = "Depreciation — vehicles",
+            Type = AccountCategoryType.Expense,
+            TaxTreatment = TaxTreatment.Deductible,
+            StatementLine = ChartDefinitions.CharityCustomLine("8020"),
+            CashFlowClass = AccountCashFlowClass.Operating
+        };
+        db.AccountCategories.Add(vehicles);
+        await db.SaveChangesAsync();
+        Assert.Equal(AccountStatementLine.Depreciation, vehicles.StatementLine);
+        db.Adjustments.Add(new Adjustment
+        {
+            PeriodId = fixture.Period.Id,
+            Description = "Vehicle depreciation",
+            DebitCategoryId = vehicles.Id,
+            CreditCategoryId = fixture.Ids["0020"],
+            Amount = 500m,
+            ImpactOnProfit = -500m,
+            Source = AdjustmentSource.Manual,
+            CreatedBy = "Automated fixture"
+        });
+        db.ImportedTransactions.Add(Tx(fixture, vehicles.Id, -300m, "Depreciation booked through the bank", 2));
+        await db.SaveChangesAsync();
+        var service = new TaxComputationService(db, new FinancialStatementsService(db));
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        Assert.Equal(29_200m, computation.AccountingProfit);
+        Assert.Equal(800m, Assert.Single(computation.Adjustments, item => item.Description == "Add back: depreciation").Amount);
+        Assert.DoesNotContain(computation.Adjustments, item => item.Description.Contains("non-deductible", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(30_000m, computation.TaxableProfit);
+        Assert.Equal(800m, (await service.GetCt1SupportDataAsync(fixture.Company.Id, fixture.Period.Id)).DepreciationCharged);
+    }
+
+    // Review probe (fix round 1): a CT payment from the bank categorised straight to the TaxOnProfit
+    // charge account is below profit before tax, so the bank stream must not add it back either.
+    [Fact]
+    public async Task Probe_CtPaidFromBankToChargeAccount_NotAddedBack()
+    {
+        await using var db = CreateDbContext();
+        var fixture = await SeedPeriodAsync(db, "CT paid to 8000 fixture");
+        var sales = AddCategory(db, fixture.Company.Id, "4000", "Sales", AccountCategoryType.Income);
+        var charge = AddCategory(db, fixture.Company.Id, "8000", "Corporation Tax Charge", AccountCategoryType.Expense, TaxTreatment.NonDeductible);
+        db.ImportedTransactions.AddRange(
+            Tx(fixture, sales.Id, 50_000m, "Trading sales", 1),
+            Tx(fixture, charge.Id, -6_250m, "Revenue CT payment", 5));
+        await db.SaveChangesAsync();
+        var service = new TaxComputationService(db, new FinancialStatementsService(db));
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        Assert.Equal(50_000m, computation.AccountingProfit);
+        Assert.DoesNotContain(computation.Adjustments, item => item.Description.Contains("non-deductible", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(50_000m, computation.TaxableProfit);
+    }
+
+    // Accounting profit is profit before tax, which never includes the TaxOnProfit line. The auto CT
+    // provision (generic 8000, charity 8900; both NonDeductible) must not be added back to it, and a
+    // provision equal to the computed tax must not raise the pre-filing "does not match" warning.
+    [Theory]
+    [InlineData(ChartOfAccountsVariant.GenericTrading)]
+    [InlineData(ChartOfAccountsVariant.CharityClg)]
+    public async Task CorporationTaxProvision_IsNotAddedBackAndMatchesTheComputation(ChartOfAccountsVariant variant)
+    {
+        await using var db = CreateDbContext();
+        Fixture fixture;
+        int salesId;
+        if (variant == ChartOfAccountsVariant.CharityClg)
+        {
+            var charity = await SeedCharityPeriodAsync(db, "Charity CT provision fixture");
+            fixture = charity;
+            salesId = charity.Ids["4000"];
+        }
+        else
+        {
+            fixture = await SeedPeriodAsync(db, "Generic CT provision fixture");
+            salesId = AddCategory(db, fixture.Company.Id, "4000", "Sales", AccountCategoryType.Income).Id;
+        }
+        db.ImportedTransactions.Add(Tx(fixture, salesId, 10_000m, "Trading sales", 1));
+        db.TaxBalances.Add(new TaxBalance
+        {
+            PeriodId = fixture.Period.Id,
+            TaxType = TaxType.CorporationTax,
+            Liability = 1_250m,
+            Balance = 1_250m
+        });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(fixture.Company.Id, fixture.Period.Id);
+        var provision = await db.Adjustments.SingleAsync(item => item.Description == "Corporation tax provision");
+        var chargeAccount = await db.AccountCategories.SingleAsync(item => item.Id == provision.DebitCategoryId);
+        Assert.Equal(variant == ChartOfAccountsVariant.CharityClg ? "8900" : "8000", chargeAccount.Code);
+        Assert.Equal(TaxTreatment.NonDeductible, chargeAccount.TaxTreatment);
+
+        var statements = new FinancialStatementsService(db);
+        var service = new TaxComputationService(db, statements);
+        await service.SaveScopeReviewAsync(fixture.Company.Id, fixture.Period.Id, SupportedScope(), "Automated fixture actor");
+        var computation = await service.ComputeAsync(fixture.Company.Id, fixture.Period.Id);
+
+        Assert.Equal(1_250m, (await statements.GetProfitAndLossAsync(fixture.Company.Id, fixture.Period.Id)).TaxCharge);
+        Assert.Equal(10_000m, computation.AccountingProfit);
+        Assert.DoesNotContain(computation.Adjustments, item => item.Description.Contains("non-deductible", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(10_000m, computation.TaxableProfit);
+        Assert.Equal(1_250m, computation.TotalCorporationTax);
+        Assert.True(computation.FinalTaxChargeSupported, string.Join(" | ", computation.BlockingReasons));
+
+        var issues = await statements.GetPreFilingConsistencyIssuesAsync(fixture.Company.Id, fixture.Period.Id);
+        Assert.DoesNotContain(issues, issue => issue.Contains("does not match", StringComparison.Ordinal));
+        var readiness = await statements.GetReadinessScoreAsync(fixture.Company.Id, fixture.Period.Id);
+        Assert.DoesNotContain(readiness.Warnings, warning => warning.Contains("does not match", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task LossContinuity_CannotSkipAnInterveningAccountingPeriod()
     {
@@ -490,6 +784,29 @@ public sealed class CorporationTaxSupportTests
         return new Fixture(tenant, company, period, bank);
     }
 
+    // A charity-chart CLG without a charitable tax exemption (so it posts corporation tax).
+    private static async Task<CharityFixture> SeedCharityPeriodAsync(AccountsDbContext db, string name)
+    {
+        var tenant = new Tenant { Name = "Tax Fixture Firm", Slug = Guid.NewGuid().ToString("N") };
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        var company = Company(tenant.Id, name);
+        company.CompanyType = CompanyType.CompanyLimitedByGuarantee;
+        company.ChartOfAccountsVariant = ChartOfAccountsVariant.CharityClg;
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
+        var period = Period(company.Id, 2025);
+        db.AccountingPeriods.Add(period);
+        db.AccountCategories.AddRange(ChartDefinitions.CharityClg.CreateCategories(company.Id));
+        var bank = new BankAccount { CompanyId = company.Id, Name = "Current", OpeningBalance = 0m };
+        db.BankAccounts.Add(bank);
+        await db.SaveChangesAsync();
+        var ids = await db.AccountCategories
+            .Where(category => category.CompanyId == company.Id)
+            .ToDictionaryAsync(category => category.Code, category => category.Id);
+        return new CharityFixture(tenant, company, period, bank, ids);
+    }
+
     private static Company Company(int tenantId, string name) => new()
     {
         TenantId = tenantId,
@@ -569,5 +886,12 @@ public sealed class CorporationTaxSupportTests
         return new AccountsDbContext(options);
     }
 
-    private sealed record Fixture(Tenant Tenant, Company Company, AccountingPeriod Period, BankAccount Bank);
+    private record Fixture(Tenant Tenant, Company Company, AccountingPeriod Period, BankAccount Bank);
+
+    private sealed record CharityFixture(
+        Tenant Tenant,
+        Company Company,
+        AccountingPeriod Period,
+        BankAccount Bank,
+        IReadOnlyDictionary<string, int> Ids) : Fixture(Tenant, Company, Period, Bank);
 }

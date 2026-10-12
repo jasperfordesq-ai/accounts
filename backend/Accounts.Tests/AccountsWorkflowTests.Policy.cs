@@ -4669,6 +4669,14 @@ public partial class AccountsWorkflowTests
     [InlineData("Client", "POST", "directors-approval-page", false)]
     [InlineData("Client", "POST", "directors-approval", false)]
     [InlineData("Owner", "POST", "directors-approval", true)]
+    [InlineData("Owner", "POST", "directors-approval-withdrawal", true)]
+    [InlineData("Reviewer", "POST", "directors-approval-withdrawal", true)]
+    [InlineData("Accountant", "POST", "directors-approval-withdrawal", false)]
+    [InlineData("Client", "POST", "directors-approval-withdrawal", false)]
+    [InlineData("Owner", "POST", "cro-not-delivered", true)]
+    [InlineData("Reviewer", "POST", "cro-not-delivered", true)]
+    [InlineData("Accountant", "POST", "cro-not-delivered", false)]
+    [InlineData("Client", "POST", "cro-not-delivered", false)]
     public void DirectorsApprovalRoutes_HaveTheIntendedRolePermissions(string role, string method, string action, bool allowed)
     {
         var decision = RoleAuthorizationService.Authorize(
@@ -4683,6 +4691,10 @@ public partial class AccountsWorkflowTests
     [InlineData("/api/companies/1/periods/9/filing/cro-signing-pack")]
     [InlineData("/api/companies/1/periods/9/filing/auditor-report")]
     [InlineData("/api/companies/1/periods/9/filing/directors-approval/")]
+    [InlineData("/api/companies/1/periods/9/filing/directors-approval-withdrawal")]
+    [InlineData("/api/companies/1/periods/9/filing/directors-approval-withdrawal/")]
+    [InlineData("/api/companies/1/periods/9/filing/cro-not-delivered")]
+    [InlineData("/api/companies/1/periods/9/filing/cro-not-delivered/")]
     [InlineData("/api/companies/1/periods/9/filing/cro-signing-pack/")]
     [InlineData("/api/companies/1/periods/9/filing/auditor-report/")]
     [InlineData("/api/companies/1/periods/9/mark-filed/")]

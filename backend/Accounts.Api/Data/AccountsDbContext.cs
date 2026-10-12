@@ -37,6 +37,9 @@ public class AccountsDbContext : DbContext
             ? AuthContext.GetUser(context)?.TenantId
             : null);
 
+    // Set only while ChartAdoptionService writes (see AccountingConcurrencyInterceptor); never mapped.
+    public ChartAdoptionWriteAllowance? ChartAdoptionAllowance { get; internal set; }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateCompanyQuarantineEvidenceChanges();
@@ -45,6 +48,7 @@ public class AccountsDbContext : DbContext
         ValidateExternalFilingHandoffChanges();
         ValidateAnnualReturnDateEvidenceChanges();
         ValidateDirectorsApprovalChanges();
+        ValidateHistoricAnchorEvidenceChanges();
         ValidateDuplicateReviewChanges();
         ValidateIdentityLifecycleEvidenceChanges();
         PersistenceOwnershipInvariantValidator.ValidateAsync(this, CurrentTenantId, CancellationToken.None)
@@ -64,6 +68,7 @@ public class AccountsDbContext : DbContext
         ValidateExternalFilingHandoffChanges();
         ValidateAnnualReturnDateEvidenceChanges();
         ValidateDirectorsApprovalChanges();
+        ValidateHistoricAnchorEvidenceChanges();
         ValidateDuplicateReviewChanges();
         ValidateIdentityLifecycleEvidenceChanges();
         await PersistenceOwnershipInvariantValidator.ValidateAsync(this, CurrentTenantId, cancellationToken);
@@ -87,6 +92,7 @@ public class AccountsDbContext : DbContext
     // Accounting Periods
     public DbSet<AccountingPeriod> AccountingPeriods => Set<AccountingPeriod>();
     public DbSet<SizeClassification> SizeClassifications => Set<SizeClassification>();
+    public DbSet<HistoricAnchorEvidenceRecord> HistoricAnchorEvidenceRecords => Set<HistoricAnchorEvidenceRecord>();
 
     // Filing
     public DbSet<FilingRegime> FilingRegimes => Set<FilingRegime>();
@@ -446,7 +452,21 @@ public class AccountsDbContext : DbContext
         // SizeClassification (1:1 with AccountingPeriod)
         modelBuilder.Entity<SizeClassification>(e =>
         {
-            e.ToTable("size_classifications");
+            e.ToTable("size_classifications", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_size_classifications_input_basis",
+                    "\"InputBasis\" IN ('Computed', 'HistoricAnchor', 'RetiredHistoricAnchor')");
+                // Historic figures keyed in from filed accounts must carry their evidence and attestation.
+                table.HasCheckConstraint(
+                    "CK_size_classifications_historic_anchor_evidence",
+                    "\"InputBasis\" <> 'HistoricAnchor' OR (\"HistoricEvidenceArtifact\" IS NOT NULL AND \"HistoricEvidenceSha256\" IS NOT NULL AND length(\"HistoricEvidenceSha256\") = 64 AND \"HistoricAttestedBy\" IS NOT NULL AND \"HistoricAttestedRole\" IN ('Owner', 'Reviewer') AND \"HistoricAttestedAt\" IS NOT NULL AND \"HistoricSourceReference\" IS NOT NULL AND length(btrim(\"HistoricSourceReference\")) > 0)");
+                // Retired historic figures keep their evidence and record who retired them, when and why;
+                // a current anchor carries no retirement, and nothing is marked retired without one.
+                table.HasCheckConstraint(
+                    "CK_size_classifications_historic_anchor_retirement",
+                    "(\"HistoricRetiredAt\" IS NULL AND \"HistoricRetiredBy\" IS NULL AND \"HistoricRetiredReason\" IS NULL AND \"InputBasis\" <> 'RetiredHistoricAnchor') OR (\"InputBasis\" <> 'HistoricAnchor' AND \"HistoricRetiredAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"HistoricRetiredBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"HistoricRetiredReason\", ''))) > 0 AND \"HistoricEvidenceArtifact\" IS NOT NULL AND \"HistoricEvidenceSha256\" IS NOT NULL AND length(\"HistoricEvidenceSha256\") = 64 AND \"HistoricSourceReference\" IS NOT NULL AND \"HistoricAttestedBy\" IS NOT NULL AND \"HistoricAttestedAt\" IS NOT NULL)");
+            });
             e.HasKey(s => s.Id);
             e.HasQueryFilter(s => CurrentTenantId == null || s.Period.Company.TenantId == CurrentTenantId);
             e.Property(s => s.Turnover).HasColumnType("decimal(18,2)");
@@ -459,7 +479,44 @@ public class AccountsDbContext : DbContext
             e.Property(s => s.OverrideApprovedBy).HasMaxLength(200);
             e.Property(s => s.OverrideEvidenceSha256).HasMaxLength(64);
             e.Property(s => s.OverrideInputFingerprintSha256).HasMaxLength(64);
+            e.Property(s => s.HistoricSourceReference).HasMaxLength(300);
+            e.Property(s => s.HistoricEvidenceSha256).HasMaxLength(64);
+            e.Property(s => s.HistoricAttestedBy).HasMaxLength(200);
+            e.Property(s => s.HistoricAttestedRole).HasMaxLength(50);
+            e.Property(s => s.HistoricRetiredBy).HasMaxLength(200);
+            e.Property(s => s.HistoricRetiredReason).HasMaxLength(1000);
             e.HasOne(s => s.Period).WithOne(p => p.SizeClassification).HasForeignKey<SizeClassification>(s => s.PeriodId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Append-only archive of retired or replaced historic size evidence (never updated or deleted;
+        // also enforced by a database trigger installed with its migration).
+        modelBuilder.Entity<HistoricAnchorEvidenceRecord>(e =>
+        {
+            e.ToTable("historic_anchor_evidence_records", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_historic_anchor_evidence_records_evidence",
+                    "length(\"EvidenceSha256\") = 64 AND octet_length(\"EvidenceArtifact\") > 5 AND char_length(btrim(\"SourceReference\")) > 0 AND char_length(btrim(\"AttestedBy\")) > 0 AND \"AttestedRole\" IN ('Owner', 'Reviewer') AND char_length(btrim(\"ArchivedBy\")) > 0");
+                table.HasCheckConstraint(
+                    "CK_historic_anchor_evidence_records_retirement",
+                    "(\"Event\" = 'Replaced' AND \"RetiredAt\" IS NULL AND \"RetiredBy\" IS NULL AND \"RetiredReason\" IS NULL) OR (\"RetiredAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"RetiredBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"RetiredReason\", ''))) > 0)");
+            });
+            e.HasKey(r => r.Id);
+            e.HasQueryFilter(r => CurrentTenantId == null || r.Period.Company.TenantId == CurrentTenantId);
+            e.Property(r => r.ArchivedBy).HasMaxLength(200).IsRequired();
+            e.Property(r => r.ArchivedByUserId).HasMaxLength(320);
+            e.Property(r => r.RetiredByUserId).HasMaxLength(320);
+            e.Property(r => r.Turnover).HasColumnType("decimal(18,2)");
+            e.Property(r => r.BalanceSheetTotal).HasColumnType("decimal(18,2)");
+            e.Property(r => r.SourceReference).HasMaxLength(300).IsRequired();
+            e.Property(r => r.EvidenceArtifact).IsRequired();
+            e.Property(r => r.EvidenceSha256).HasMaxLength(64).IsRequired();
+            e.Property(r => r.AttestedBy).HasMaxLength(200).IsRequired();
+            e.Property(r => r.AttestedRole).HasMaxLength(50).IsRequired();
+            e.Property(r => r.RetiredBy).HasMaxLength(200);
+            e.Property(r => r.RetiredReason).HasMaxLength(1000);
+            e.HasOne(r => r.Period).WithMany().HasForeignKey(r => r.PeriodId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(r => new { r.PeriodId, r.ArchivedAt });
         });
 
         // FilingRegime (1:1 with AccountingPeriod)
@@ -779,6 +836,11 @@ public class AccountsDbContext : DbContext
             e.Property(c => c.Name).HasMaxLength(200).IsRequired();
             e.HasOne(c => c.Company).WithMany(co => co.Categories).HasForeignKey(c => c.CompanyId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Parent).WithMany(c => c.Children).HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
+            // One account per system role per company (global rows have a null CompanyId).
+            e.HasIndex(c => c.CompanyId);
+            e.HasIndex(c => new { c.CompanyId, c.SystemRole })
+                .IsUnique()
+                .HasFilter("\"SystemRole\" IS NOT NULL");
             e.ToTable(t => t.HasCheckConstraint(
                 "CK_account_categories_global_requires_system",
                 "\"CompanyId\" IS NOT NULL OR \"IsSystem\""));
@@ -1102,12 +1164,20 @@ public class AccountsDbContext : DbContext
         // TaxBalance
         modelBuilder.Entity<TaxBalance>(e =>
         {
-            e.ToTable("tax_balances");
+            // A due confirmation is all or nothing, only for corporation tax, and always names who
+            // confirmed it, why, and the liability it was given for.
+            e.ToTable("tax_balances", table => table.HasCheckConstraint(
+                "CK_tax_balances_confirmed_due",
+                "(\"ConfirmedDueAt\" IS NULL AND \"ConfirmedDueBy\" IS NULL AND \"ConfirmedDueReason\" IS NULL AND \"ConfirmedDueLiability\" IS NULL AND \"ConfirmedTaxableProfitOutsideExemption\" IS NULL) OR (\"TaxType\" = 'CorporationTax' AND \"ConfirmedDueAt\" IS NOT NULL AND char_length(btrim(COALESCE(\"ConfirmedDueBy\", ''))) > 0 AND char_length(btrim(COALESCE(\"ConfirmedDueReason\", ''))) > 0 AND \"ConfirmedDueLiability\" > 0 AND (\"ConfirmedTaxableProfitOutsideExemption\" IS NULL OR \"ConfirmedTaxableProfitOutsideExemption\" >= 0))"));
             e.HasKey(t => t.Id);
             e.HasQueryFilter(t => CurrentTenantId == null || t.Period.Company.TenantId == CurrentTenantId);
             e.Property(t => t.Liability).HasColumnType("decimal(18,2)");
             e.Property(t => t.Paid).HasColumnType("decimal(18,2)");
             e.Property(t => t.Balance).HasColumnType("decimal(18,2)");
+            e.Property(t => t.ConfirmedDueBy).HasMaxLength(200);
+            e.Property(t => t.ConfirmedDueReason).HasMaxLength(1000);
+            e.Property(t => t.ConfirmedDueLiability).HasColumnType("decimal(18,2)");
+            e.Property(t => t.ConfirmedTaxableProfitOutsideExemption).HasColumnType("decimal(18,2)");
             e.HasOne(t => t.Period).WithMany(p => p.TaxBalances).HasForeignKey(t => t.PeriodId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(t => new { t.PeriodId, t.TaxType }).IsUnique();
         });
@@ -1711,6 +1781,16 @@ public class AccountsDbContext : DbContext
             {
                 throw new BusinessRuleException("External filing outcome failed its append-only evidence integrity checks.");
             }
+        }
+    }
+
+    private void ValidateHistoricAnchorEvidenceChanges()
+    {
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<HistoricAnchorEvidenceRecord>())
+        {
+            if (entry.State is EntityState.Modified or EntityState.Deleted)
+                throw new BusinessRuleException("Archived historic size evidence is append-only and cannot be changed or deleted.");
         }
     }
 

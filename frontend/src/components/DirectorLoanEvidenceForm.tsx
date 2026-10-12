@@ -223,7 +223,7 @@ export function DirectorLoanEvidenceForm({
 
       <fieldset className={sectionClass}>
         <legend className="px-1 text-sm font-semibold text-gray-900 dark:text-gray-100">5. Arrangement-level professional review</legend>
-        <p className="text-xs text-[var(--muted-foreground)]">This decision does not replace the separate release-level qualified-accountant approval.</p>
+        <p className="text-xs text-[var(--muted-foreground)]">This decision does not replace the directors&apos; s.324 approval of the accounts.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <SelectField
             label="Review decision"

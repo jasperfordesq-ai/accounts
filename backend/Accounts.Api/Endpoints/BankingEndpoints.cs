@@ -155,15 +155,37 @@ public static class BankingEndpoints
         // Categories
         var categories = app.MapGroup("/api/companies/{companyId:int}/categories").WithTags("Categories");
 
-        categories.MapGet("/", async (int companyId, HttpContext context, AccountsDbContext db) =>
+        categories.MapGet("/", async (int companyId, string? include, HttpContext context, AccountsDbContext db) =>
         {
             if (!await CompanyEndpointAccess.CanAccessCompanyAsync(context, db, companyId))
                 return Results.NotFound();
 
-            return Results.Ok(await db.AccountCategories
+            var rows = await db.AccountCategories
                 .Where(c => c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null))
                 .OrderBy(c => c.Code)
-                .ToListAsync());
+                .ToListAsync();
+            // Archived rows are hidden from the default list (the pickers) unless they still carry a
+            // balance, so it can be seen and cleared, or a transaction or rule still names them, so the
+            // register and rules panel can show the account; ?include=all lists every row (trial balance,
+            // admin).
+            if (!string.Equals(include, "all", StringComparison.OrdinalIgnoreCase) && rows.Any(c => c.IsArchived))
+            {
+                var archivedIds = rows.Where(c => c.IsArchived).Select(c => c.Id).ToArray();
+                var shown = await ArchivedCategoriesWithBalanceAsync(db, companyId, archivedIds);
+                shown.UnionWith(await db.ImportedTransactions
+                    .Where(t => t.BankAccount.CompanyId == companyId && t.CategoryId != null && archivedIds.Contains(t.CategoryId.Value))
+                    .Select(t => t.CategoryId!.Value)
+                    .Distinct()
+                    .ToListAsync());
+                shown.UnionWith(await db.TransactionRules
+                    .Where(r => r.CompanyId == companyId && archivedIds.Contains(r.CategoryId))
+                    .Select(r => r.CategoryId)
+                    .Distinct()
+                    .ToListAsync());
+                rows = rows.Where(c => !c.IsArchived || shown.Contains(c.Id)).ToList();
+            }
+
+            return Results.Ok(rows);
         });
 
         categories.MapPost("/seed", async (int companyId, HttpContext context, ApiAccessService apiAccess, AccountsDbContext db, CategoryService service, AuditService audit) =>
@@ -201,6 +223,20 @@ public static class BankingEndpoints
                 return validationProblem;
 
             var category = input.ToEntity(companyId);
+            if (await CategoryInputs.CompanyVariantAsync(db, companyId) == ChartOfAccountsVariant.CharityClg)
+            {
+                // A row added to a charity chart takes its defaults from the charity chart's code ranges
+                // (validated above), never the generic code rules, and never a system role.
+                category.StatementLine ??= ChartDefinitions.CharityCustomLine(category.Code);
+                category.CashFlowClass ??= ChartDefinitions.CharityDefaultCashFlow(category.StatementLine!.Value);
+                category.SystemRole = null;
+            }
+            else
+            {
+                CategoryClassification.ClassifyNew(
+                    category,
+                    await db.AccountCategories.Where(c => c.CompanyId == companyId).ToListAsync());
+            }
             db.AccountCategories.Add(category);
             await db.SaveChangesAsync();
             await DomainAuditCoverage.LogAsync(
@@ -298,8 +334,8 @@ public static class BankingEndpoints
         if (txn.IsDuplicate)
             return Results.Conflict(new { error = "A discarded duplicate row cannot be categorised. Reopen its duplicate decision first." });
 
-        if (!await CategoryAvailableToCompanyAsync(db, companyId, input.CategoryId))
-            return Results.BadRequest(new { error = "Category is not available for this company." });
+        if (await ValidateCategorisationTargetAsync(db, companyId, input.CategoryId) is { } invalidTarget)
+            return invalidTarget;
 
         var user = AuthContext.RequireUser(context);
         var oldValue = TransactionCategorisationSnapshot(txn);
@@ -456,8 +492,8 @@ public static class BankingEndpoints
         if (txns.Any(transaction => transaction.IsDuplicate))
             return Results.Conflict(new { error = "Discarded duplicate rows cannot be bulk-categorised. Reopen their duplicate decisions first." });
 
-        if (!await CategoryAvailableToCompanyAsync(db, companyId, input.CategoryId))
-            return Results.BadRequest(new { error = "Category is not available for this company." });
+        if (await ValidateCategorisationTargetAsync(db, companyId, input.CategoryId) is { } invalidTarget)
+            return invalidTarget;
 
         var user = AuthContext.RequireUser(context);
         var oldValue = txns.Select(TransactionCategorisationSnapshot).ToList();
@@ -831,8 +867,59 @@ public static class BankingEndpoints
         return periodExists ? null : Results.NotFound();
     }
 
-    private static Task<bool> CategoryAvailableToCompanyAsync(AccountsDbContext db, int companyId, int categoryId) =>
-        db.AccountCategories.AnyAsync(c => c.Id == categoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+    // The archived categories that carry a balance in any period of the company: a non-zero net of the
+    // period's bank transactions, journals and opening balances on the account. (A balance-sheet balance
+    // carried forward unchanged is non-zero in the period whose postings created it.)
+    private static async Task<HashSet<int>> ArchivedCategoriesWithBalanceAsync(AccountsDbContext db, int companyId, int[] archivedIds)
+    {
+        var transactions = await db.ImportedTransactions
+            .AsNoTracking()
+            .Where(t => t.BankAccount.CompanyId == companyId
+                && t.PeriodId != null
+                && !t.IsDuplicate
+                && t.CategoryId != null
+                && archivedIds.Contains(t.CategoryId.Value))
+            .Select(t => new { CategoryId = t.CategoryId!.Value, PeriodId = t.PeriodId!.Value, NetDebit = -t.Amount })
+            .ToListAsync();
+        var journals = await db.Adjustments
+            .AsNoTracking()
+            .Where(a => a.Period.CompanyId == companyId
+                && ((a.DebitCategoryId != null && archivedIds.Contains(a.DebitCategoryId.Value))
+                    || (a.CreditCategoryId != null && archivedIds.Contains(a.CreditCategoryId.Value))))
+            .Select(a => new { a.PeriodId, a.DebitCategoryId, a.CreditCategoryId, a.Amount })
+            .ToListAsync();
+        var openings = await db.OpeningBalances
+            .AsNoTracking()
+            .Where(o => o.Period.CompanyId == companyId && archivedIds.Contains(o.AccountCategoryId))
+            .Select(o => new { CategoryId = o.AccountCategoryId, o.PeriodId, NetDebit = o.Debit - o.Credit })
+            .ToListAsync();
+
+        var postings = transactions.Select(t => (t.CategoryId, t.PeriodId, t.NetDebit))
+            .Concat(journals.Where(a => a.DebitCategoryId is not null).Select(a => (a.DebitCategoryId!.Value, a.PeriodId, a.Amount)))
+            .Concat(journals.Where(a => a.CreditCategoryId is not null).Select(a => (a.CreditCategoryId!.Value, a.PeriodId, -a.Amount)))
+            .Concat(openings.Select(o => (o.CategoryId, o.PeriodId, o.NetDebit)));
+        return postings
+            .Where(posting => archivedIds.Contains(posting.Item1))
+            .GroupBy(posting => (posting.Item1, posting.Item2))
+            .Where(group => group.Sum(posting => posting.Item3) != 0m)
+            .Select(group => group.Key.Item1)
+            .ToHashSet();
+    }
+
+    // The category must belong to the company (or be a global system row) and be a usable target: not
+    // archived and not the bank control account (AccountCategoryTargets).
+    private static async Task<IResult?> ValidateCategorisationTargetAsync(AccountsDbContext db, int companyId, int categoryId)
+    {
+        var category = await db.AccountCategories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == categoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+        if (category is null)
+            return Results.BadRequest(new { error = "Category is not available for this company." });
+
+        return AccountCategoryTargets.RefusalReason(category) is { } reason
+            ? Results.BadRequest(new { error = reason })
+            : null;
+    }
 
     private static async Task HydrateAvailableCategoriesAsync(AccountsDbContext db, int companyId, IReadOnlyCollection<ImportedTransaction> transactions)
     {
@@ -925,6 +1012,26 @@ public static class CategoryInputs
         else if (code.Length > 20) errors["code"] = ["Code must be 20 characters or fewer."];
         if (name.Length == 0) errors["name"] = ["Name is required."];
         else if (name.Length > 200) errors["name"] = ["Name must be 200 characters or fewer."];
+        var charityChart = await CompanyVariantAsync(db, companyId) == ChartOfAccountsVariant.CharityClg;
+        AccountStatementLine? charityLine = charityChart && input.StatementLine is null && code.Length > 0
+            ? ChartDefinitions.CharityCustomLine(code)
+            : null;
+        if (input.StatementLine is { } line && !CategoryClassification.IsLineAllowedForType(input.Type, line))
+            errors["statementLine"] = [$"Statement line {line} cannot be used for a {input.Type} account."];
+        else if (charityChart && input.StatementLine is null && code.Length > 0 && charityLine is null)
+            errors["statementLine"] = [$"Code {code} has no default statement line on the charity chart; supply a statement line."];
+        else if (charityLine is { } rangeLine && !CategoryClassification.IsLineAllowedForType(input.Type, rangeLine))
+            errors["statementLine"] = [$"Code {code} is in the charity chart's {rangeLine} range, which cannot be used for a {input.Type} account; supply a statement line."];
+        else if (input.CashFlowClass is { } cashFlowClass)
+        {
+            var effectiveLine = input.StatementLine
+                ?? charityLine
+                ?? LegacyCategoryClassification.Derive(input.Type, code, input.IsNonTradingIncome).StatementLine;
+            if (!CategoryClassification.IsCashFlowClassAllowed(input.Type, effectiveLine, cashFlowClass))
+                errors["cashFlowClass"] = [cashFlowClass == AccountCashFlowClass.Cash
+                    ? $"Cash-flow class Cash is only for a cash at bank account or a bank overdraft (a Liability on OtherCreditorsWithinYear), not {effectiveLine}."
+                    : $"A cash at bank account must use cash-flow class Cash, not {cashFlowClass}."];
+        }
 
         if (input.ParentId is { } parentId)
         {
@@ -939,6 +1046,15 @@ public static class CategoryInputs
 
         return null;
     }
+
+    // The company's chart variant; a company the caller cannot see (already refused by the endpoint's
+    // access check, or absent in a direct domain test) is validated with the generic rules.
+    public static async Task<ChartOfAccountsVariant> CompanyVariantAsync(AccountsDbContext db, int companyId) =>
+        await db.Companies
+            .Where(company => company.Id == companyId)
+            .Select(company => (ChartOfAccountsVariant?)company.ChartOfAccountsVariant)
+            .FirstOrDefaultAsync()
+        ?? ChartOfAccountsVariant.GenericTrading;
 
     // Kept for direct domain-test compatibility. HTTP endpoints bind AccountCategoryInput and never
     // expose this entity-normalisation overload as a request contract.
@@ -981,11 +1097,15 @@ public static class TransactionRuleInputs
             return Results.BadRequest(new { error = "Transaction rule pattern is required." });
 
 
-        var categoryBelongsToCompany = await db.AccountCategories
-            .AnyAsync(c => c.Id == input.CategoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
-        return categoryBelongsToCompany
-            ? null
-            : Results.BadRequest(new { error = "Category is not available for this company." });
+        var category = await db.AccountCategories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == input.CategoryId && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+        if (category is null)
+            return Results.BadRequest(new { error = "Category is not available for this company." });
+
+        return AccountCategoryTargets.RefusalReason(category) is { } reason
+            ? Results.BadRequest(new { error = reason })
+            : null;
     }
 
     public static TransactionRule ToEntity(int companyId, TransactionRuleInput input) => new()

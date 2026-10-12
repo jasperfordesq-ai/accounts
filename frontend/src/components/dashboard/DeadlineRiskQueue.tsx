@@ -12,6 +12,7 @@ export function DeadlineRiskQueue({
   items,
   state,
   canRunDelivery,
+  canRetry,
   busyKey,
   actionMessage,
   onReload,
@@ -21,6 +22,8 @@ export function DeadlineRiskQueue({
   items: DeadlineRiskQueueItem[];
   state: ResourceState;
   canRunDelivery: boolean;
+  /** Retrying a reminder is Owner/Accountant on the backend (canWriteWorkingPapers). */
+  canRetry: boolean;
   busyKey: string | null;
   actionMessage: string | null;
   onReload: () => void | Promise<void>;
@@ -63,7 +66,7 @@ export function DeadlineRiskQueue({
                 <p className="mt-1 text-sm text-[var(--muted-foreground)]">Due {formatDate(item.dueDate)} · {item.attemptCount} attempt{item.attemptCount === 1 ? "" : "s"} · next attempt {formatDateTime(item.nextAttemptAtUtc)}</p>
                 {item.lastFailureCode && <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-300"><AlertTriangle className="h-3.5 w-3.5" />Failure code: {item.lastFailureCode}</p>}
               </div>
-              {item.state === 2 && (
+              {item.state === 2 && canRetry && (
                 <Button size="sm" variant="secondary" onPress={() => void onRetry(item.outboxId)} isDisabled={busyKey !== null}>
                   {busyKey === item.outboxId ? <Spinner size="sm" /> : <RefreshCw className="h-4 w-4" />}Retry now
                 </Button>

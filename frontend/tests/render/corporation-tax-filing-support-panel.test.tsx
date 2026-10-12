@@ -23,7 +23,7 @@ describe("CorporationTaxFilingSupportPanel", () => {
     expect(screen.getByText("Retained ROS payment receipt PTL2-2025-00081.")).toBeInTheDocument();
     expect(screen.getByText("Sales / Receipts / Turnover")).toBeInTheDocument();
     expect(screen.getByText("Exact published label")).toBeInTheDocument();
-    expect(screen.getByText(/named qualified accountant approve/)).toBeInTheDocument();
+    expect(screen.getByText(/Have an Owner or Reviewer review the final ROS handoff in FilingBridge/)).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: "Support worksheet CSV" })).toHaveAttribute(
       "href",
@@ -33,6 +33,23 @@ describe("CorporationTaxFilingSupportPanel", () => {
       "href",
       "/api/companies/7/periods/3/revenue/ct1-support/worksheet",
     );
+  });
+
+  it("leaves the live ROS CT1 outside FilingBridge and never says an accountant is required", () => {
+    const { container } = render(
+      <CorporationTaxFilingSupportPanel
+        companyId={7}
+        periodId={3}
+        response={corporationTaxFilingSupportFixture()}
+      />,
+    );
+
+    const note = screen.getByText(/The live ROS CT1 must be completed outside FilingBridge/);
+    expect(note).toHaveTextContent("the retained handoff evidence reviewed by an Owner or Reviewer in FilingBridge");
+    expect(note).toHaveTextContent("an accountant's review is optional");
+    expect(container).not.toHaveTextContent(/approved by the directors|directors approve/i);
+    expect(screen.getByText("Manual ROS completion required")).toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/qualified accountant|qualified-accountant|accountant review required|accountant must/i);
   });
 
   it("captures reviewed bases and retained payment evidence without a submission action", async () => {

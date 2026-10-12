@@ -65,6 +65,20 @@ public sealed class ExternalFilingHandoffEndpointTests
     }
 
     [Fact]
+    public async Task Workspace_SourceGaps_LeaveTheUnsupportedCt1PanelsToROS_WithoutRequiringAnAccountant()
+    {
+        var accessor = new HttpContextAccessor();
+        await using var db = CreateDb(accessor);
+        var fixture = await SeedAsync(db);
+        accessor.HttpContext = Context(Actor(fixture.Tenant.Id, fixture.Company.Id, "Owner"), HttpMethods.Get, $"/api/companies/{fixture.Company.Id}/periods/{fixture.Period.Id}/external-filing-handoff/workspace");
+
+        var workspace = await Service(db).GetWorkspaceAsync(fixture.Company.Id, fixture.Period.Id);
+
+        Assert.Contains("Bounded corporation-tax support is never a complete CT1; the unsupported panels must be completed in ROS.", workspace.SourceGaps);
+        Assert.DoesNotContain(workspace.SourceGaps, gap => gap.Contains("accountant", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Endpoints_RetainAuthorityReplaySnapshotAmendmentExactArtifactAndChronology()
     {
         var reviewer = Actor(1, 1, "Reviewer");

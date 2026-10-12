@@ -273,6 +273,77 @@ public sealed class PrivacyGovernanceTests
         FinancialIntegrityVerified = true
     };
 
+    // Batch B fix round 2: archived historic size evidence that a person archived or retired is
+    // located by subject access through the user ids it records.
+    [Fact]
+    public async Task SubjectAccessExport_LocatesArchivedHistoricSizeEvidenceTheSubjectArchivedOrRetired()
+    {
+        await using var db = CreateDb();
+        var tenant = await SeedTenantAsync(db, "privacy-archive");
+        var owner = await SeedUserAsync(db, tenant.Id, "owner@example.ie", "Owner", "Owner");
+        var subject = await SeedUserAsync(db, tenant.Id, "subject@example.ie", "Subject", "Owner");
+        var company = await SeedCompanyAndPeriodAsync(db, tenant.Id, "Archive Company");
+        db.HistoricAnchorEvidenceRecords.Add(new HistoricAnchorEvidenceRecord
+        {
+            PeriodId = company.PeriodId,
+            Event = HistoricAnchorEvidenceEvent.Retired,
+            ArchivedAt = Instant.UtcDateTime,
+            ArchivedBy = "Subject",
+            ArchivedByUserId = $"user:{subject.Id}",
+            SourceReference = "Fictitious filed accounts",
+            EvidenceArtifact = [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31],
+            EvidenceSha256 = new string('a', 64),
+            AttestedBy = "Owner",
+            AttestedRole = "Owner",
+            AttestedAt = Instant.UtcDateTime,
+            RetiredAt = Instant.UtcDateTime,
+            RetiredBy = "Subject",
+            RetiredByUserId = $"user:{subject.Id}",
+            RetiredReason = "Fictitious reason"
+        });
+        await db.SaveChangesAsync();
+
+        var artifact = await Service(db, Instant).BuildSubjectAccessExportAsync(tenant.Id, subject.Id, owner.Id);
+
+        var json = Encoding.UTF8.GetString(artifact.Bytes);
+        Assert.Contains("HistoricAnchorEvidenceRecord", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("EvidenceArtifact", json, StringComparison.Ordinal);
+    }
+
+    // Fix round 3: a replacement recorded by someone else names the subject only as the retirer.
+    [Fact]
+    public async Task SubjectAccessExport_LocatesArchivedHistoricSizeEvidenceWhereTheSubjectIsOnlyTheRetirer()
+    {
+        await using var db = CreateDb();
+        var tenant = await SeedTenantAsync(db, "privacy-archive-retirer");
+        var owner = await SeedUserAsync(db, tenant.Id, "owner@example.ie", "Owner", "Owner");
+        var subject = await SeedUserAsync(db, tenant.Id, "subject@example.ie", "Subject", "Owner");
+        var company = await SeedCompanyAndPeriodAsync(db, tenant.Id, "Archive Retirer Company");
+        db.HistoricAnchorEvidenceRecords.Add(new HistoricAnchorEvidenceRecord
+        {
+            PeriodId = company.PeriodId,
+            Event = HistoricAnchorEvidenceEvent.Replaced,
+            ArchivedAt = Instant.UtcDateTime,
+            ArchivedBy = "Owner",
+            ArchivedByUserId = $"user:{owner.Id}",
+            SourceReference = "Fictitious filed accounts",
+            EvidenceArtifact = [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31],
+            EvidenceSha256 = new string('b', 64),
+            AttestedBy = "Owner",
+            AttestedRole = "Owner",
+            AttestedAt = Instant.UtcDateTime,
+            RetiredAt = Instant.UtcDateTime,
+            RetiredBy = "Subject",
+            RetiredByUserId = $"user:{subject.Id}",
+            RetiredReason = "Fictitious reason"
+        });
+        await db.SaveChangesAsync();
+
+        var artifact = await Service(db, Instant).BuildSubjectAccessExportAsync(tenant.Id, subject.Id, owner.Id);
+
+        Assert.Contains("HistoricAnchorEvidenceRecord", Encoding.UTF8.GetString(artifact.Bytes), StringComparison.Ordinal);
+    }
+
     private static PrivacyGovernanceService Service(AccountsDbContext db, DateTimeOffset now) => new(
         db,
         Options.Create(new PrivacyGovernanceConfig()),

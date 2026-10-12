@@ -151,6 +151,122 @@ describe("atomic company onboarding", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  async function completeOnboarding(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText("Exact Annual Return Date from CRO CORE"), {
+      target: { value: "2025-07-01" },
+    });
+    await user.type(screen.getByLabelText("Annual Return Date evidence reference"), "CRO-CORE-ARD-2025");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(screen.getByLabelText("Name"), "Aisling Director");
+    await user.click(screen.getByRole("button", { name: "Create Company" }));
+  }
+
+  async function startOnboarding(user: ReturnType<typeof userEvent.setup>, legalName: string, companyType: string) {
+    await user.type(screen.getByLabelText("Legal Name *"), legalName);
+    fireEvent.change(screen.getByLabelText("Company type"), { target: { value: companyType } });
+    fireEvent.change(screen.getByLabelText("Incorporation Date *"), {
+      target: { value: "2025-01-01" },
+    });
+    await user.click(screen.getByRole("button", { name: "Next" }));
+  }
+
+  it("pre-fills the chart of accounts from the company type and charity answers and sends it", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<NewCompanyPage />);
+    await startOnboarding(user, "Example Community CLG", "CompanyLimitedByGuarantee");
+
+    const chart = screen.getByLabelText("Chart of accounts");
+    expect(chart).toHaveValue("GenericTrading");
+    expect(screen.getByRole("option", { name: "Standard trading company" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Charity / company limited by guarantee" })).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "Registered Charity" }));
+    expect(chart).toHaveValue("CharityClg");
+
+    await completeOnboarding(user);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(String(init.body));
+    expect(payload.company).toMatchObject({
+      companyType: "CompanyLimitedByGuarantee",
+      isCharitableOrganisation: true,
+      chartOfAccountsVariant: "CharityClg",
+    });
+  });
+
+  it("keeps an explicit chart of accounts choice over the default", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<NewCompanyPage />);
+    await startOnboarding(user, "Example Community CLG", "CompanyLimitedByGuarantee");
+
+    const chart = screen.getByLabelText("Chart of accounts");
+    expect(chart).toHaveValue("GenericTrading");
+    await user.selectOptions(chart, "CharityClg");
+    await user.click(screen.getByRole("checkbox", { name: "Registered Charity" }));
+    await user.click(screen.getByRole("checkbox", { name: "Registered Charity" }));
+    expect(chart).toHaveValue("CharityClg");
+
+    await completeOnboarding(user);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(String(init.body));
+    expect(payload.company).toMatchObject({
+      companyType: "CompanyLimitedByGuarantee",
+      isCharitableOrganisation: false,
+      chartOfAccountsVariant: "CharityClg",
+    });
+  });
+
+  it("offers the chart of accounts only to a company limited by guarantee and sends none otherwise", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<NewCompanyPage />);
+    await startOnboarding(user, "Example Trading Limited", "Private");
+
+    expect(screen.queryByLabelText("Chart of accounts")).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Charity / company limited by guarantee" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: "Registered Charity" }));
+    expect(screen.queryByLabelText("Chart of accounts")).not.toBeInTheDocument();
+
+    await completeOnboarding(user);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(String(init.body));
+    expect(payload.company).toMatchObject({ companyType: "Private", isCharitableOrganisation: true });
+    expect(payload.company).not.toHaveProperty("chartOfAccountsVariant");
+  });
+
+  it("drops a charity chart choice when the company type changes away from CLG", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<NewCompanyPage />);
+    await startOnboarding(user, "Example Changed Type", "CompanyLimitedByGuarantee");
+    await user.selectOptions(screen.getByLabelText("Chart of accounts"), "CharityClg");
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.change(screen.getByLabelText("Company type"), { target: { value: "DesignatedActivityCompany" } });
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByLabelText("Chart of accounts")).not.toBeInTheDocument();
+
+    await completeOnboarding(user);
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(String(init.body));
+    expect(payload.company).toMatchObject({ companyType: "DesignatedActivityCompany" });
+    expect(payload.company).not.toHaveProperty("chartOfAccountsVariant");
+  });
+
   it("retries a network failure with the identical idempotency key", async () => {
     vi.useFakeTimers();
     const outcome = {

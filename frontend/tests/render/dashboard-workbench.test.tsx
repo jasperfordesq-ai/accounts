@@ -25,12 +25,12 @@ describe("DashboardWorkbench", () => {
     for (const addLink of screen.getAllByRole("link", { name: "Add Company" })) {
       expect(addLink).toHaveAttribute("href", "/companies/new");
     }
-    expect(screen.getByText("Accountant Work Queue")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Work queue" })).toBeInTheDocument();
     expect(screen.getByText("Practice command summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Company directory" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Platform release status" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open release evidence" })).toHaveAttribute("href", "/production-readiness");
-    const workQueue = screen.getByText("Accountant Work Queue");
+    const workQueue = screen.getByRole("heading", { name: "Work queue" });
     const releaseStatus = screen.getByRole("heading", { name: "Platform release status" });
     expect(workQueue.compareDocumentPosition(releaseStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
@@ -49,7 +49,7 @@ describe("DashboardWorkbench", () => {
       />,
     );
 
-    const workQueue = screen.getByText("Accountant Work Queue");
+    const workQueue = screen.getByRole("heading", { name: "Work queue" });
     const reminderRisk = screen.getByRole("heading", { name: "Reminder delivery at risk" });
     expect(workQueue.compareDocumentPosition(reminderRisk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

@@ -22,7 +22,7 @@ test("all material workbench routes consume the canonical role capabilities", ()
   assert.match(period, /<PeriodFilingWorkspace[\s\S]*?canApprove=\{canApprove\}[\s\S]*?canRead=\{canRead\}[\s\S]*?canReview=\{canReview\}[\s\S]*?canWriteWorkingPapers=\{canWriteWorkingPapers\}/);
 
   const routeCapabilities = [
-    ["src/app/companies/[companyId]/periods/[periodId]/classify/page.tsx", "canWriteWorkingPapers"],
+    ["src/app/companies/[companyId]/periods/[periodId]/classify/page.tsx", "canWriteWorkingPapers, canApprove"],
     ["src/app/companies/[companyId]/periods/[periodId]/notes/page.tsx", "canWriteWorkingPapers"],
     ["src/app/companies/[companyId]/periods/[periodId]/charity/page.tsx", "canApprove, canReview, canWriteWorkingPapers"],
     ["src/components/period/YearEndQuestionnaireRoute.tsx", "canWriteWorkingPapers, canReview"],

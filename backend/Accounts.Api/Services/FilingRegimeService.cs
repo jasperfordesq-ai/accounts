@@ -44,7 +44,11 @@ public class FilingRegimeService
 
         var sc = period.SizeClassification
             ?? throw new BusinessRuleException("Size classification must be completed first.");
-        if (string.IsNullOrWhiteSpace(sc.DecisionInputFingerprintSha256)
+        if (sc.InputBasis == SizeInputBasis.HistoricAnchor)
+            throw new BusinessRuleException(SizeClassificationService.HistoricAnchorNotATargetMessage);
+        // Retired historic figures are never a decision: the period must be classified first.
+        if (sc.InputBasis != SizeInputBasis.Computed
+            || string.IsNullOrWhiteSpace(sc.DecisionInputFingerprintSha256)
             || sc.ThresholdElectionEffectiveFrom is null)
             throw new BusinessRuleException("Run the statutory size classification against current raw inputs before determining a filing regime.");
         if (period.Company.IsHolding)

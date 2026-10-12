@@ -92,6 +92,8 @@ describe("FinancialStatementsWorkbench", () => {
 
     expect(screen.getByRole("tab", { name: /Tax Computation/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Corporation Tax Support Data")).toBeInTheDocument();
+    expect(screen.getByText("Simple-scope machine checks passed - the directors' review is still required")).toBeInTheDocument();
+    expect(screen.queryByText(/qualified review/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Revenue corporation tax" })).toHaveClass("min-h-6");
     await user.click(screen.getByRole("tab", { name: /Source Trail/ }));
     expect(onStatementTabChange).toHaveBeenCalledWith("sources");
@@ -106,6 +108,133 @@ describe("FinancialStatementsWorkbench", () => {
       "text-xs",
     );
     expect(screen.getByText("€10,000.00")).toHaveClass("whitespace-nowrap");
+  });
+
+  it("keeps the capital and reserves presentation for a company on the generic chart", () => {
+    render(<FinancialStatementsWorkbench {...props()} selectedStatementTab="balance-sheet" />);
+
+    expect(screen.getByText("Share Capital")).toBeInTheDocument();
+    expect(screen.getByText("Total Capital and Reserves")).toBeInTheDocument();
+    expect(screen.queryByText("Bank Overdraft")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total Members' Funds")).not.toBeInTheDocument();
+  });
+
+  it("presents members' funds and the bank overdraft for a company on the charity chart", () => {
+    render(
+      <FinancialStatementsWorkbench
+        {...props()}
+        bs={sampleCharityBalanceSheet()}
+        selectedStatementTab="balance-sheet"
+      />,
+    );
+
+    expect(screen.getByText("Bank Overdraft")).toBeInTheDocument();
+    expect(screen.getByText("€1,620.00")).toBeInTheDocument();
+    expect(screen.getByText("Members' Funds")).toBeInTheDocument();
+    expect(screen.getByText("Members' funds brought forward")).toBeInTheDocument();
+    expect(screen.getByText("Surplus/(deficit) for the financial year")).toBeInTheDocument();
+    expect(screen.getByText("Restricted funds")).toBeInTheDocument();
+    expect(screen.getByText("Total Members' Funds")).toBeInTheDocument();
+    expect(screen.queryByText("Share Capital")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total Capital and Reserves")).not.toBeInTheDocument();
+    expect(screen.queryByText("Other movements in members' funds")).not.toBeInTheDocument();
+  });
+
+  it("hides a nil bank overdraft for a company on the charity chart", () => {
+    const bs = sampleCharityBalanceSheet();
+    bs.currentAssets = { ...bs.currentAssets, cash: 1_820, total: 1_820 };
+    bs.creditorsWithinYear = { ...bs.creditorsWithinYear, bankOverdraft: 0, total: 250 };
+    bs.netCurrentAssets = 1_570;
+    render(<FinancialStatementsWorkbench {...props()} bs={bs} selectedStatementTab="balance-sheet" />);
+
+    expect(screen.getByText("Total Members' Funds")).toBeInTheDocument();
+    expect(screen.queryByText("Bank Overdraft")).not.toBeInTheDocument();
+  });
+
+  it("labels the statement of changes in members' funds for a company on the charity chart", () => {
+    const { unmount } = render(
+      <FinancialStatementsWorkbench
+        {...props()}
+        bs={sampleCharityBalanceSheet()}
+        equity={{ ...sampleEquity(), openingShareCapital: 0, openingTotal: 0, closingShareCapital: 0, closingTotal: 78_750 }}
+        selectedStatementTab="equity-changes"
+      />,
+    );
+
+    expect(screen.getByRole("table", { name: "Statement of Changes in Members' Funds" })).toBeInTheDocument();
+    expect(screen.getByText("Movements in members' funds for the period")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Members' Funds" })).toBeInTheDocument();
+    expect(screen.getByText("Surplus/(deficit) for the Year")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Retained Earnings" })).not.toBeInTheDocument();
+    // No nil share capital column and no nil dividends row for a company limited by guarantee.
+    expect(screen.queryByRole("columnheader", { name: "Share Capital" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Dividends Paid")).not.toBeInTheDocument();
+    unmount();
+
+    render(<FinancialStatementsWorkbench {...props()} selectedStatementTab="equity-changes" />);
+    expect(screen.getByRole("columnheader", { name: "Retained Earnings" })).toBeInTheDocument();
+    expect(screen.getByText("Profit for the Year")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Share Capital" })).toBeInTheDocument();
+    expect(screen.getByText("Dividends Paid")).toBeInTheDocument();
+  });
+
+  it("keeps the profit and loss wording for a company on the generic chart", () => {
+    const { unmount } = render(<FinancialStatementsWorkbench {...props()} selectedStatementTab="pnl" />);
+
+    expect(screen.getByRole("tab", { name: /Profit & Loss/ })).toBeInTheDocument();
+    expect(screen.getByText("Profit & Loss Account")).toBeInTheDocument();
+    expect(screen.getByText("Turnover")).toBeInTheDocument();
+    expect(screen.getByText("Gross Profit")).toBeInTheDocument();
+    expect(screen.getByText("Profit Before Tax")).toBeInTheDocument();
+    expect(screen.getByText("Less: Corporation Tax")).toBeInTheDocument();
+    expect(screen.getByText("Profit After Tax")).toBeInTheDocument();
+    expect(screen.queryByText(/Surplus/)).not.toBeInTheDocument();
+    unmount();
+
+    // The generic layout shows the tax line even when it is nil.
+    render(<FinancialStatementsWorkbench {...props()} pnl={{ ...samplePnl(), taxCharge: 0 }} selectedStatementTab="pnl" />);
+    expect(screen.getByText("Less: Corporation Tax")).toBeInTheDocument();
+  });
+
+  it("presents the income and expenditure account for a company on the charity chart", () => {
+    const { unmount } = render(
+      <FinancialStatementsWorkbench {...props()} bs={sampleCharityBalanceSheet()} selectedStatementTab="pnl" />,
+    );
+
+    expect(screen.getByRole("tab", { name: /Income & Expenditure/ })).toBeInTheDocument();
+    expect(screen.getByText("Income and Expenditure Account")).toBeInTheDocument();
+    expect(screen.getByText("Income")).toBeInTheDocument();
+    expect(screen.getByText("Gross Surplus/(deficit)")).toBeInTheDocument();
+    expect(screen.getByText("Operating Surplus/(deficit)")).toBeInTheDocument();
+    expect(screen.getByText("Surplus/(deficit) before taxation")).toBeInTheDocument();
+    expect(screen.getByText("Surplus/(deficit) for the financial year")).toBeInTheDocument();
+    expect(screen.getByText("Less: Corporation Tax")).toBeInTheDocument();
+    expect(screen.queryByText(/Turnover|Profit/)).not.toBeInTheDocument();
+    unmount();
+
+    // The tax line is kept only when it is non-zero.
+    render(
+      <FinancialStatementsWorkbench
+        {...props()}
+        bs={sampleCharityBalanceSheet()}
+        pnl={{ ...samplePnl(), taxCharge: 0 }}
+        selectedStatementTab="pnl"
+      />,
+    );
+    expect(screen.queryByText("Less: Corporation Tax")).not.toBeInTheDocument();
+    expect(screen.getByText("Surplus/(deficit) for the financial year")).toBeInTheDocument();
+  });
+
+  it("titles the directors' report results section by chart", () => {
+    const { unmount } = render(
+      <FinancialStatementsWorkbench {...props()} bs={sampleCharityBalanceSheet()} selectedStatementTab="directors-report" />,
+    );
+    expect(screen.getByRole("heading", { name: "Results" })).toBeInTheDocument();
+    expect(screen.queryByText("Results and Dividends")).not.toBeInTheDocument();
+    unmount();
+
+    render(<FinancialStatementsWorkbench {...props()} selectedStatementTab="directors-report" />);
+    expect(screen.getByRole("heading", { name: "Results and Dividends" })).toBeInTheDocument();
   });
 
   it("explains the filing-regime prerequisite without presenting it as a failed request", () => {
@@ -291,6 +420,45 @@ function sampleBalanceSheet(): BalanceSheet {
       unexplainedDifference: 0,
     },
     balances: true,
+  };
+}
+
+// Charity chart: the overdrawn bank (1,620) is within creditors, not negative cash; members' funds
+// replace share capital.
+function sampleCharityBalanceSheet(): BalanceSheet {
+  return {
+    fixedAssets: { categories: [], total: 1_200 },
+    currentAssets: { stock: 0, debtors: 0, prepayments: 0, cash: 200, total: 200 },
+    creditorsWithinYear: {
+      tradeCreditors: 0,
+      accruals: 0,
+      taxCreditors: 0,
+      otherCreditors: 250,
+      total: 1_870,
+      bankOverdraft: 1_620,
+    },
+    netCurrentAssets: -1_670,
+    totalAssetsLessCurrentLiabilities: -470,
+    creditorsAfterYear: { loans: 0, other: 800, total: 800 },
+    netAssets: -1_270,
+    capitalAndReserves: {
+      shareCapital: 0,
+      openingRetainedEarnings: 1_000,
+      profitForYear: -2_520,
+      dividendsPaid: 0,
+      otherReserveMovements: 250,
+      retainedEarnings: -1_270,
+      total: -1_270,
+      unexplainedDifference: 0,
+    },
+    balances: true,
+    membersFunds: {
+      fundsBroughtForward: 1_000,
+      surplusForYear: -2_520,
+      otherMovements: 0,
+      restrictedFunds: 250,
+      total: -1_270,
+    },
   };
 }
 

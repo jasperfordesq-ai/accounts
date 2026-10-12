@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Accounts.Api.Data;
 using Accounts.Api.Entities;
 using Accounts.Api.Services;
@@ -18,6 +19,24 @@ public static class ClassificationEndpoints
         // Run classification engine, optionally saving the inputs in the same write
         group.MapPost("/classify", ClassifySizeEndpointAsync)
             .Produces<SizeClassificationService.ClassificationResult>();
+
+        // Read-only preflight: which earlier periods must be classified before this one (s.280A)
+        group.MapGet("/classification/prerequisites", GetClassificationPrerequisitesEndpointAsync)
+            .Produces<ClassificationPrerequisites>();
+
+        // Record figures keyed in from a preceding period's filed accounts (provenance-marked root).
+        group.MapPut("/classification/historic-anchor", RecordHistoricAnchorEndpointAsync)
+            .Produces<SizeClassification>();
+
+        // Retire those figures (Owner only): the evidence is kept, the period is classified normally again.
+        group.MapPost("/classification/historic-anchor/retire", RetireHistoricAnchorEndpointAsync)
+            .Produces<SizeClassification>();
+
+        // Archived (retired or replaced) historic evidence, and its PDF. Owner, Reviewer and Accountant.
+        group.MapGet("/classification/historic-anchor/archive", ListHistoricAnchorEvidenceEndpointAsync)
+            .Produces<IReadOnlyList<HistoricAnchorEvidenceSummary>>();
+        group.MapGet("/classification/historic-anchor/archive/{recordId:int}/evidence", DownloadHistoricAnchorEvidenceEndpointAsync)
+            .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
         // Apply or re-review a conservative, evidence-bound statutory classification override.
         group.MapPut("/size-classification/override", ApplySizeClassificationOverrideEndpointAsync);
@@ -168,6 +187,23 @@ public static class ClassificationEndpoints
         return Results.Ok(sc);
     }
 
+    /// <summary>
+    /// Read-only: whether every earlier period has the current size decision a later year's test
+    /// needs (Companies Act 2014, s.280A), and which period to classify first if not.
+    /// </summary>
+    public static async Task<IResult> GetClassificationPrerequisitesEndpointAsync(
+        int companyId,
+        int periodId,
+        SizeClassificationService service,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+
+        return Results.Ok(await service.GetPrerequisitesAsync(companyId, periodId));
+    }
+
     public static async Task<IResult> ClassifySizeEndpointAsync(
         int companyId,
         int periodId,
@@ -224,6 +260,9 @@ public static class ClassificationEndpoints
             throw new BusinessRuleException("Prior-year class is derived from retained raw prior-period figures and cannot be supplied by the caller.");
 
         var sc = period.SizeClassification;
+        // Historic figures are replaced only through the evidence-bound historic-anchor route.
+        if (sc is not null && sc.InputBasis == SizeInputBasis.HistoricAnchor)
+            throw new BusinessRuleException(SizeClassificationService.HistoricAnchorNotATargetMessage);
         object? oldValue = sc is null ? null : SizeClassificationInputSnapshot(sc);
         if (sc == null)
         {
@@ -232,7 +271,13 @@ public static class ClassificationEndpoints
             period.SizeClassification = sc;
         }
 
-        var changed = sc.Turnover != input.Turnover
+        // The period's own figures replace retired historic figures: the row becomes an ordinary computed
+        // row, undecided until classified, and keeps the retired evidence and its retirement record.
+        var replacesRetiredFigures = sc.InputBasis == SizeInputBasis.RetiredHistoricAnchor;
+        if (replacesRetiredFigures)
+            sc.InputBasis = SizeInputBasis.Computed;
+        var changed = replacesRetiredFigures
+            || sc.Turnover != input.Turnover
             || sc.BalanceSheetTotal != input.BalanceSheetTotal
             || sc.AvgEmployees != input.AvgEmployees
             || sc.ThresholdElectionEffectiveFrom != input.ThresholdElectionEffectiveFrom;
@@ -285,6 +330,141 @@ public static class ClassificationEndpoints
         return Results.Ok(result);
     }
 
+    /// <summary>
+    /// Records figures keyed in from a preceding period's filed accounts (with the PDF evidence) as
+    /// the root of the next period's s.280A test. Owner/Reviewer only, with recent authenticator
+    /// verification (RecentAuthenticationMiddleware); the attester is the authenticated principal.
+    /// </summary>
+    public static async Task<IResult> RecordHistoricAnchorEndpointAsync(
+        int companyId,
+        int periodId,
+        HistoricAnchorInput input,
+        SizeClassificationService service,
+        AccountsDbContext db,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        var user = AuthContext.RequireUser(context);
+        if (user.Role is not "Owner" and not "Reviewer")
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var result = await service.RecordHistoricAnchorAsync(
+            companyId,
+            periodId,
+            new HistoricSizeFiguresRequest(
+                input.Turnover,
+                input.BalanceSheetTotal,
+                input.AvgEmployees,
+                input.ThresholdElectionEffectiveFrom,
+                input.SourceReference,
+                input.EvidenceArtifact,
+                input.EvidenceSha256,
+                input.AttestedEffectiveClass),
+            user.Role,
+            user.DisplayName,
+            AuthenticatedIdentity.AuditUserId(user));
+        return Results.Ok(result);
+    }
+
+    /// <summary>
+    /// Retires a period's historic figures. Owner only, with recent authenticator verification
+    /// (RecentAuthenticationMiddleware); the evidence is kept and the retirer is the principal.
+    /// </summary>
+    public static async Task<IResult> RetireHistoricAnchorEndpointAsync(
+        int companyId,
+        int periodId,
+        HistoricAnchorRetirementInput input,
+        SizeClassificationService service,
+        AccountsDbContext db,
+        HttpContext context,
+        ApiAccessService apiAccess)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+        if (EndpointRequestAuthorization.AuthorizeCurrentRequest(context, apiAccess) is { } denied)
+            return denied;
+
+        var user = AuthContext.RequireUser(context);
+        if (user.Role is not "Owner")
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var result = await service.RetireHistoricAnchorAsync(
+            companyId,
+            periodId,
+            input.Reason,
+            user.Role,
+            user.DisplayName,
+            AuthenticatedIdentity.AuditUserId(user));
+        return Results.Ok(result);
+    }
+
+    /// <summary>
+    /// Lists the period's archived historic evidence (retired or replaced), newest first, without the
+    /// PDF bytes. Owner, Reviewer and Accountant only.
+    /// </summary>
+    public static async Task<IResult> ListHistoricAnchorEvidenceEndpointAsync(
+        int companyId,
+        int periodId,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+        if (AuthContext.GetUser(context) is { Role: "Client" })
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        IReadOnlyList<HistoricAnchorEvidenceSummary> records = await db.HistoricAnchorEvidenceRecords
+            .AsNoTracking()
+            .Where(record => record.PeriodId == periodId && record.Period.CompanyId == companyId)
+            .OrderByDescending(record => record.ArchivedAt)
+            .ThenByDescending(record => record.Id)
+            .Select(record => new HistoricAnchorEvidenceSummary(
+                record.Id,
+                record.Event,
+                record.ArchivedAt,
+                record.ArchivedBy,
+                record.Turnover,
+                record.BalanceSheetTotal,
+                record.AvgEmployees,
+                record.SourceReference,
+                record.EvidenceSha256,
+                record.AttestedBy,
+                record.AttestedRole,
+                record.AttestedAt,
+                record.AttestedEffectiveClass,
+                record.RetiredAt,
+                record.RetiredBy,
+                record.RetiredReason))
+            .ToListAsync();
+        return Results.Ok(records);
+    }
+
+    /// <summary>Downloads the PDF of an archived historic evidence record. Owner, Reviewer and Accountant only.</summary>
+    public static async Task<IResult> DownloadHistoricAnchorEvidenceEndpointAsync(
+        int companyId,
+        int periodId,
+        int recordId,
+        AccountsDbContext db,
+        HttpContext context)
+    {
+        if (!await CompanyEndpointAccess.CanAccessCompanyPeriodAsync(context, db, companyId, periodId))
+            return Results.NotFound();
+        if (AuthContext.GetUser(context) is { Role: "Client" })
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var record = await db.HistoricAnchorEvidenceRecords
+            .AsNoTracking()
+            .Where(candidate => candidate.Id == recordId && candidate.PeriodId == periodId && candidate.Period.CompanyId == companyId)
+            .Select(candidate => new { candidate.EvidenceArtifact })
+            .FirstOrDefaultAsync();
+        return record is null
+            ? Results.NotFound()
+            : TypedResults.File(record.EvidenceArtifact, "application/pdf", $"historic-figures-period-{periodId}-{recordId}.pdf");
+    }
+
     private static string? AuditUserId(HttpContext context)
     {
         var user = AuthContext.GetUser(context);
@@ -314,5 +494,33 @@ public record SizeClassificationOverrideInput(
     string Reason,
     byte[] EvidenceArtifact,
     string EvidenceSha256);
+public record HistoricAnchorInput(
+    decimal Turnover,
+    decimal BalanceSheetTotal,
+    int AvgEmployees,
+    string SourceReference,
+    byte[] EvidenceArtifact,
+    string EvidenceSha256,
+    CompanySizeClass? AttestedEffectiveClass = null,
+    DateOnly? ThresholdElectionEffectiveFrom = null);
+public record HistoricAnchorRetirementInput(string? Reason);
+/// <summary>An archived (retired or replaced) historic evidence record, without its PDF bytes.</summary>
+public sealed record HistoricAnchorEvidenceSummary(
+    int Id,
+    HistoricAnchorEvidenceEvent Event,
+    DateTime ArchivedAt,
+    string ArchivedBy,
+    decimal Turnover,
+    decimal BalanceSheetTotal,
+    int AvgEmployees,
+    string SourceReference,
+    string EvidenceSha256,
+    string AttestedBy,
+    string AttestedRole,
+    DateTime AttestedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] CompanySizeClass? AttestedEffectiveClass,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTime? RetiredAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? RetiredBy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? RetiredReason);
 public record FilingRegimeInput(ElectedRegime? ElectedRegime);
 public record MemberAuditNoticeInput(bool Received, DateOnly? NoticeDate);

@@ -419,6 +419,21 @@ public sealed class CompanyQuarantineTests
             case "size_classifications":
                 db.SizeClassifications.Add(new SizeClassification { PeriodId = f.PeriodId, Turnover = 1m, BalanceSheetTotal = 1m, AvgEmployees = 1 });
                 break;
+            case "historic_anchor_evidence_records":
+                db.HistoricAnchorEvidenceRecords.Add(new HistoricAnchorEvidenceRecord
+                {
+                    PeriodId = f.PeriodId,
+                    Event = HistoricAnchorEvidenceEvent.Replaced,
+                    ArchivedAt = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc),
+                    ArchivedBy = "Example Owner",
+                    SourceReference = "Fictitious filed accounts",
+                    EvidenceArtifact = [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31],
+                    EvidenceSha256 = new string('a', 64),
+                    AttestedBy = "Example Owner",
+                    AttestedRole = "Owner",
+                    AttestedAt = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc)
+                });
+                break;
             case "filing_regimes":
                 db.FilingRegimes.Add(new FilingRegime { PeriodId = f.PeriodId, ElectedRegime = ElectedRegime.Full });
                 break;

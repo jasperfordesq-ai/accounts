@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button, Spinner } from "@heroui/react";
 import { Download, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,9 +9,12 @@ import {
   generateDirectorsApprovalPage,
   getDirectorsApproval,
   recordDirectorsApproval,
+  withdrawDirectorsApproval,
+  type DirectorsApprovalHistoryItem,
   type DirectorsApprovalPageSummary,
   type DirectorsApprovalState,
   type DirectorsApprovalSummary,
+  type DirectorsApprovalWithdrawalReason,
 } from "@/lib/api";
 import { formatDateIE } from "@/lib/format";
 import { ReviewPanel, StatusBadge } from "@/components/workbench";
@@ -27,6 +30,23 @@ import {
 
 const REFERENCE_MIN = 3;
 const REFERENCE_MAX = 200;
+const NOTE_MIN = 3;
+const NOTE_MAX = 500;
+
+const WITHDRAWAL_REASONS: ReadonlyArray<{ value: DirectorsApprovalWithdrawalReason; label: string }> = [
+  { value: "entered-in-error", label: "Entered in error" },
+  { value: "board-rescinded", label: "Board rescinded the approval" },
+  { value: "superseded", label: "Superseded by a new approval" },
+];
+
+/** Plain-English labels for the reasons stored on a revocation (manual withdrawals carry a "withdrawn-" prefix). */
+function revocationLabel(reason: string | null) {
+  const manual = WITHDRAWAL_REASONS.find((option) => `withdrawn-${option.value}` === reason);
+  if (manual) return `Withdrawn: ${manual.label}`;
+  if (reason === "accounts-regenerated") return "Withdrawn automatically: the accounts were regenerated";
+  if (reason === "accounts-source-changed") return "Withdrawn automatically: the figures behind the accounts changed";
+  return reason ? `Withdrawn: ${reason}` : "Withdrawn";
+}
 
 export function DirectorsApprovalPanel({
   companyId,
@@ -74,6 +94,7 @@ export function DirectorsApprovalPanel({
   const approvalDate = state?.periodApprovalDate ?? null;
   const current = state?.current ?? null;
   const latestPage = state?.latestPage ?? null;
+  const history = state?.history ?? [];
 
   async function generate() {
     if (!approvalDate) return;
@@ -156,7 +177,18 @@ export function DirectorsApprovalPanel({
           <Button size="sm" variant="outline" onPress={() => void load()}>Retry</Button>
         </div>
       ) : current ? (
-        <RecordedApproval approval={current} />
+        <div className="space-y-4">
+          <RecordedApproval approval={current}>
+            {canRecord && (
+              <WithdrawApproval
+                companyId={companyId}
+                periodId={periodId}
+                onWithdrawn={async () => { await Promise.all([load(), onChanged?.()]); }}
+              />
+            )}
+          </RecordedApproval>
+          <ApprovalHistory history={history} />
+        </div>
       ) : (
         <div className="space-y-4">
           {approvalDate === null ? (
@@ -220,6 +252,7 @@ export function DirectorsApprovalPanel({
           <p className="text-xs leading-5 text-[var(--muted-foreground)]">
             Charity and Revenue approvals depend on the CRO accounts and on this directors&apos; approval being recorded.
           </p>
+          <ApprovalHistory history={history} />
         </div>
       )}
     </ReviewPanel>
@@ -324,7 +357,7 @@ function LatestPage({ page, downloadHref }: { page: DirectorsApprovalPageSummary
   );
 }
 
-function RecordedApproval({ approval }: { approval: DirectorsApprovalSummary }) {
+function RecordedApproval({ approval, children }: { approval: DirectorsApprovalSummary; children?: ReactNode }) {
   const page = approval.page;
   const signatories = page.secondDirectorName ? `${page.firstDirectorName} and ${page.secondDirectorName}` : `${page.firstDirectorName} (sole director)`;
   return (
@@ -348,6 +381,152 @@ function RecordedApproval({ approval }: { approval: DirectorsApprovalSummary }) 
           </p>
         </div>
       </div>
+      {children && <div className="mt-3">{children}</div>}
+    </section>
+  );
+}
+
+/**
+ * Owner or Reviewer: withdraws a recorded approval (for example one recorded in error). Nothing is
+ * deleted; the server appends a withdrawal to the approval's permanent record.
+ */
+function WithdrawApproval({
+  companyId,
+  periodId,
+  onWithdrawn,
+}: {
+  companyId: number;
+  periodId: number;
+  onWithdrawn: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<DirectorsApprovalWithdrawalReason | "">("");
+  const [note, setNote] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+
+  function close() {
+    setOpen(false);
+    setReason("");
+    setNote("");
+    setConfirming(false);
+    setNeedsVerification(false);
+  }
+
+  function review() {
+    if (!reason) {
+      toast.error("Choose why the approval is being withdrawn");
+      return;
+    }
+    const trimmed = note.trim();
+    if (trimmed.length < NOTE_MIN || trimmed.length > NOTE_MAX) {
+      toast.error(`Explain why the approval is being withdrawn (${NOTE_MIN} to ${NOTE_MAX} characters)`);
+      return;
+    }
+    setConfirming(true);
+  }
+
+  async function withdraw() {
+    if (!reason) return;
+    setBusy(true);
+    try {
+      await withdrawDirectorsApproval(companyId, periodId, { reason, note: note.trim() });
+      toast.success("Directors' approval withdrawn. It stays in the record, marked as withdrawn.");
+      close();
+      await onWithdrawn();
+    } catch (error) {
+      if (isRecentMfaRequired(error)) {
+        setNeedsVerification(true);
+      } else {
+        toast.error(errorMessage(error, "Failed to withdraw the directors' approval"));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" aria-label="Withdraw approval" onPress={() => setOpen(true)}>
+          Withdraw approval
+        </Button>
+      </div>
+    );
+  }
+
+  const reasonLabel = WITHDRAWAL_REASONS.find((option) => option.value === reason)?.label;
+  return (
+    <div className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-[var(--foreground)]">
+      <p className="text-sm font-semibold">Withdraw this approval</p>
+      {confirming ? (
+        <div className="space-y-3 text-sm">
+          <p>
+            Reason: {reasonLabel}. {note.trim()}
+          </p>
+          <p className="font-medium">The approval stays in the permanent record marked as withdrawn; it can never be deleted.</p>
+          <p className="text-xs leading-5 text-[var(--muted-foreground)]">
+            Any filing approval that relied on it is withdrawn too. Record a new directors&apos; approval (s.324) before approving the filing again.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="ghost" aria-label="Back" isDisabled={busy} onPress={() => setConfirming(false)}>Back</Button>
+            <Button size="sm" variant="danger" aria-label="Confirm withdrawal" isDisabled={busy} onPress={() => void withdraw()}>
+              {busy ? <Spinner size="sm" /> : "Confirm withdrawal"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Reason for withdrawal">
+              <select
+                value={reason}
+                onChange={(event) => setReason(event.target.value as DirectorsApprovalWithdrawalReason | "")}
+                className={inputClass}
+              >
+                <option value="">Select a reason</option>
+                {WITHDRAWAL_REASONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Why is it being withdrawn?" hint={`${NOTE_MIN} to ${NOTE_MAX} characters. Kept in the audit trail.`}>
+              <textarea
+                value={note}
+                maxLength={NOTE_MAX}
+                rows={3}
+                onChange={(event) => setNote(event.target.value)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="ghost" aria-label="Cancel" onPress={close}>Cancel</Button>
+            <Button size="sm" variant="primary" aria-label="Continue" onPress={review}>Continue</Button>
+          </div>
+        </>
+      )}
+      {needsVerification && <RecentVerificationPrompt onVerified={() => setNeedsVerification(false)} />}
+    </div>
+  );
+}
+
+function ApprovalHistory({ history }: { history: ReadonlyArray<DirectorsApprovalHistoryItem> }) {
+  if (history.length === 0) return null;
+  return (
+    <section role="region" aria-label="Directors' approval history" className="space-y-2">
+      <h3 className="text-sm font-semibold text-[var(--foreground)]">History</h3>
+      <ul className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)] bg-[var(--surface)] text-sm">
+        {history.map((item) => (
+          <li key={item.eventId} className="flex flex-col gap-1 p-3 md:flex-row md:items-center md:justify-between">
+            <span className="text-[var(--foreground)]">
+              {formatDateIE(item.approvalDate)} · {item.kind === "Approved" ? "Approved" : revocationLabel(item.reason)}
+            </span>
+            <span className="text-xs text-[var(--muted-foreground)]">
+              By {item.recordedByDisplayName} on {formatDateTime(item.recordedAtUtc)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

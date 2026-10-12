@@ -13,7 +13,7 @@ describe("WorkbenchPreview", () => {
     expect(screen.getByText("Nearest filing gate")).toBeInTheDocument();
     expect(screen.getAllByText("3 deadline pressure").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("navigation", { name: "Accounting Workflow" })).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Accountant Workflow" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Accounts workflow" })).toBeInTheDocument();
     expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
     expect(screen.getByText("Evidence checklist")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Trial balance review" })).toBeInTheDocument();

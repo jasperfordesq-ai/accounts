@@ -24,7 +24,7 @@ import { useGuardedRouter, useUnsavedChanges } from "@/lib/useUnsavedChanges";
 export default function CompanyDetailPage({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId: id } = use(params);
   const router = useGuardedRouter();
-  const { canWriteWorkingPapers, permissions } = useAuth();
+  const { canWriteWorkingPapers, isOwner, permissions } = useAuth();
   const [company, setCompany] = useState<Company | null>(null);
   const [companyState, setCompanyState] = useState<ResourceState>(INITIAL_RESOURCE_STATE);
   const [showNewPeriod, setShowNewPeriod] = useState(false);
@@ -411,6 +411,8 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       company={company}
       canWriteWorkingPapers={canWriteWorkingPapers}
       canDeleteCompany={permissions.canDeleteCompany}
+      canAdoptChart={isOwner}
+      onChartAdopted={load}
       editing={editing}
       editForm={editForm}
       savingCompany={savingCompany}

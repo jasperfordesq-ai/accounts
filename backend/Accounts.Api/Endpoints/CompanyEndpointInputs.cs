@@ -47,6 +47,12 @@ public class CompanyInput
     public bool HoldsCharitableTaxExemption { get; set; }
     public string? CharitableTaxExemptionReference { get; set; }
     public DateOnly? CharitableTaxExemptionConfirmedDate { get; set; }
+    // Chart of accounts for a new company; omitted means the default for its type (see
+    // ChartDefinitions.DefaultVariantFor). Used only at creation: an existing company's chart never
+    // changes through an update. Omitted from serialisation when null so request fingerprints of
+    // inputs that predate it are unchanged.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Accounts.Api.Entities.ChartOfAccountsVariant? ChartOfAccountsVariant { get; set; }
 }
 
 public class CompanyOfficerInput
@@ -103,6 +109,10 @@ public static class EndpointInputs
             && (!string.IsNullOrWhiteSpace(input.CharitableTaxExemptionReference)
                 || input.CharitableTaxExemptionConfirmedDate is not null))
             errors["holdsCharitableTaxExemption"] = ["Set charitable tax exemption to held before recording its evidence."];
+        if (input.ChartOfAccountsVariant is { } variant && !Enum.IsDefined(variant))
+            errors["chartOfAccountsVariant"] = ["Chart of accounts variant is not supported."];
+        else if (input.ChartOfAccountsVariant is { } chosen && !ChartDefinitions.IsAvailableTo(chosen, input.CompanyType))
+            errors["chartOfAccountsVariant"] = [ChartDefinitions.CharityChartRequiresClg];
 
         return errors.Count > 0 ? Results.ValidationProblem(errors) : null;
     }
@@ -183,11 +193,17 @@ public static class EndpointInputs
     {
         var company = new Accounts.Api.Entities.Company { LegalName = input.LegalName!.Trim() };
         ApplyCompany(company, input);
+        company.ChartOfAccountsVariant = input.ChartOfAccountsVariant
+            ?? ChartDefinitions.DefaultVariantFor(input.CompanyType, input.IsCharitableOrganisation);
         return company;
     }
 
     public static void ApplyCompany(Accounts.Api.Entities.Company company, CompanyInput input)
     {
+        // The company's chart is never changed here, so its type must stay one the chart is available to.
+        if (!ChartDefinitions.IsAvailableTo(company.ChartOfAccountsVariant, input.CompanyType))
+            throw new BusinessRuleException(ChartDefinitions.CharityChartCompanyTypeLocked);
+
         company.LegalName = input.LegalName!.Trim();
         company.TradingName = TrimToNull(input.TradingName);
         company.CroNumber = TrimToNull(input.CroNumber);

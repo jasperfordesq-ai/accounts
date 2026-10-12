@@ -1,5 +1,6 @@
 import type { AccountingPeriod, Company } from "@/lib/api";
 import { formatPeriodRange } from "@/lib/format";
+import { sizeClassificationLabel } from "@/lib/historicSizeFigures";
 import { IssueDigest, MetricStrip, ReviewPanel, StatusBadge, WorkflowDecisionSummary } from "@/components/workbench";
 import { AccountantWorkflowRail } from "@/components/workbench/AccountantWorkflowRail";
 
@@ -11,16 +12,15 @@ export function CompanyWorkspaceOverview({ company }: { company: Company }) {
   const readyItems = companyReadyItems(company, latestPeriod);
   const missingItems = companyMissingItems(company);
   const nextAction = companyNextAction(company, latestPeriod);
-  const latestSize = latestPeriod?.sizeClassification?.calculatedClass ?? "Unclassified";
+  const latestSize = sizeClassificationLabel(latestPeriod?.sizeClassification, "Unclassified");
   const latestRegime = latestPeriod?.filingRegime?.electedRegime ?? "Regime not elected";
   const supportTone = manualReason ? "bad" : missingItems.length > 0 ? "warn" : "good";
-  const activeWorkflowStage = manualReason ? "Review" : latestPeriod ? "Import" : "Setup";
 
   return (
     <div className="mb-8 space-y-4">
       <ReviewPanel
         title="Company command centre"
-        description="Company-level support path, setup readiness and next accountant action before entering a period workspace."
+        description="Company-level support path, setup readiness and next action before entering a period workspace."
         actions={<StatusBadge tone={supportTone}>{manualReason ? "Manual professional review required" : "Core workflow"}</StatusBadge>}
       >
         <WorkflowDecisionSummary
@@ -57,7 +57,7 @@ export function CompanyWorkspaceOverview({ company }: { company: Company }) {
         ]}
       />
 
-      <AccountantWorkflowRail activeStage={activeWorkflowStage} />
+      <AccountantWorkflowRail mode="guide" />
 
       <IssueDigest
         title="Company-level issue digest"

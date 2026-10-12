@@ -23,6 +23,9 @@ public static partial class YearEndEndpoints
         if (YearEndFigureInputs.ForFixedAsset(input) is { } invalid)
             return invalid;
 
+        if (await FixedAssetClassRefusalAsync(db, companyId, input) is { } refused)
+            return refused;
+
         if (await writeGuard.BlockIfCompanyAccountingLockedAsync(companyId, input.AcquisitionDate) is { } blocked)
             return blocked;
 
@@ -59,6 +62,9 @@ public static partial class YearEndEndpoints
 
         if (YearEndFigureInputs.ForFixedAsset(input) is { } invalid)
             return invalid;
+
+        if (await FixedAssetClassRefusalAsync(db, companyId, input) is { } refused)
+            return refused;
 
         var oldValue = FixedAssetSnapshot(item);
         var effectiveDate = BankingEndpointInputs.Earliest(item.AcquisitionDate, input.AcquisitionDate);
@@ -120,6 +126,18 @@ public static partial class YearEndEndpoints
             new { Deleted = true },
             AuditUserId(context));
         return Results.NoContent();
+    }
+
+    // A class the company's chart has no fixed-asset account for is refused when the asset is saved.
+    private static async Task<IResult?> FixedAssetClassRefusalAsync(AccountsDbContext db, int companyId, FixedAssetInput input)
+    {
+        var variant = await db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => (ChartOfAccountsVariant?)c.ChartOfAccountsVariant)
+            .FirstOrDefaultAsync();
+        return variant is { } chart && ChartDefinitions.FixedAssetClassRefusal(chart, input.Category!) is { } refusal
+            ? Results.BadRequest(new { error = refusal })
+            : null;
     }
 
     private static void StampCapitalAllowanceReview(

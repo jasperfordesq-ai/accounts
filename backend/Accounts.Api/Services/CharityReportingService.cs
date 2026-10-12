@@ -147,7 +147,8 @@ public sealed class CharityReportingService(AccountsDbContext db)
         package.TrusteeReviewArtifactSha256 = FilingReleaseGate.ComputeSha256(evidenceArtifact);
         package.TrusteePopulationJson = populationJson;
         package.TrusteePopulationSha256 = FilingReleaseGate.ComputeSha256(Encoding.UTF8.GetBytes(populationJson));
-        package.FilingStatus = FilingStatus.InProgress;
+        if (!FilingReleaseGate.HasOpenCorrection(package))
+            package.FilingStatus = FilingStatus.InProgress;
         await db.SaveChangesAsync();
         return package;
     }
@@ -358,10 +359,18 @@ public sealed class CharityReportingService(AccountsDbContext db)
         package.ApproverVerificationArtifactSha256 = null;
         package.ApproverVerifiedAt = null;
         package.ApproverCredentialValidUntil = null;
-        package.SubmittedBy = null;
-        package.SubmittedAt = null;
         package.AcceptedBy = null;
         package.AcceptedAt = null;
+        // A return sent back for correction or rejected keeps its correction tracker (status, reference,
+        // submission and deadline) until it is resubmitted; only the artifacts and the approval go.
+        if (FilingReleaseGate.HasOpenCorrection(package))
+        {
+            if (!FilingReleaseGate.IsInCorrection(package.FilingStatus))
+                package.FilingStatus = FilingStatus.CorrectionRequired;
+            return;
+        }
+        package.SubmittedBy = null;
+        package.SubmittedAt = null;
         package.AnnualReturnReference = null;
         package.Status = FilingPackageStatus.Draft;
         package.FilingStatus = FilingStatus.InProgress;

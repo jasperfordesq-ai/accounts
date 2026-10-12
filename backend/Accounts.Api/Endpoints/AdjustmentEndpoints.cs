@@ -282,7 +282,7 @@ public static class AdjustmentEndpoints
         var item = await db.Adjustments.FirstOrDefaultAsync(a => a.Id == id && a.PeriodId == periodId);
         if (item == null) return Results.NotFound();
 
-        if (await AdjustmentInputs.ValidateAsync(db, companyId, input) is { } validationProblem)
+        if (await AdjustmentInputs.ValidateAsync(db, companyId, input, item) is { } validationProblem)
             return validationProblem;
 
         var oldValue = AdjustmentSnapshot(item);
@@ -458,7 +458,10 @@ public static class AdjustmentInputs
         input.ApprovedAt = null;
     }
 
-    public static async Task<IResult?> ValidateAsync(AccountsDbContext db, int companyId, AdjustmentInput input)
+    // A manual journal may not post to an archived account or the bank control (AccountCategoryTargets).
+    // Editing a system-generated journal keeps an account it already posts to on the same side, so a
+    // generated bank-control posting (for example a paid dividend) stays editable.
+    public static async Task<IResult?> ValidateAsync(AccountsDbContext db, int companyId, AdjustmentInput input, Adjustment? existing = null)
     {
         if (string.IsNullOrWhiteSpace(input.Description))
             return Results.BadRequest(new { error = "Adjustment description is required." });
@@ -476,13 +479,28 @@ public static class AdjustmentInputs
             .OfType<int>()
             .Distinct()
             .ToArray();
-        var validCount = await db.AccountCategories.CountAsync(c =>
-            categoryIds.Contains(c.Id)
-            && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)));
+        var categories = await db.AccountCategories
+            .AsNoTracking()
+            .Where(c => categoryIds.Contains(c.Id)
+                && (c.CompanyId == companyId || (c.IsSystem && c.CompanyId == null)))
+            .ToListAsync();
 
-        return validCount == categoryIds.Length
-            ? null
-            : Results.BadRequest(new { error = "Adjustment categories must be available for this company." });
+        if (categories.Count != categoryIds.Length)
+            return Results.BadRequest(new { error = "Adjustment categories must be available for this company." });
+
+        var systemJournal = existing is { IsAuto: true };
+        foreach (var (categoryId, keptBySystemJournal) in new[]
+                 {
+                     (input.DebitCategoryId, systemJournal && existing!.DebitCategoryId == input.DebitCategoryId),
+                     (input.CreditCategoryId, systemJournal && existing!.CreditCategoryId == input.CreditCategoryId)
+                 })
+        {
+            if (!keptBySystemJournal
+                && AccountCategoryTargets.RefusalReason(categories.Single(c => c.Id == categoryId)) is { } reason)
+                return Results.BadRequest(new { error = reason });
+        }
+
+        return null;
     }
 
     public static Adjustment ToManualAdjustment(AdjustmentInput input, int periodId, AuthenticatedUser user, DateTime now)

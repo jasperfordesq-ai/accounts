@@ -112,8 +112,8 @@ function CorporationTaxFilingSupportPanelState({
               Support worksheet only — not a CT1 return
             </h3>
             <p className="mt-1 text-sm leading-6">
-              Nothing on this screen is submitted to Revenue. A named qualified accountant must complete the live ROS CT1,
-              confirm every unsupported panel and approve the retained handoff evidence.
+              Nothing on this screen is submitted to Revenue. The live ROS CT1 must be completed outside FilingBridge, every
+              unsupported panel confirmed and the retained handoff evidence reviewed by an Owner or Reviewer in FilingBridge; an accountant&apos;s review is optional.
             </p>
           </div>
         </div>
@@ -132,7 +132,7 @@ function CorporationTaxFilingSupportPanelState({
               <IssueList
                 title="Blocking review points"
                 items={response.filingSupport.blockingReasons}
-                empty="No machine-detected filing-support blockers. Qualified-accountant review is still mandatory."
+                empty="No machine-detected filing-support blockers. The unsupported CT1 panels must still be completed in ROS."
                 tone="bad"
               />
               <IssueList title="Calculation cautions" items={response.filingSupport.warnings} tone="warn" />
@@ -213,7 +213,7 @@ function SupportSummary({ response }: { response: CorporationTaxFilingSupportRes
           <StatusBadge tone={support.filingSupportReady ? "good" : "bad"}>
             {support.filingSupportReady ? "Support checks clear" : `${support.blockingReasons.length} blocker${support.blockingReasons.length === 1 ? "" : "s"}`}
           </StatusBadge>
-          <StatusBadge tone="warn">Accountant review required</StatusBadge>
+          <StatusBadge tone="warn">Manual ROS completion required</StatusBadge>
         </div>
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-[var(--border)] bg-[var(--border)] lg:grid-cols-4">

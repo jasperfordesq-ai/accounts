@@ -149,6 +149,16 @@ public sealed class ExternalFilingHandoffArtifactBuilderTests
     }
 
     [Fact]
+    public void RevenueArtifact_ManualCompletionBlocker_StillBlocks_WithoutRequiringAnAccountant()
+    {
+        var result = ExternalFilingHandoffArtifactBuilder.BuildInitial(RevenueRequest());
+
+        Assert.False(result.Document.ReadyForManualHandoff);
+        Assert.Contains("The unsupported CT1 sections must be completed in ROS before any external filing outcome is recorded.", result.Document.BlockingIssues);
+        Assert.DoesNotContain(result.Document.BlockingIssues, issue => issue.Contains("accountant", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void OutcomeChronology_RequiresExactHashAuthorityAndPrecedingState()
     {
         var snapshot = ExternalFilingHandoffArtifactBuilder.BuildInitial(CroRequest());

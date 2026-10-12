@@ -186,6 +186,9 @@ export function PeriodFilingWorkspace({
         onConfirmCroPayment={onConfirmCroPayment}
         onMarkCroAccepted={onMarkCroAccepted}
         onRecordCroSendBack={onRecordCroSendBack}
+        companyId={companyId}
+        periodId={periodId}
+        onCroTreatedAsNotDelivered={onFilingEvidenceChanged}
       />
 
       <ExternalFilingHandoffRuntime

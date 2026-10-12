@@ -25,6 +25,7 @@ it("keeps failed reminder delivery visible and exposes bounded retry and filing-
     items={[item]}
     state={{ status: "loaded", error: null, failedResourceKeys: [], hasRetainedData: true }}
     canRunDelivery
+    canRetry
     busyKey={null}
     actionMessage={null}
     onReload={vi.fn()}
@@ -47,6 +48,7 @@ it("shows an honest empty state and hides the privileged manual run for non-Owne
     items={[]}
     state={{ status: "empty", error: null, failedResourceKeys: [], hasRetainedData: false }}
     canRunDelivery={false}
+    canRetry={false}
     busyKey={null}
     actionMessage={null}
     onReload={vi.fn()}
@@ -55,4 +57,29 @@ it("shows an honest empty state and hides the privileged manual run for non-Owne
   />);
   expect(screen.getByText(/No pending or failed reminder delivery/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Run delivery cycle" })).not.toBeInTheDocument();
+});
+
+// Retry is Owner/Accountant on the backend (canWriteWorkingPapers): a Reviewer, who can see the queue,
+// is not offered it.
+it("offers Retry only to roles the backend allows to retry a reminder", () => {
+  const queue = (canRetry: boolean) => (
+    <DeadlineRiskQueue
+      items={[item]}
+      state={{ status: "loaded", error: null, failedResourceKeys: [], hasRetainedData: true }}
+      canRunDelivery={false}
+      canRetry={canRetry}
+      busyKey={null}
+      actionMessage={null}
+      onReload={vi.fn()}
+      onRetry={vi.fn()}
+      onRunDelivery={vi.fn()}
+    />
+  );
+  const reviewer = render(queue(false));
+  expect(screen.getByText("Failure code: provider-unavailable")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Retry now" })).not.toBeInTheDocument();
+  reviewer.unmount();
+
+  render(queue(true));
+  expect(screen.getByRole("button", { name: "Retry now" })).toBeInTheDocument();
 });

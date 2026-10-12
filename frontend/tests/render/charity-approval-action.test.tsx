@@ -119,6 +119,36 @@ describe("Charity page approval action", () => {
     expect(screen.queryByRole("button", { name: "Approve charity pack" })).not.toBeInTheDocument();
   });
 
+  it("starts the annual return reference empty during a correction and shows the previous one", async () => {
+    api.getDirectorsApproval.mockResolvedValue(directorsApproval(true));
+    api.getFilingWorkflowStatus.mockResolvedValue({
+      charity: {
+        ...charityStatus,
+        status: "Approved",
+        annualReturnReference: "AR-EXAMPLE-1",
+        submittedBy: "Firm Reviewer",
+        submittedAt: "2026-09-01T10:00:00Z",
+        rejectionReason: "Example charity correction.",
+        correctionDeadline: "2026-10-20T09:00:00Z",
+      },
+    });
+    await renderPage();
+
+    await screen.findByRole("button", { name: /Record external submission/ });
+    expect(screen.getByLabelText("Charities Regulator annual return reference")).toHaveValue("");
+    expect(screen.getByText("Previous submission: AR-EXAMPLE-1")).toBeInTheDocument();
+  });
+
+  it("keeps the recorded annual return reference outside a correction", async () => {
+    api.getDirectorsApproval.mockResolvedValue(directorsApproval(true));
+    api.getFilingWorkflowStatus.mockResolvedValue({ charity: { ...charityStatus, status: "Approved", annualReturnReference: "AR-EXAMPLE-1" } });
+    await renderPage();
+
+    await screen.findByRole("button", { name: /Record external submission/ });
+    expect(screen.getByLabelText("Charities Regulator annual return reference")).toHaveValue("AR-EXAMPLE-1");
+    expect(screen.queryByText(/Previous submission/)).not.toBeInTheDocument();
+  });
+
   it("is not offered once the pack is already approved", async () => {
     api.getDirectorsApproval.mockResolvedValue(directorsApproval(true));
     api.getFilingWorkflowStatus.mockResolvedValue({ charity: { ...charityStatus, status: "Approved" } });

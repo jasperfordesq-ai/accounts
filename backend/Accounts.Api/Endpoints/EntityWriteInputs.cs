@@ -41,6 +41,9 @@ public sealed class AccountCategoryInput
     public TaxTreatment TaxTreatment { get; init; } = TaxTreatment.Deductible;
     public bool IsNonTradingIncome { get; init; }
     public int? ParentId { get; init; }
+    // Optional explicit presentation; when omitted they are derived from Type and Code.
+    public AccountStatementLine? StatementLine { get; init; }
+    public AccountCashFlowClass? CashFlowClass { get; init; }
 
     internal AccountCategory ToEntity(int companyId) => new()
     {
@@ -51,7 +54,9 @@ public sealed class AccountCategoryInput
         TaxTreatment = TaxTreatment,
         IsNonTradingIncome = IsNonTradingIncome,
         IsSystem = false,
-        ParentId = ParentId
+        ParentId = ParentId,
+        StatementLine = StatementLine,
+        CashFlowClass = CashFlowClass
     };
 
     public static implicit operator AccountCategoryInput(AccountCategory value) => new()
@@ -61,7 +66,9 @@ public sealed class AccountCategoryInput
         Type = value.Type,
         TaxTreatment = value.TaxTreatment,
         IsNonTradingIncome = value.IsNonTradingIncome,
-        ParentId = value.ParentId
+        ParentId = value.ParentId,
+        StatementLine = value.StatementLine,
+        CashFlowClass = value.CashFlowClass
     };
 }
 
@@ -467,6 +474,8 @@ public sealed class TaxBalanceInput
         Balance = value.Balance
     };
 }
+
+public sealed record CorporationTaxDueConfirmationInput(string? Reason, decimal? TaxableProfitOutsideExemption = null);
 
 public sealed class NotesDisclosureInput
 {

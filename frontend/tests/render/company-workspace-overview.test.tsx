@@ -1,10 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { CompanyWorkspaceOverview } from "@/components/company/CompanyWorkspaceOverview";
 import type { Company } from "@/lib/api";
 
 describe("CompanyWorkspaceOverview", () => {
-  it("surfaces company-level blockers, readiness and next accountant action", () => {
+  it("surfaces company-level blockers, readiness and next action", () => {
     render(<CompanyWorkspaceOverview company={sampleCompany()} />);
 
     expect(screen.getByText("Company command centre")).toBeInTheDocument();
@@ -26,7 +26,7 @@ describe("CompanyWorkspaceOverview", () => {
     expect(screen.getByText("2 officers")).toBeInTheDocument();
     expect(screen.getByText("2 periods")).toBeInTheDocument();
     expect(screen.getByText("Medium")).toBeInTheDocument();
-    const workflow = screen.getByRole("navigation", { name: "Accountant Workflow" });
+    const workflow = screen.getByRole("navigation", { name: "Accounts workflow" });
     expect(workflow).toBeInTheDocument();
     expect(screen.getByText("8 stages")).toBeInTheDocument();
     expect(workflow).toHaveTextContent("Setup");
@@ -37,7 +37,10 @@ describe("CompanyWorkspaceOverview", () => {
     expect(workflow).toHaveTextContent("Notes");
     expect(workflow).toHaveTextContent("Review");
     expect(workflow).toHaveTextContent("Filing");
-    expect(screen.getByText("Start with company setup, then move period work through evidence, statements, review and filing.")).toBeInTheDocument();
+    expect(screen.getByText("Open a period to see its progress through these stages.")).toBeInTheDocument();
+    expect(within(workflow).queryByText("Complete")).not.toBeInTheDocument();
+    expect(within(workflow).queryByText("Pending")).not.toBeInTheDocument();
+    expect(workflow.querySelector("[aria-current]")).toBeNull();
   });
 });
 

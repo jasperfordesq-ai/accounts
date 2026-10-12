@@ -64,8 +64,8 @@ export function AccountantDashboardQueue({
   return (
     <div data-dashboard-accountant-work-queue="true">
     <ReviewPanel
-      title="Accountant Work Queue"
-      description="Active production work across the firm."
+      title="Work queue"
+      description="Active production work across your companies."
       actions={<StatusBadge tone={urgentCount > 0 ? "bad" : "good"}>{urgentCount} urgent total</StatusBadge>}
     >
       {rows.length === 0 ? (
@@ -75,7 +75,7 @@ export function AccountantDashboardQueue({
       ) : (
         <div className="space-y-4">
           <QueueTriage row={rows[0]} />
-          <AccountantWorkflowRail activeStage={dashboardActiveStage(rows)} />
+          <AccountantWorkflowRail mode="guide" />
           <MetricStrip
             metrics={[
               {
@@ -103,7 +103,7 @@ export function AccountantDashboardQueue({
           <ReleaseBlockerSummary blockers={productionReleaseBlockers} />
           <ReviewerActionQueue rows={rows} missingReviewerCount={unassignedReviewerCount} />
           <DataGrid
-            caption="Accountant work queue"
+            caption="Work queue"
             mobilePresentation="cards"
             filterPlaceholder="Filter companies, blockers, reviewers or actions"
             emptyState="No matching companies in the work queue"
@@ -183,7 +183,7 @@ function ReviewerActionQueue({
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[var(--foreground)]">Reviewer action queue</h3>
           <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
-            First three items needing practice attention.
+            First three items needing attention.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -199,7 +199,7 @@ function ReviewerActionQueue({
         {priorityRows.map((row) => {
           const reviewerName = row.company.assignedReviewerName?.trim();
           const reviewerLabel = reviewerName || "Unassigned reviewer";
-          const reviewerDetail = reviewerName ? row.company.assignedReviewerEmail?.trim() : "Assign before approval";
+          const reviewerDetail = reviewerName ? row.company.assignedReviewerEmail?.trim() : "Reviewer assignment is optional";
 
           return (
             <div
@@ -264,7 +264,7 @@ function QueueTriage({ row }: { row: QueueRow }) {
       <TriageItem
         label="Reviewer ownership"
         value={reviewerName || "Unassigned reviewer"}
-        detail={reviewerName ? row.company.assignedReviewerEmail : "Assign before approval"}
+        detail={reviewerName ? row.company.assignedReviewerEmail : "Reviewer assignment is optional"}
       />
       <div className="min-w-0">
         <p className="mb-1 text-[11px] font-semibold uppercase text-[var(--muted-foreground)]">What must I do next</p>
@@ -297,13 +297,6 @@ function TriageItem({
       {detail && <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{detail}</p>}
     </div>
   );
-}
-
-function dashboardActiveStage(rows: QueueRow[]) {
-  if (rows.some((row) => row.blockerLabel === "No period")) return "Setup";
-  if (rows.some((row) => row.blockerLabel === "Manual handoff")) return "Review";
-  if (rows.some((row) => row.deadlineState === "Overdue" || row.deadlineState === "Due soon")) return "Filing";
-  return "Review";
 }
 
 function ReviewerBadge({ company }: { company: Company }) {

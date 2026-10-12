@@ -43,6 +43,18 @@ describe("YearEndFixedAssetsSection", () => {
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledWith(7);
   });
+
+  it("offers leased equipment as a class (charity chart: cost 0010, depreciation 8010)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(<FixedAssetHarness onChange={onChange} onAdd={vi.fn()} onDelete={vi.fn()} />);
+
+    const category = screen.getByRole("combobox", { name: "Asset category" });
+    expect(screen.getByRole("option", { name: "Leased equipment" })).toHaveValue("Leased Equipment");
+    await user.selectOptions(category, "Leased Equipment");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ category: "Leased Equipment" }));
+  });
 });
 
 function FixedAssetHarness({

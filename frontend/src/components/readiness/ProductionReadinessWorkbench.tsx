@@ -1245,7 +1245,7 @@ export function ProductionReadinessWorkbench({ report }: { report: ProductionRea
 
       <ReviewPanel
         title="Accountant acceptance criteria"
-        description="Scenario-by-scenario acceptance gates a named qualified accountant must review before generated packs are trusted for real statutory use."
+        description="Scenario-by-scenario acceptance criteria for the generated packs; each company's filing gate remains its directors' s.324 approval."
         actions={<StatusBadge tone="warn">{accountantAcceptanceCriteria.length} required</StatusBadge>}
       >
         <DataGrid

@@ -164,12 +164,14 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
 
         // Get transaction rules for auto-categorisation
         var rules = await db.TransactionRules
+            .Include(r => r.Category)
             .Where(r => r.CompanyId == bankAccount.CompanyId)
             .Where(r => r.Category.CompanyId == bankAccount.CompanyId || (r.Category.IsSystem && r.Category.CompanyId == null))
             .OrderBy(r => r.Priority)
             .ToListAsync(cancellationToken);
 
         var warnings = new List<string>();
+        var refusedRuleIds = new HashSet<int>();
         var transactions = new List<ImportedTransaction>();
         int duplicateCandidates = 0;
         int autoCategorised = 0;
@@ -301,6 +303,14 @@ public class ImportService(AccountsDbContext db, IOptions<ImportLimitConfig>? im
             foreach (var rule in rules)
             {
                 if (!description.Contains(rule.Pattern, StringComparison.OrdinalIgnoreCase)) continue;
+                // A rule whose account is archived or is the bank control is never applied (one warning
+                // per rule); the row is left for a later rule or for the reviewer to categorise.
+                if (AccountCategoryTargets.RefusalReason(rule.Category) is { } refusal)
+                {
+                    if (refusedRuleIds.Add(rule.Id))
+                        warnings.Add($"Transaction rule \"{rule.Pattern}\" was not applied: {refusal}");
+                    continue;
+                }
                 categoryId = rule.CategoryId;
                 confidence = 0.85m;
                 autoCategorised++;

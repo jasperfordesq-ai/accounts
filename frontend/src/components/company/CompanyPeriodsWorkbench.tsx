@@ -5,6 +5,7 @@ import { Button } from "@heroui/react";
 import { ArrowRight, Calendar, Plus } from "lucide-react";
 import type { AccountingPeriod, Company } from "@/lib/api";
 import { formatPeriodRange } from "@/lib/format";
+import { sizeClassificationLabel } from "@/lib/historicSizeFigures";
 import { DataGrid, ReviewPanel, StatusBadge } from "@/components/workbench";
 
 interface CompanyPeriodsWorkbenchProps {
@@ -97,11 +98,11 @@ export function CompanyPeriodsWorkbench({
           sortableColumns={[true, true, true, false, false]}
           rows={periods.map((period, index) => ({
             id: period.id,
-            searchText: `${period.periodStart} ${period.periodEnd} ${period.status} ${period.sizeClassification?.calculatedClass ?? "Unclassified"} ${period.filingRegime?.electedRegime ?? "Regime not elected"}`,
+            searchText: `${period.periodStart} ${period.periodEnd} ${period.status} ${sizeClassificationLabel(period.sizeClassification, "Unclassified")} ${period.filingRegime?.electedRegime ?? "Regime not elected"}`,
             sortValues: [
               period.periodStart,
               period.status,
-              `${period.sizeClassification?.calculatedClass ?? "Unclassified"}:${period.filingRegime?.electedRegime ?? "Regime not elected"}`,
+              `${sizeClassificationLabel(period.sizeClassification, "Unclassified")}:${period.filingRegime?.electedRegime ?? "Regime not elected"}`,
               null,
               null,
             ],
@@ -166,7 +167,7 @@ function PeriodLabel({ period }: { period: AccountingPeriod }) {
 }
 
 function SizeRegime({ period }: { period: AccountingPeriod }) {
-  const size = period.sizeClassification?.calculatedClass ?? "Unclassified";
+  const size = sizeClassificationLabel(period.sizeClassification, "Unclassified");
   const regime = period.filingRegime?.electedRegime ?? "Regime not elected";
 
   return (

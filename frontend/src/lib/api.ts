@@ -1,6 +1,6 @@
 import { z } from "zod";
 import * as apiContracts from "./apiContracts.ts";
-import { DEFAULT_API_PROXY_MAX_BODY_BYTES } from "./apiProxyLimits.ts";
+import { assertEvidenceUploadFits, readEvidenceFile } from "./evidenceUpload.ts";
 import {
   reportClientMonitoringEvent,
   type ClientMonitoringEventCode,
@@ -31,6 +31,7 @@ import {
 } from "./productionReadinessContract.ts";
 
 export * from "./productionReadinessContract.ts";
+export * from "./evidenceUpload.ts";
 
 export { ApiContractError } from "./apiContracts.ts";
 
@@ -391,6 +392,8 @@ async function apiFetch<T>(
 
 // === Types ===
 
+export type ChartOfAccountsVariant = "GenericTrading" | "CharityClg";
+
 export interface Company {
   id: number;
   legalName: string;
@@ -432,6 +435,7 @@ export interface Company {
   holdsCharitableTaxExemption?: boolean;
   charitableTaxExemptionReference?: string;
   charitableTaxExemptionConfirmedDate?: string;
+  chartOfAccountsVariant?: ChartOfAccountsVariant;
   assignedReviewerName?: string;
   assignedReviewerEmail?: string;
   latestPeriod?: AccountingPeriod;
@@ -491,6 +495,7 @@ export interface SizeClassification {
   calculatedClass?: string;
   overrideRequiresRereview?: boolean;
   qualificationNotes?: string;
+  inputBasis?: "Computed" | "HistoricAnchor" | "RetiredHistoricAnchor"; // see lib/historicSizeFigures.ts
 }
 
 export interface FilingRegime {
@@ -557,6 +562,10 @@ export interface AccountCategory {
   code: string;
   name: string;
   type: string;
+  statementLine?: z.infer<typeof apiContracts.accountStatementLineSchema> | null;
+  cashFlowClass?: z.infer<typeof apiContracts.accountCashFlowClassSchema> | null;
+  systemRole?: z.infer<typeof apiContracts.accountSystemRoleSchema> | null;
+  isArchived?: boolean;
 }
 
 export interface OpeningBalance {
@@ -783,6 +792,7 @@ export interface BalanceSheet {
     taxCreditors: number;
     otherCreditors: number;
     total: number;
+    bankOverdraft?: number;
   };
   netCurrentAssets: number;
   totalAssetsLessCurrentLiabilities: number;
@@ -803,6 +813,8 @@ export interface BalanceSheet {
     unexplainedDifference: number;
   };
   balances: boolean;
+  /** Charity chart only (as is creditorsWithinYear.bankOverdraft): members' funds presentation. */
+  membersFunds?: { fundsBroughtForward: number; surplusForYear: number; otherMovements: number; restrictedFunds: number; total: number };
 }
 
 export interface TaxComputation {
@@ -1499,6 +1511,12 @@ export const seedCategories = (companyId: number) =>
     responseSchema: z.array(apiContracts.accountCategorySchema),
     responseContract: "seeded account category list",
   });
+/** A JSON POST / PUT through the shared client (CSRF, errors, monitoring) for client modules kept outside this file. */
+export const postApiJson = <T>(path: string, body: unknown, responseSchema: z.ZodType<unknown>, responseContract: string) =>
+  apiFetch<T>(path, { method: "POST", body: JSON.stringify(body), responseSchema, responseContract });
+export const putApiJson = <T>(path: string, body: unknown, responseSchema: z.ZodType<unknown>, responseContract: string) =>
+  apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body), responseSchema, responseContract });
+export const getApiJson = <T>(path: string, responseSchema: z.ZodType<unknown>, responseContract: string) => apiFetch<T>(path, { responseSchema, responseContract });
 
 // Transaction Rules
 export const getTransactionRules = (companyId: number) =>
@@ -2037,6 +2055,13 @@ export const runClassification = (companyId: number, periodId: number, inputs?: 
     ...(inputs ? { body: JSON.stringify(inputs) } : {}),
     responseSchema: apiContracts.classificationResultSchema,
     responseContract: "size classification result",
+  });
+
+export type ClassificationPrerequisites = z.infer<typeof apiContracts.classificationPrerequisitesSchema>;
+export const getClassificationPrerequisites = (companyId: number, periodId: number) =>
+  apiFetch<ClassificationPrerequisites>(`/api/companies/${companyId}/periods/${periodId}/classification/prerequisites`, {
+    responseSchema: apiContracts.classificationPrerequisitesSchema,
+    responseContract: "classification prerequisites",
   });
 
 export const setFilingRegime = (companyId: number, periodId: number, electedRegime?: string) =>
@@ -3057,6 +3082,7 @@ export type DirectorOption = z.infer<typeof apiContracts.directorOptionSchema>;
 export type DirectorsApprovalPageSummary = z.infer<typeof apiContracts.directorsApprovalPageSummarySchema>;
 export type DirectorsApprovalSummary = z.infer<typeof apiContracts.directorsApprovalSummarySchema>;
 export type DirectorsApprovalState = z.infer<typeof apiContracts.directorsApprovalStateSchema>;
+export type DirectorsApprovalHistoryItem = z.infer<typeof apiContracts.directorsApprovalHistoryItemSchema>;
 export type CroSigningPackSummary = z.infer<typeof apiContracts.croSigningPackSummarySchema>;
 export type AuditorReportSummary = z.infer<typeof apiContracts.auditorReportSummarySchema>;
 export type AccountantReviewSummary = z.infer<typeof apiContracts.accountantReviewSummarySchema>;
@@ -3072,6 +3098,13 @@ export interface DirectorsApprovalRecordInput {
   approvalPageId: number;
   signedPage: Blob;
   resolution: Blob;
+}
+
+export type DirectorsApprovalWithdrawalReason = "entered-in-error" | "board-rescinded" | "superseded";
+
+export interface DirectorsApprovalWithdrawalInput {
+  reason: DirectorsApprovalWithdrawalReason;
+  note: string;
 }
 
 export interface CroSigningPackInput {
@@ -3098,52 +3131,6 @@ export interface AccountantReviewInput {
   membershipNumber: string;
   reviewDate: string;
   reviewLetter?: Blob | null;
-}
-
-export interface EvidenceFilePayload {
-  base64: string;
-  sha256: string;
-}
-
-/** Reads an uploaded evidence file into the base64 body and lowercase hex SHA-256 the filing endpoints verify. */
-export async function readEvidenceFile(file: Blob): Promise<EvidenceFilePayload> {
-  const buffer = await file.arrayBuffer();
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buffer));
-  const sha256 = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-  }
-  return { base64: btoa(binary), sha256 };
-}
-
-/** Room left in the proxy body limit for the JSON field names, the other fields and quoting. */
-const EVIDENCE_UPLOAD_JSON_MARGIN_BYTES = 16 * 1024;
-
-/** Raised in the browser, before anything is sent, when evidence files would exceed the proxy body limit. */
-export class EvidenceUploadTooLargeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "EvidenceUploadTooLargeError";
-  }
-}
-
-/**
- * Evidence files travel base64-encoded in one JSON body (about 4/3 of their size), which must fit
- * the frontend API proxy's body limit. Checks the encoded size before reading or sending anything.
- */
-export function assertEvidenceUploadFits(files: ReadonlyArray<Blob | null | undefined>) {
-  const present = files.filter((file): file is Blob => file != null);
-  const encodedBytes = present.reduce((total, file) => total + Math.ceil(file.size / 3) * 4, 0);
-  const allowedEncodedBytes = DEFAULT_API_PROXY_MAX_BODY_BYTES - EVIDENCE_UPLOAD_JSON_MARGIN_BYTES;
-  if (encodedBytes <= allowedEncodedBytes) return;
-  const maxMegabytes = Math.floor(((allowedEncodedBytes * 3) / 4 / (1024 * 1024)) * 10) / 10;
-  throw new EvidenceUploadTooLargeError(
-    present.length > 1
-      ? `These files are too large to upload together (max about ${maxMegabytes} MB). Please compress or rescan at a lower resolution.`
-      : `This file is too large to upload (max about ${maxMegabytes} MB). Please compress or rescan at a lower resolution.`,
-  );
 }
 
 const directorsApprovalBase = (companyId: number, periodId: number) =>
@@ -3200,6 +3187,21 @@ export const recordDirectorsApproval = async (
     responseContract: "directors' approval record",
   });
 };
+
+/** Withdraws the current directors' approval; it stays in the record, marked as withdrawn. */
+export const withdrawDirectorsApproval = (
+  companyId: number,
+  periodId: number,
+  input: DirectorsApprovalWithdrawalInput,
+  idempotencyKey?: string,
+) =>
+  apiFetch<DirectorsApprovalHistoryItem>(`${directorsApprovalBase(companyId, periodId)}/directors-approval-withdrawal`, {
+    method: "POST",
+    ...idempotentMutation("directors-approval-withdrawal", idempotencyKey),
+    body: JSON.stringify({ reason: input.reason, note: input.note }),
+    responseSchema: apiContracts.directorsApprovalHistoryItemSchema,
+    responseContract: "directors' approval withdrawal",
+  });
 
 export const recordCroSigningPack = async (
   companyId: number,

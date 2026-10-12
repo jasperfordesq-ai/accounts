@@ -152,10 +152,6 @@ public sealed class AccountingConcurrencyInterceptor : SaveChangesInterceptor
 
             foreach (var scope in scopes)
             {
-                var scopedStates = scope.PeriodIds
-                    .Where(periodStates.ContainsKey)
-                    .Select(periodId => periodStates[periodId])
-                    .ToArray();
                 var quarantineTransition = IsCompanyQuarantineTransition(scope.Entry);
                 if (scope.CompanyIds.Any(companyId =>
                         companyStates.TryGetValue(companyId, out var quarantined) && quarantined)
@@ -171,7 +167,9 @@ public sealed class AccountingConcurrencyInterceptor : SaveChangesInterceptor
 
                 if (!quarantineTransition
                     && !IsLockedPeriodWorkflow(scope.Entry)
-                    && scopedStates.Any(state => state.IsLocked))
+                    && scope.PeriodIds.Any(periodId => periodStates.TryGetValue(periodId, out var state)
+                        && state.IsLocked
+                        && !IsVerifiedChartAdoptionWrite(db, scope.Entry, periodId)))
                 {
                     throw await ConflictAsync(db, scope.PeriodIds, periodStates, cancellationToken);
                 }
@@ -226,6 +224,22 @@ public sealed class AccountingConcurrencyInterceptor : SaveChangesInterceptor
             .Select(property => property.Metadata.Name)
             .ToArray();
         return changed.Length > 0 && changed.All(PeriodWorkflowProperties.Contains);
+    }
+
+    // ChartAdoptionService re-codes, archives and inserts a company's accounts and sets its chart variant
+    // only after verifying, under the company lock and in this transaction, that no account it changes has
+    // an entry in any of the company's locked periods; those verified locked periods (and only those) do
+    // not refuse these two kinds of change. Every other check (quarantine, lost update) still applies.
+    private static bool IsVerifiedChartAdoptionWrite(AccountsDbContext db, EntityEntry entry, int periodId)
+    {
+        if (db.ChartAdoptionAllowance is not { } allowance || !allowance.VerifiedLockedPeriodIds.Contains(periodId))
+            return false;
+        if (entry.Entity is AccountCategory category)
+            return category.CompanyId == allowance.CompanyId && entry.State is EntityState.Added or EntityState.Modified;
+        if (entry.Entity is not Company company || company.Id != allowance.CompanyId || entry.State != EntityState.Modified)
+            return false;
+        var changed = entry.Properties.Where(property => property.IsModified).Select(property => property.Metadata.Name).ToArray();
+        return changed.Length > 0 && changed.All(name => name == nameof(Company.ChartOfAccountsVariant));
     }
 
     private static bool IsCompanyQuarantineTransition(EntityEntry entry)

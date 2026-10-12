@@ -15,6 +15,12 @@ public class AccountCategory
     public bool IsNonTradingIncome { get; set; }
     public bool IsSystem { get; set; }
     public int? ParentId { get; set; }
+    // Explicit presentation attributes; null means "derive today's code rules"
+    // (see CategoryClassification / LegacyCategoryClassification).
+    public AccountStatementLine? StatementLine { get; set; }
+    public AccountCashFlowClass? CashFlowClass { get; set; }
+    public AccountSystemRole? SystemRole { get; set; }
+    public bool IsArchived { get; set; }
 
     // Navigation
     [JsonIgnore]

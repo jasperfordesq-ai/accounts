@@ -90,6 +90,25 @@ public class SizeClassification
     public string? QualificationNotes { get; set; }
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
 
+    // Provenance. A HistoricAnchor row's figures were keyed in from accounts filed elsewhere and
+    // attested with retained evidence; the system did not compute them. It roots the next period's
+    // decision chain and is never itself a classification or filing target.
+    public SizeInputBasis InputBasis { get; set; } = SizeInputBasis.Computed;
+    public string? HistoricSourceReference { get; set; }
+    [JsonIgnore]
+    public byte[]? HistoricEvidenceArtifact { get; set; }
+    public string? HistoricEvidenceSha256 { get; set; }
+    public string? HistoricAttestedBy { get; set; }
+    public string? HistoricAttestedRole { get; set; }
+    public DateTime? HistoricAttestedAt { get; set; }
+    // Null means no effective class is attested: the next year treats this year as not qualified.
+    public CompanySizeClass? HistoricAttestedEffectiveClass { get; set; }
+    // Retirement of the anchor by an Owner. The evidence above is kept; once set, these stay with the
+    // row (also after the period is classified from fresh figures) until an anchor is recorded again.
+    public DateTime? HistoricRetiredAt { get; set; }
+    public string? HistoricRetiredBy { get; set; }
+    public string? HistoricRetiredReason { get; set; }
+
     // Navigation
     [JsonIgnore]
     public AccountingPeriod Period { get; set; } = null!;

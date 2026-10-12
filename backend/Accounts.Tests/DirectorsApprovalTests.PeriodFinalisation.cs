@@ -31,7 +31,9 @@ public sealed partial class DirectorsApprovalTests
             NoApiKey()));
 
         Assert.Contains("A directors' approval is recorded for the current approval date", error.Message);
-        Assert.Contains("regenerate the accounts", error.Message);
+        Assert.Equal(
+            "A directors' approval is recorded for the current approval date; withdraw it on the Filing tab before changing the date.",
+            error.Message);
         var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(x => x.Id == p.Id);
         Assert.Equal(new DateOnly(2026, 11, 20), reloaded.ApprovalDate);
         Assert.NotEqual(PeriodStatus.Finalised, reloaded.Status);

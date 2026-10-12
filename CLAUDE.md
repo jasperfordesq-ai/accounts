@@ -191,7 +191,7 @@ Auth, security & platform services:
 ## API endpoints
 
 The committed OpenAPI 3.1 contract is the canonical route and transport-schema inventory:
-`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 183 paths and 196
+`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 193 paths and 228
 schemas. `Docs/architecture/generated-api-contracts.md` documents regeneration and frontend drift
 checks; avoid maintaining a second exhaustive hand-written route count here.
 
@@ -380,7 +380,7 @@ Public Production retains the following contract:
 
 ## Generated/current inventory
 
-- Transport inventory: committed OpenAPI 3.1 contract (183 paths, 196 schemas at this revision).
+- Transport inventory: committed OpenAPI 3.1 contract (193 paths, 228 schemas at this revision).
 - Database inventory: EF model plus append-only migrations; migration/model drift is tested rather
   than represented by a manually maintained count.
 - Test inventory: use test-run output and retained CI evidence for the exact candidate; historical

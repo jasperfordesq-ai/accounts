@@ -61,6 +61,7 @@ public static class TenantIsolationPolicyCatalog
 
         // Tables whose authoritative parent is an accounting period.
         new("size_classifications", TenantOwnershipPath.Period),
+        new("historic_anchor_evidence_records", TenantOwnershipPath.Period),
         new("filing_regimes", TenantOwnershipPath.Period),
         new("cro_filing_packages", TenantOwnershipPath.Period),
         new("directors_approval_pages", TenantOwnershipPath.Period),

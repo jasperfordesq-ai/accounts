@@ -54,6 +54,67 @@ export const companySizeSchema = z.enum(["Micro", "Small", "Medium", "Large"]);
 export const electedRegimeSchema = z.enum(["Micro", "Small", "SmallAbridged", "Medium", "Full"]);
 export const officerRoleSchema = z.enum(["Director", "Secretary", "CompanySecretary"]);
 export const accountCategoryTypeSchema = z.enum(["Income", "Expense", "Asset", "Liability", "Equity"]);
+export const chartOfAccountsVariantSchema = z.enum(["GenericTrading", "CharityClg"]);
+export const accountStatementLineSchema = z.enum([
+  "TangibleFixedAssets",
+  "Stocks",
+  "Debtors",
+  "Prepayments",
+  "CashAtBank",
+  "TradeCreditors",
+  "Accruals",
+  "TaxCreditors",
+  "OtherCreditorsWithinYear",
+  "LoansAfterYear",
+  "OtherCreditorsAfterYear",
+  "ShareCapital",
+  "Reserves",
+  "RestrictedFunds",
+  "DividendsPaid",
+  "Suspense",
+  "OpeningBalanceControl",
+  "Turnover",
+  "OtherOperatingIncome",
+  "CostOfSales",
+  "AdministrativeExpenses",
+  "Depreciation",
+  "InterestPayable",
+  "TaxOnProfit",
+]);
+export const accountCashFlowClassSchema = z.enum([
+  "Operating",
+  "Investing",
+  "Tax",
+  "Dividend",
+  "Loan",
+  "ShareIssue",
+  "OtherFinancing",
+  "Cash",
+]);
+export const accountSystemRoleSchema = z.enum([
+  "BankControl",
+  "RetainedEarnings",
+  "Depreciation",
+  "Prepayments",
+  "Stock",
+  "CostOfSalesStockMovement",
+  "Accruals",
+  "TradeDebtors",
+  "TradeDebtorIncome",
+  "TradeCreditors",
+  "DirectorLoanLiability",
+  "DirectorLoanReceivable",
+  "CorporationTaxCharge",
+  "CorporationTaxPayable",
+  "DividendsPaid",
+  "DividendsPayable",
+  "DisposalLoss",
+  "DisposalGain",
+  "VatPayable",
+  "VatReceivable",
+  "Suspense",
+  "OpeningBalanceControl",
+]);
 export const filingStatusSchema = z.enum([
   "NotStarted",
   "InProgress",
@@ -104,7 +165,32 @@ export const sizeClassificationSchema = z.object({
   calculatedClass: companySizeSchema.nullable().optional().transform((value) => value ?? undefined),
   overrideRequiresRereview: z.boolean().nullable().optional().transform((value) => value ?? undefined),
   qualificationNotes: optionalText,
+  // Provenance: HistoricAnchor figures were keyed in from accounts filed elsewhere, not computed here.
+  // RetiredHistoricAnchor figures were retired by an Owner and are kept as evidence only.
+  inputBasis: z.enum(["Computed", "HistoricAnchor", "RetiredHistoricAnchor"]).nullable().optional().transform((value) => value ?? undefined),
+  historicSourceReference: optionalText,
+  historicEvidenceSha256: z.string().regex(/^[a-f0-9]{64}$/i).nullable().optional().transform((value) => value ?? undefined),
+  historicAttestedBy: optionalText,
+  historicAttestedRole: optionalText,
+  historicAttestedAt: optionalDateTime,
+  historicAttestedEffectiveClass: companySizeSchema.nullable().optional().transform((value) => value ?? undefined),
+  historicRetiredAt: optionalDateTime,
+  historicRetiredBy: optionalText,
+  historicRetiredReason: optionalText,
 }).superRefine((classification, context) => {
+  if (classification.inputBasis === "HistoricAnchor" || classification.inputBasis === "RetiredHistoricAnchor") {
+    for (const field of ["historicSourceReference", "historicEvidenceSha256", "historicAttestedBy", "historicAttestedRole"] as const) {
+      if (!classification[field]) addIssue(context, [field], "Historic figures must carry their source, evidence and attestation");
+    }
+  }
+  if (classification.inputBasis === "RetiredHistoricAnchor") {
+    for (const field of ["historicRetiredAt", "historicRetiredBy", "historicRetiredReason"] as const) {
+      if (!classification[field]) addIssue(context, [field], "Retired historic figures must record who retired them, when and why");
+    }
+    if (classification.decisionInputFingerprintSha256) {
+      addIssue(context, ["decisionInputFingerprintSha256"], "Retired historic figures are never a classification decision");
+    }
+  }
   // Saved inputs without a current engine decision are a legitimate state ("not yet classified").
   // The API reports the decision fields as absent then; a decision must carry all of them.
   const decisionFields = ["calculatedClass", "rawCurrentClass", "periodLengthInYears", "annualisedTurnover"] as const;
@@ -134,6 +220,34 @@ export const classificationResultSchema = z.object({
   periodLengthInYears: z.number().finite().positive().max(2),
   thresholdScheduleCode: optionalText,
   thresholdScheduleEffectiveFrom: optionalDate,
+});
+
+/** Read-only preflight: which earlier period must be classified first (Companies Act 2014, s.280A). */
+const classificationPeriodSchema = z.object({
+  periodId: positiveIdSchema,
+  periodStart: isoDateSchema,
+  periodEnd: isoDateSchema,
+  reason: z.string().min(1),
+}).superRefine((blocking, context) => {
+  if (blocking.periodEnd < blocking.periodStart) addIssue(context, ["periodEnd"], "Period end precedes period start");
+});
+
+export const classificationPrerequisitesSchema = z.object({
+  ready: z.boolean(),
+  isFirstYear: z.boolean(),
+  firstBlockingPeriod: classificationPeriodSchema.nullable(),
+  message: z.string().min(1),
+  // The second route: key in the immediately preceding period's figures from its filed accounts.
+  historicFiguresPeriod: classificationPeriodSchema.nullable().optional().transform((value) => value ?? null),
+  canRecordHistoricFigures: z.boolean().optional().transform((value) => value ?? false),
+  suggestedThresholdElection: isoDateSchema.nullable().optional().transform((value) => value ?? null),
+}).superRefine((prerequisites, context) => {
+  if (prerequisites.ready && prerequisites.firstBlockingPeriod !== null) {
+    addIssue(context, ["firstBlockingPeriod"], "A ready period cannot have a blocking period");
+  }
+  if (prerequisites.ready && prerequisites.historicFiguresPeriod !== null) {
+    addIssue(context, ["historicFiguresPeriod"], "A ready period needs no historic figures");
+  }
 });
 
 export const filingRegimeSchema = z.object({
@@ -210,6 +324,7 @@ export const companySchema = z.object({
   holdsCharitableTaxExemption: z.boolean().optional().default(false),
   charitableTaxExemptionReference: optionalText,
   charitableTaxExemptionConfirmedDate: optionalDate,
+  chartOfAccountsVariant: chartOfAccountsVariantSchema.optional(),
   assignedReviewerName: optionalText,
   assignedReviewerEmail: z.string().email().nullable().optional().transform((value) => value ?? undefined),
   latestPeriod: accountingPeriodSchema.nullable().optional().transform((value) => value ?? undefined),
@@ -235,6 +350,11 @@ export const accountCategorySchema = z.object({
   code: z.string().trim().min(1),
   name: z.string().trim().min(1),
   type: accountCategoryTypeSchema,
+  // Explicit presentation attributes; null/absent on rows not yet classified.
+  statementLine: accountStatementLineSchema.nullable().optional(),
+  cashFlowClass: accountCashFlowClassSchema.nullable().optional(),
+  systemRole: accountSystemRoleSchema.nullable().optional(),
+  isArchived: z.boolean().optional(),
 });
 
 export const importedTransactionSchema = z.object({
@@ -768,6 +888,7 @@ const balanceSheetSchemaBase = z.object({
     taxCreditors: moneySchema,
     otherCreditors: moneySchema,
     total: moneySchema,
+    bankOverdraft: moneySchema.optional(),
   }),
   netCurrentAssets: moneySchema,
   totalAssetsLessCurrentLiabilities: moneySchema,
@@ -784,6 +905,13 @@ const balanceSheetSchemaBase = z.object({
     unexplainedDifference: moneySchema,
   }),
   balances: z.boolean(),
+  membersFunds: z.object({
+    fundsBroughtForward: moneySchema,
+    surplusForYear: moneySchema,
+    otherMovements: moneySchema,
+    restrictedFunds: moneySchema,
+    total: moneySchema,
+  }).optional(),
 });
 
 export const balanceSheetSchema = balanceSheetSchemaBase.superRefine((statement, context) => {
@@ -791,7 +919,8 @@ export const balanceSheetSchema = balanceSheetSchemaBase.superRefine((statement,
   const currentAssetTotal = statement.currentAssets.stock + statement.currentAssets.debtors
     + statement.currentAssets.prepayments + statement.currentAssets.cash;
   const currentCreditorTotal = statement.creditorsWithinYear.tradeCreditors + statement.creditorsWithinYear.accruals
-    + statement.creditorsWithinYear.taxCreditors + statement.creditorsWithinYear.otherCreditors;
+    + statement.creditorsWithinYear.taxCreditors + statement.creditorsWithinYear.otherCreditors
+    + (statement.creditorsWithinYear.bankOverdraft ?? 0);
   const afterYearTotal = statement.creditorsAfterYear.loans + statement.creditorsAfterYear.other;
   const expectedRetained = statement.capitalAndReserves.openingRetainedEarnings
     + statement.capitalAndReserves.profitForYear
@@ -809,12 +938,23 @@ export const balanceSheetSchema = balanceSheetSchemaBase.superRefine((statement,
     [["capitalAndReserves", "total"], statement.capitalAndReserves.total, statement.capitalAndReserves.shareCapital + statement.capitalAndReserves.retainedEarnings],
     [["capitalAndReserves", "unexplainedDifference"], statement.capitalAndReserves.unexplainedDifference, statement.netAssets - statement.capitalAndReserves.total],
   ];
+  if (statement.membersFunds) {
+    const funds = statement.membersFunds;
+    checks.push(
+      [["membersFunds", "total"], funds.total, statement.capitalAndReserves.total],
+      [["membersFunds", "total"], funds.total, statement.capitalAndReserves.shareCapital + funds.fundsBroughtForward
+        + funds.surplusForYear + funds.otherMovements + funds.restrictedFunds],
+    );
+  }
   checks.forEach(([path, actual, expected]) => {
     if (!near(actual, expected)) addIssue(context, path, `Expected reconciled value ${expected}`);
   });
   const expectedBalances = Math.abs(statement.capitalAndReserves.unexplainedDifference) < 0.01;
   if (statement.balances !== expectedBalances) addIssue(context, ["balances"], "balances flag contradicts unexplainedDifference");
 });
+
+// The description of the corporation-tax line that removes income within a charitable exemption.
+export const CHARITABLE_EXEMPTION_ADJUSTMENT_PREFIX = "Income within the charitable exemption";
 
 export const taxComputationSchema = z.object({
   accountingProfit: moneySchema,
@@ -855,7 +995,11 @@ export const taxComputationSchema = z.object({
   if (!near(tax.balanceDue, tax.totalCorporationTax - tax.preliminaryTaxPaid)) {
     addIssue(context, ["balanceDue"], "Balance due does not reconcile");
   }
-  if (!near(tax.taxableProfit, tax.tradingProfitAfterLossRelief + Math.max(0, tax.passiveNonTradingIncome))) {
+  // A confirmed exempt company carries one "income within the charitable exemption" deduction line.
+  const charitableExemption = tax.adjustments
+    .filter((adjustment) => adjustment.description.startsWith(CHARITABLE_EXEMPTION_ADJUSTMENT_PREFIX))
+    .reduce((total, adjustment) => total + adjustment.amount, 0);
+  if (!near(tax.taxableProfit, tax.tradingProfitAfterLossRelief + Math.max(0, tax.passiveNonTradingIncome) + charitableExemption)) {
     addIssue(context, ["taxableProfit"], "Taxable profit does not reconcile to trading and passive streams");
   }
   if (!near(
@@ -1722,11 +1866,25 @@ export const directorsApprovalSummarySchema = z.object({
   recordedAtUtc: isoDateTimeSchema,
   recordSha256: sha256Schema,
 });
+export const directorsApprovalHistoryItemSchema = z.object({
+  eventId: positiveIdSchema,
+  kind: z.enum(["Approved", "Revoked"]),
+  approvalDate: isoDateSchema,
+  reason: z.string().trim().min(1).nullable(),
+  recordedByDisplayName: z.string().trim().min(1),
+  recordedAtUtc: isoDateTimeSchema,
+  recordSha256: sha256Schema,
+}).superRefine((item, context) => {
+  if ((item.reason === null) !== (item.kind === "Approved")) {
+    addIssue(context, ["reason"], "A revocation carries its reason; an approval has none");
+  }
+});
 export const directorsApprovalStateSchema = z.object({
   eligibleDirectors: z.array(directorOptionSchema),
   latestPage: directorsApprovalPageSummarySchema.nullable(),
   current: directorsApprovalSummarySchema.nullable(),
   periodApprovalDate: isoDateSchema.nullable(),
+  history: z.array(directorsApprovalHistoryItemSchema),
 });
 export const croSigningPackSummarySchema = z.object({
   signedByDirector: z.string().trim().min(1),
@@ -2098,8 +2256,9 @@ const corporationTaxBridgeSchema = z.object({
   blockingReasons: z.array(z.string().trim().min(1)),
   artifactSha256: workingPaperSha256Schema,
 }).strict().superRefine((artifact, context) => {
+  const charitableExemption = artifact.rows.find((row) => row.code === "charitable-exemption")?.amount ?? 0;
   if (!near(artifact.taxableProfit,
-    Math.max(0, artifact.tradingProfitAfterLossRelief) + Math.max(0, artifact.passiveNonTradingIncome))) {
+    Math.max(0, artifact.tradingProfitAfterLossRelief) + Math.max(0, artifact.passiveNonTradingIncome) + charitableExemption)) {
     addIssue(context, ["taxableProfit"], "Taxable profit does not equal the supported tax streams");
   }
   if (!near(artifact.balanceDue, artifact.corporationTaxDue - artifact.preliminaryTaxPaid)) {

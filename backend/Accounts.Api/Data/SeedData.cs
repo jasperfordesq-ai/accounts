@@ -836,6 +836,8 @@ public static class SeedData
             category.Type = seed.Type;
             category.TaxTreatment = seed.TaxTreatment;
             category.IsSystem = true;
+            if (category.StatementLine is null)
+                CategoryClassification.ClassifyNew(category, byCode.Values);
         }
 
         await db.SaveChangesAsync();

@@ -144,7 +144,7 @@ public static class PeriodStatusEndpoint
     /// <summary>
     /// Companies Act 2014 s.324: the board approves the accounts on or after the period end and not in
     /// the future. A recorded date may be corrected only while no current directors' approval binds
-    /// it; regenerating the accounts withdraws that approval first.
+    /// it; that approval is withdrawn first (on the Filing tab), or by regenerating changed accounts.
     /// </summary>
     private static async Task AssertBoardApprovalDateCanBeSetAsync(
         AccountsDbContext db,
@@ -172,7 +172,7 @@ public static class PeriodStatusEndpoint
             .ToListAsync(cancellationToken);
         if (DirectorsApprovalService.ResolveCurrent(events, pages, cro) is not null)
             throw new BusinessRuleException(
-                "A directors' approval is recorded for the current approval date; regenerate the accounts (which withdraws it) before changing the date.");
+                "A directors' approval is recorded for the current approval date; withdraw it on the Filing tab before changing the date.");
     }
 
     private static async Task AssertFilingObligationsRecordedAsync(
@@ -182,17 +182,17 @@ public static class PeriodStatusEndpoint
         int periodId,
         string auditUserId)
     {
-        var company = await db.Companies
+        var isCharitableOrganisation = await db.Companies
             .AsNoTracking()
             .Where(c => c.Id == companyId)
-            .Select(c => new { c.IsCharitableOrganisation, c.HoldsCharitableTaxExemption })
+            .Select(c => c.IsCharitableOrganisation)
             .SingleAsync();
-        var requiredTypes = (company.IsCharitableOrganisation, company.HoldsCharitableTaxExemption) switch
-        {
-            (true, false) => new[] { DeadlineType.CRO, DeadlineType.Revenue, DeadlineType.Charity },
-            (true, true)  => new[] { DeadlineType.CRO, DeadlineType.Charity },
-            _             => new[] { DeadlineType.CRO, DeadlineType.Revenue },
-        };
+        // Revenue applies unless the company holds a charitable tax exemption and nothing is confirmed due.
+        var requiredTypes = new List<DeadlineType> { DeadlineType.CRO };
+        if (await CorporationTaxObligation.RevenueAppliesAsync(db, periodId))
+            requiredTypes.Add(DeadlineType.Revenue);
+        if (isCharitableOrganisation)
+            requiredTypes.Add(DeadlineType.Charity);
         var deadlines = await db.FilingDeadlines
             .AsNoTracking()
             .Where(d => d.CompanyId == companyId && d.PeriodId == periodId)

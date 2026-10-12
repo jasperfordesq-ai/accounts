@@ -244,9 +244,9 @@ public sealed class FilingReleaseGate
                 package,
                 sourceChanged ? "accounts-source-changed" : "accounts-regenerated")
             : null;
-        package.FilingStatus = package.AccountsPdfGenerated && package.SignaturePageGenerated
-            ? FilingStatus.PackageGenerated
-            : FilingStatus.InProgress;
+        // A filing sent back for correction or rejected stays in that state (the correction tracker)
+        // until the corrected pack is resubmitted or the filing is treated as not delivered.
+        ReturnCroToPreApprovalStatus(package);
 
         await _db.SaveChangesAsync();
         await LogDirectorsApprovalRevokedAsync(period, directorsRevocation, auditUserId);
@@ -282,7 +282,8 @@ public sealed class FilingReleaseGate
             RevokeRevenueApproval(package);
             ClearExternalRevenueValidation(package);
         }
-        package.FilingStatus = FilingStatus.InProgress;
+        if (!IsInCorrection(package.FilingStatus))
+            package.FilingStatus = FilingStatus.InProgress;
 
         await _db.SaveChangesAsync();
         await LogGeneratedAsync(period, FilingReleaseArtifact.RevenueIxbrl, hash, candidate, auditUserId);
@@ -360,7 +361,13 @@ public sealed class FilingReleaseGate
         package.GeneratedAt = DateTime.UtcNow;
         if (candidateChanged || sourceChanged || contentChanged)
             RevokeCharityApproval(package);
-        if (package.SofaGenerated && package.TrusteesReportGenerated)
+        if (HasOpenCorrection(package))
+        {
+            // The correction tracker (status, reference, deadline) stays until the filing is resubmitted.
+            if (!IsInCorrection(package.FilingStatus))
+                package.FilingStatus = FilingStatus.CorrectionRequired;
+        }
+        else if (package.SofaGenerated && package.TrusteesReportGenerated)
         {
             package.FilingStatus = FilingStatus.PackageGenerated;
             package.Status = FilingPackageStatus.Generated;
@@ -399,6 +406,10 @@ public sealed class FilingReleaseGate
         package.SignedPdfArtifact = evidence.SignedArtifact.ToArray();
         package.SignedPdfSha256 = evidence.SignedArtifactSha256.ToLowerInvariant();
         RevokeCroApproval(package);
+        // A corrected pack approved during an open correction returns to the correction, as on every
+        // other revoke path; outside a correction the status is left exactly as before.
+        if (HasOpenCorrection(package))
+            ReturnCroToPreApprovalStatus(package);
         await _db.SaveChangesAsync();
         await LogEvidenceAsync(period, "CRO executed signing pack", package.SignedPdfSha256, auditUserId);
         return package;
@@ -447,7 +458,7 @@ public sealed class FilingReleaseGate
             period.CroFilingPackage.AccountsPdfGenerated = false;
             period.CroFilingPackage.SignaturePageGenerated = false;
             ClearCroSignatureEvidence(period.CroFilingPackage);
-            period.CroFilingPackage.FilingStatus = FilingStatus.InProgress;
+            ReturnCroToPreApprovalStatus(period.CroFilingPackage);
         }
         await _db.SaveChangesAsync();
         await LogDirectorsApprovalRevokedAsync(period, directorsRevocation, auditUserId);
@@ -815,6 +826,8 @@ public sealed class FilingReleaseGate
             Block("Final filing release requires a finalised and locked accounting period.");
         if (period.SizeClassification is null)
             Block("Final filing release requires a current size classification.");
+        if (period.SizeClassification.InputBasis != SizeInputBasis.Computed)
+            Block("Final filing release cannot rest on historic figures keyed in from accounts filed elsewhere; this period is evidence for the following year only.");
         if (period.FilingRegime is null)
             Block("Final filing release requires a determined filing regime.");
 
@@ -1336,11 +1349,136 @@ public sealed class FilingReleaseGate
         if (package?.ApprovedBy is null || package.FilingStatus is FilingStatus.Submitted or FilingStatus.Accepted)
             return false;
         RevokeCroApproval(package);
-        // Back to the pre-approval state RecordCroArtifactAsync derives, so the pack no longer reads as Approved.
+        // Back to the pre-approval state RecordCroArtifactAsync derives, so the pack no longer reads as
+        // Approved; a filing in correction keeps its correction tracker.
+        ReturnCroToPreApprovalStatus(package);
+        return true;
+    }
+
+    /// <summary>
+    /// The board's s.324 approval was withdrawn: revoke every filing-package approval bound to the board
+    /// in the caller's unit of work (the caller saves) and return each revoked package to its
+    /// pre-approval status, as the other revocations do. A package already recorded as externally
+    /// submitted or accepted was filed under that approval and is left to its correction workflow, so
+    /// the withdrawal is refused before anything changes. A package sent back for correction or rejected
+    /// keeps its correction tracker (status and external reference); only its approval is revoked.
+    /// Returns the workflows whose approval was revoked.
+    /// </summary>
+    public static IReadOnlyList<string> RevokeApprovalsBoundToWithdrawnBoardApproval(AccountingPeriod period)
+    {
+        var filed = new (string Label, FilingStatus? Status)[]
+            {
+                ("CRO", period.CroFilingPackage?.FilingStatus),
+                ("Revenue", period.RevenueFilingPackage?.FilingStatus),
+                ("Charity", period.CharityFilingPackage?.FilingStatus)
+            }
+            .FirstOrDefault(p => p.Status is FilingStatus.Submitted or FilingStatus.Accepted);
+        if (filed.Label is not null)
+            throw new BusinessRuleException($"The {filed.Label} filing is recorded as submitted or accepted under this approval; record a correction before withdrawing the directors' approval.");
+
+        var revoked = new List<string>();
+        if (period.CroFilingPackage is { ApprovalCapacity: BoardApprovalCapacity } cro)
+        {
+            RevokeCroApproval(cro);
+            ReturnCroToPreApprovalStatus(cro);
+            revoked.Add("CRO");
+        }
+        if (period.RevenueFilingPackage is { ApprovalCapacity: BoardApprovalCapacity } revenue)
+        {
+            RevokeRevenueApproval(revenue);
+            if (!IsInCorrection(revenue.FilingStatus))
+                revenue.FilingStatus = FilingStatus.InProgress;
+            revoked.Add("Revenue");
+        }
+        if (period.CharityFilingPackage is { ApprovalCapacity: BoardApprovalCapacity } charity)
+        {
+            RevokeCharityApproval(charity);
+            if (HasOpenCorrection(charity))
+            {
+                if (!IsInCorrection(charity.FilingStatus))
+                    charity.FilingStatus = FilingStatus.CorrectionRequired;
+            }
+            else
+            {
+                charity.FilingStatus = charity.SofaGenerated && charity.TrusteesReportGenerated
+                    ? FilingStatus.PackageGenerated
+                    : FilingStatus.InProgress;
+            }
+            revoked.Add("Charity");
+        }
+        return revoked;
+    }
+
+    /// <summary>
+    /// A filing the regulator sent back for correction or rejected. Until the corrected pack is
+    /// resubmitted (or the CRO filing is treated as not delivered), revoking an approval revokes only
+    /// the approval: the status, the external submission reference and the correction deadline stay.
+    /// </summary>
+    public static bool IsInCorrection(FilingStatus status) =>
+        status is FilingStatus.CorrectionRequired or FilingStatus.Rejected;
+
+    /// <summary>The CRO and the Charities Regulator allow 14 days to correct and redeliver a sent-back filing.</summary>
+    public const int CorrectionWindowDays = 14;
+
+    // The send-back (its deadline less the correction window) must post-date the recorded submission, so a
+    // send-back left on a filing that was resubmitted before these fields were cleared is not reopened.
+    private static bool SentBackAfterSubmission(DateTime correctionDeadline, DateTime? submittedAt) =>
+        submittedAt is null || correctionDeadline.AddDays(-CorrectionWindowDays) >= submittedAt.Value;
+
+    /// <summary>
+    /// The CRO correction is open while the filing is sent back or rejected, and also after the corrected
+    /// pack is approved but not yet resubmitted: the send-back's correction deadline (or, for a rejection,
+    /// its recorded reason) is still set against the original CORE reference. Recording the new submission
+    /// or treating the filing as not delivered clears both and so closes the correction.
+    /// </summary>
+    public static bool HasOpenCorrection(CroFilingPackage package) =>
+        IsInCorrection(package.FilingStatus)
+        || (!string.IsNullOrWhiteSpace(package.CroSubmissionReference)
+            && package.FilingStatus is not (FilingStatus.Submitted or FilingStatus.Accepted)
+            && (package.CorrectionDeadline is { } deadline
+                ? SentBackAfterSubmission(deadline, package.SubmittedAt)
+                : package.RejectionReason is not null));
+
+    /// <summary>The charity annual return's equivalent of <see cref="HasOpenCorrection(CroFilingPackage)"/>.</summary>
+    public static bool HasOpenCorrection(CharityFilingPackage package) =>
+        IsInCorrection(package.FilingStatus)
+        || (package.CorrectionDeadline is { } deadline
+            && SentBackAfterSubmission(deadline, package.SubmittedAt)
+            && !string.IsNullOrWhiteSpace(package.AnnualReturnReference)
+            && package.FilingStatus is not (FilingStatus.Submitted or FilingStatus.Accepted));
+
+    /// <summary>
+    /// After an approval is revoked: a sent-back or rejected filing keeps its status, a corrected pack
+    /// approved during an open correction returns to CorrectionRequired, and any other pack returns to the
+    /// pre-approval state its artifacts support. A rejection (no correction deadline) returns to Rejected.
+    /// </summary>
+    private static void ReturnCroToPreApprovalStatus(CroFilingPackage package)
+    {
+        if (IsInCorrection(package.FilingStatus))
+            return;
+        package.FilingStatus = HasOpenCorrection(package)
+            ? package.CorrectionDeadline is null ? FilingStatus.Rejected : FilingStatus.CorrectionRequired
+            : package.AccountsPdfGenerated && package.SignaturePageGenerated
+                ? FilingStatus.PackageGenerated
+                : FilingStatus.InProgress;
+    }
+
+    /// <summary>
+    /// Closes a CRO correction that the CRO treats as not delivered, in the caller's unit of work (the
+    /// caller saves and audits the prior state): the status returns to the pre-approval state, and the
+    /// approval and the external submission (reference, submitter, payment) are cleared, so the filing
+    /// is made afresh.
+    /// </summary>
+    public static void CloseCroCorrectionAsNotDelivered(CroFilingPackage package)
+    {
+        if (!HasOpenCorrection(package))
+            throw new BusinessRuleException("Only a CRO filing that was sent back for correction or rejected can be treated as not delivered.");
+        package.CorrectionDeadline = null;
+        package.RejectionReason = null;
         package.FilingStatus = package.AccountsPdfGenerated && package.SignaturePageGenerated
             ? FilingStatus.PackageGenerated
             : FilingStatus.InProgress;
-        return true;
+        RevokeCroApproval(package);
     }
 
     private static void RevokeCroApproval(CroFilingPackage package)
@@ -1355,10 +1493,12 @@ public sealed class FilingReleaseGate
         package.ApprovalDecision = null;
         package.ApproverVerificationReference = null;
         package.ApproverCredentialValidUntil = null;
+        package.PaymentCompleted = false;
+        if (HasOpenCorrection(package))
+            return;
         package.SubmittedBy = null;
         package.SubmittedAt = null;
         package.CroSubmissionReference = null;
-        package.PaymentCompleted = false;
     }
 
     /// <summary>
@@ -1392,7 +1532,8 @@ public sealed class FilingReleaseGate
         package.ApproverVerificationArtifactSha256 = null;
         package.ApproverVerifiedAt = null;
         package.ApproverCredentialValidUntil = null;
-        package.Ct1Reference = null;
+        if (!IsInCorrection(package.FilingStatus))
+            package.Ct1Reference = null;
     }
 
     private static void RevokeCharityApproval(CharityFilingPackage package)
@@ -1412,10 +1553,12 @@ public sealed class FilingReleaseGate
         package.ApproverVerificationArtifactSha256 = null;
         package.ApproverVerifiedAt = null;
         package.ApproverCredentialValidUntil = null;
-        package.SubmittedBy = null;
-        package.SubmittedAt = null;
         package.AcceptedBy = null;
         package.AcceptedAt = null;
+        if (HasOpenCorrection(package))
+            return;
+        package.SubmittedBy = null;
+        package.SubmittedAt = null;
         package.AnnualReturnReference = null;
     }
 

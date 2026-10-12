@@ -58,6 +58,8 @@ public static partial class YearEndEndpoints
                 error = "Opening balances cannot be posted to income or expense accounts. "
                     + "Carry the brought-forward profit or loss to retained earnings instead."
             });
+        if (AccountCategoryTargets.RefusalReason(category, openingBalance: true) is { } refusal)
+            return Results.BadRequest(new { error = refusal });
 
         var balance = await db.OpeningBalances
             .FirstOrDefaultAsync(o => o.PeriodId == periodId && o.AccountCategoryId == categoryId);

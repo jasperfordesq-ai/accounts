@@ -8,6 +8,7 @@ public static class EndpointRegistration
         app.MapUserAdministrationEndpoints();
         app.MapClassificationEndpoints();
         app.MapBankingEndpoints();
+        app.MapChartAdoptionEndpoints();
         app.MapYearEndEndpoints();
         app.MapAdjustmentEndpoints();
         app.MapStatementsEndpoints();

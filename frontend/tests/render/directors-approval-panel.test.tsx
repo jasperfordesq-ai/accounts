@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({
   getDirectorsApproval: vi.fn(),
   generateDirectorsApprovalPage: vi.fn(),
   recordDirectorsApproval: vi.fn(),
+  withdrawDirectorsApproval: vi.fn(),
 }));
 vi.mock("@/lib/api", async (original) => ({ ...(await original<typeof import("@/lib/api")>()), ...api }));
 vi.mock("@/components/AuthProvider", () => ({ useAuth: () => ({ reauthenticate: vi.fn() }) }));
@@ -24,6 +25,34 @@ const page = {
   accountsPdfSha256: "a".repeat(64),
   recordSha256: "d".repeat(64),
   generatedAtUtc: "2026-11-20T10:00:00Z",
+};
+
+const currentApproval = {
+  eventId: 7,
+  page,
+  signedPageSha256: "e".repeat(64),
+  resolutionSha256: "f".repeat(64),
+  recordedByDisplayName: "Firm Owner",
+  recordedAtUtc: "2026-11-21T09:00:00Z",
+  recordSha256: "9".repeat(64),
+};
+
+const approvedEvent = {
+  eventId: 7,
+  kind: "Approved",
+  approvalDate: "2026-11-20",
+  reason: null,
+  recordedByDisplayName: "Firm Owner",
+  recordedAtUtc: "2026-11-21T09:00:00Z",
+  recordSha256: "9".repeat(64),
+};
+
+const recordedState = {
+  eligibleDirectors: [],
+  latestPage: page,
+  current: currentApproval,
+  periodApprovalDate: "2026-11-20",
+  history: [approvedEvent],
 };
 
 const threeDirectors = [
@@ -205,5 +234,101 @@ describe("DirectorsApprovalPanel", () => {
     await user.upload(screen.getByLabelText("Minute or written resolution (PDF)"), new File(["b"], "b.pdf", { type: "application/pdf" }));
     await user.click(screen.getByRole("button", { name: "Record directors' approval" }));
     expect(await screen.findByText(/Verify with your password and authenticator code/i)).toBeInTheDocument();
+  });
+
+  it("lets an Owner or Reviewer withdraw the recorded approval after a plain confirmation", async () => {
+    const user = userEvent.setup();
+    api.getDirectorsApproval.mockResolvedValue(recordedState);
+    api.withdrawDirectorsApproval.mockResolvedValue({ ...approvedEvent, eventId: 8, kind: "Revoked", reason: "withdrawn-board-rescinded" });
+    const onChanged = vi.fn();
+    render(<DirectorsApprovalPanel companyId={1} periodId={9} canRecord onChanged={onChanged} />);
+
+    const recorded = await screen.findByRole("region", { name: "Recorded directors' approval" });
+    await user.click(within(recorded).getByRole("button", { name: "Withdraw approval" }));
+    const reason = within(recorded).getByLabelText("Reason for withdrawal");
+    expect(within(reason).getAllByRole("option").map((o) => o.textContent)).toEqual(expect.arrayContaining([
+      "Entered in error",
+      "Board rescinded the approval",
+      "Superseded by a new approval",
+    ]));
+    await user.selectOptions(reason, "board-rescinded");
+    await user.type(within(recorded).getByLabelText("Why is it being withdrawn?"), "The board rescinded it at the meeting of 2 December.");
+    await user.click(within(recorded).getByRole("button", { name: "Continue" }));
+
+    expect(within(recorded).getByText("The approval stays in the permanent record marked as withdrawn; it can never be deleted.")).toBeInTheDocument();
+    expect(api.withdrawDirectorsApproval).not.toHaveBeenCalled();
+    await user.click(within(recorded).getByRole("button", { name: "Confirm withdrawal" }));
+
+    await waitFor(() => expect(api.withdrawDirectorsApproval).toHaveBeenCalledWith(1, 9, {
+      reason: "board-rescinded",
+      note: "The board rescinded it at the meeting of 2 December.",
+    }));
+    await waitFor(() => expect(api.getDirectorsApproval).toHaveBeenCalledTimes(2));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("does not offer withdrawal without the Owner or Reviewer permission", async () => {
+    api.getDirectorsApproval.mockResolvedValue(recordedState);
+    render(<DirectorsApprovalPanel companyId={1} periodId={9} canRecord={false} canGenerate={false} />);
+    await screen.findByRole("region", { name: "Recorded directors' approval" });
+    expect(screen.queryByRole("button", { name: "Withdraw approval" })).not.toBeInTheDocument();
+  });
+
+  it("needs a reason and a note of at least three characters before confirming", async () => {
+    const user = userEvent.setup();
+    api.getDirectorsApproval.mockResolvedValue(recordedState);
+    render(<DirectorsApprovalPanel companyId={1} periodId={9} canRecord />);
+    await user.click(await screen.findByRole("button", { name: "Withdraw approval" }));
+    await user.type(screen.getByLabelText("Why is it being withdrawn?"), "no");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.queryByRole("button", { name: "Confirm withdrawal" })).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Reason for withdrawal"), "entered-in-error");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.queryByRole("button", { name: "Confirm withdrawal" })).not.toBeInTheDocument();
+    expect(api.withdrawDirectorsApproval).not.toHaveBeenCalled();
+  });
+
+  it("asks for recent verification beside, not inside, the withdrawal controls", async () => {
+    const user = userEvent.setup();
+    api.getDirectorsApproval.mockResolvedValue(recordedState);
+    api.withdrawDirectorsApproval.mockRejectedValue(
+      new ApiError(428, "Precondition Required", JSON.stringify({ code: "recent_mfa_required", error: "Recent authenticator verification is required for this operation." })),
+    );
+    render(<DirectorsApprovalPanel companyId={1} periodId={9} canRecord />);
+    await user.click(await screen.findByRole("button", { name: "Withdraw approval" }));
+    await user.selectOptions(screen.getByLabelText("Reason for withdrawal"), "entered-in-error");
+    await user.type(screen.getByLabelText("Why is it being withdrawn?"), "Recorded against the wrong minute.");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Confirm withdrawal" }));
+
+    const prompt = await screen.findByRole("form", { name: "Recent verification" });
+    expect(prompt.parentElement?.closest("form")).toBeNull();
+    // The confirmation stays open so the user can repeat the action once verified.
+    expect(screen.getByRole("button", { name: "Confirm withdrawal" })).toBeInTheDocument();
+  });
+
+  it("lists the approval history with withdrawals and their reasons", async () => {
+    api.getDirectorsApproval.mockResolvedValue({
+      eligibleDirectors: threeDirectors,
+      latestPage: page,
+      current: null,
+      periodApprovalDate: "2026-11-20",
+      history: [
+        { ...approvedEvent, eventId: 9, kind: "Revoked", reason: "accounts-regenerated", recordedByDisplayName: "FilingBridge", recordedAtUtc: "2026-11-23T09:00:00Z" },
+        { ...approvedEvent, eventId: 8, kind: "Revoked", reason: "withdrawn-entered-in-error", recordedByDisplayName: "Firm Reviewer", recordedAtUtc: "2026-11-22T09:00:00Z" },
+        approvedEvent,
+      ],
+    });
+    render(<DirectorsApprovalPanel companyId={1} periodId={9} canRecord />);
+    const history = await screen.findByRole("region", { name: "Directors' approval history" });
+    const items = within(history).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveTextContent(/Withdrawn automatically: the accounts were regenerated/);
+    expect(items[1]).toHaveTextContent(/Withdrawn: Entered in error/);
+    expect(items[1]).toHaveTextContent(/Firm Reviewer/);
+    expect(items[2]).toHaveTextContent(/20 Nov 2026/);
+    expect(items[2]).toHaveTextContent(/Approved/);
+    expect(items[2]).toHaveTextContent(/Firm Owner/);
   });
 });

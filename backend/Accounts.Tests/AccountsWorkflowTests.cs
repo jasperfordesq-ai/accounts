@@ -454,6 +454,9 @@ public partial class AccountsWorkflowTests
             || c is >= 'a' and <= 'f'
             || c is >= 'A' and <= 'F');
 
+    /// <summary>Marks a fixture row as decided without running the engine (not a real fingerprint).</summary>
+    private static readonly string FixtureDecisionFingerprint = new('a', 64);
+
     private static async Task MakePeriodReadyForCroDocumentsAsync(AccountsDbContext db, AccountingPeriod period)
     {
         period.ApprovalDate ??= period.PeriodEnd;
@@ -463,7 +466,10 @@ public partial class AccountsWorkflowTests
             CalculatedClass = CompanySizeClass.Micro,
             Turnover = 100m,
             BalanceSheetTotal = 101m,
-            AvgEmployees = 1
+            AvgEmployees = 1,
+            // Readiness does not count a saved-but-undecided row; release tests replace this marker
+            // with an engine decision in FinaliseReleaseTestPeriodAsync.
+            DecisionInputFingerprintSha256 = FixtureDecisionFingerprint
         });
 
         var bankCategory = AddCategory(db, period.CompanyId, "1400", "Bank Current Account", AccountCategoryType.Asset);
@@ -802,7 +808,9 @@ public partial class AccountsWorkflowTests
     private static async Task FinaliseReleaseTestPeriodAsync(AccountsDbContext db, AccountingPeriod period)
     {
         var classification = await db.SizeClassifications.SingleOrDefaultAsync(s => s.PeriodId == period.Id);
-        if (classification is not null && string.IsNullOrWhiteSpace(classification.DecisionInputFingerprintSha256))
+        if (classification is not null
+            && (string.IsNullOrWhiteSpace(classification.DecisionInputFingerprintSha256)
+                || classification.DecisionInputFingerprintSha256 == FixtureDecisionFingerprint))
         {
             var existingRegime = await db.FilingRegimes.SingleOrDefaultAsync(f => f.PeriodId == period.Id);
             var electedRegime = existingRegime?.ElectedRegime;

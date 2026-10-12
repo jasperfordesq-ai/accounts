@@ -113,6 +113,13 @@ export function FinancialStatementsWorkbench({
     );
   }
 
+  // Charity chart: the balance sheet carries a members' funds presentation (no share capital).
+  const membersFunds = Boolean(bs?.membersFunds);
+  // A company limited by guarantee shows no nil share capital column or nil dividends row.
+  const showShareCapital = !membersFunds || !equity
+    || equity.openingShareCapital !== 0 || equity.sharesIssued !== 0 || equity.closingShareCapital !== 0;
+  const showDividends = !membersFunds || (equity?.dividendsPaid ?? 0) !== 0;
+
   return (
     <PageShell
       title="Financial Statements"
@@ -184,7 +191,7 @@ export function FinancialStatementsWorkbench({
       className="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 border-b-2 border-transparent data-[selected]:border-emerald-600 data-[selected]:text-emerald-700 dark:data-[selected]:text-emerald-400 cursor-pointer outline-none"
     >
       <BarChart3 className="w-4 h-4 inline mr-1.5 -mt-0.5" />
-      Profit &amp; Loss
+      {membersFunds ? "Income & Expenditure" : "Profit & Loss"}
     </Tab>
     <Tab
       id="balance-sheet"
@@ -395,7 +402,7 @@ export function FinancialStatementsWorkbench({
   <TabPanel id="pnl">
     <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
       <Card.Header>
-        <Card.Title>Profit &amp; Loss Account</Card.Title>
+        <Card.Title>{membersFunds ? "Income and Expenditure Account" : "Profit & Loss Account"}</Card.Title>
         <Card.Description>
           Income statement for the period
         </Card.Description>
@@ -403,14 +410,14 @@ export function FinancialStatementsWorkbench({
       <Card.Content>
         {pnl ? (
           <div className="max-w-lg mx-auto space-y-1">
-            <StatementRow label="Turnover" amount={pnl.turnover} bold />
+            <StatementRow label={membersFunds ? "Income" : "Turnover"} amount={pnl.turnover} bold />
             <StatementRow
               label="Less: Cost of Sales"
               amount={-pnl.costOfSales}
             />
             <Divider />
             <StatementRow
-              label="Gross Profit"
+              label={membersFunds ? "Gross Surplus/(deficit)" : "Gross Profit"}
               amount={pnl.grossProfit}
               bold
               highlight
@@ -436,7 +443,7 @@ export function FinancialStatementsWorkbench({
             />
             <Divider />
             <StatementRow
-              label="Operating Profit"
+              label={membersFunds ? "Operating Surplus/(deficit)" : "Operating Profit"}
               amount={pnl.operatingProfit}
               bold
               highlight
@@ -466,18 +473,20 @@ export function FinancialStatementsWorkbench({
             )}
             <Divider />
             <StatementRow
-              label="Profit Before Tax"
+              label={membersFunds ? "Surplus/(deficit) before taxation" : "Profit Before Tax"}
               amount={pnl.profitBeforeTax}
               bold
               highlight
             />
-            <StatementRow
-              label="Less: Corporation Tax"
-              amount={-pnl.taxCharge}
-            />
+            {(!membersFunds || pnl.taxCharge !== 0) && (
+              <StatementRow
+                label="Less: Corporation Tax"
+                amount={-pnl.taxCharge}
+              />
+            )}
             <Divider double />
             <StatementRow
-              label="Profit After Tax"
+              label={membersFunds ? "Surplus/(deficit) for the financial year" : "Profit After Tax"}
               amount={pnl.profitAfterTax}
               bold
               highlight
@@ -569,6 +578,13 @@ export function FinancialStatementsWorkbench({
               <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
                 Creditors: amounts falling due within one year
               </p>
+              {(bs.creditorsWithinYear.bankOverdraft ?? 0) !== 0 && (
+                <StatementRow
+                  label="Bank Overdraft"
+                  amount={bs.creditorsWithinYear.bankOverdraft ?? 0}
+                  indent
+                />
+              )}
               <StatementRow
                 label="Trade Creditors"
                 amount={bs.creditorsWithinYear.tradeCreditors}
@@ -634,7 +650,60 @@ export function FinancialStatementsWorkbench({
               highlight
             />
 
-            {/* Capital and Reserves */}
+            {bs.membersFunds ? (
+            /* Members' funds (charity chart: a company limited by guarantee has no share capital) */
+            <div className="pt-3">
+              <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
+                Members&apos; Funds
+              </p>
+              {bs.capitalAndReserves.shareCapital !== 0 && (
+                <StatementRow
+                  label="Share Capital"
+                  amount={bs.capitalAndReserves.shareCapital}
+                  indent
+                />
+              )}
+              <StatementRow
+                label="Members' funds brought forward"
+                amount={bs.membersFunds.fundsBroughtForward}
+                indent
+              />
+              <StatementRow
+                label="Surplus/(deficit) for the financial year"
+                amount={bs.membersFunds.surplusForYear}
+                indent
+              />
+              {bs.membersFunds.otherMovements !== 0 && (
+                <StatementRow
+                  label="Other movements in members' funds"
+                  amount={bs.membersFunds.otherMovements}
+                  indent
+                />
+              )}
+              {bs.membersFunds.restrictedFunds !== 0 && (
+                <StatementRow
+                  label="Restricted funds"
+                  amount={bs.membersFunds.restrictedFunds}
+                  indent
+                />
+              )}
+              {Math.abs(bs.capitalAndReserves.unexplainedDifference) >= 0.01 && (
+                <StatementRow
+                  label="Unexplained balance sheet difference"
+                  amount={bs.capitalAndReserves.unexplainedDifference}
+                  indent
+                />
+              )}
+              <Divider double />
+              <StatementRow
+                label="Total Members' Funds"
+                amount={bs.membersFunds.total}
+                bold
+                highlight
+              />
+            </div>
+            ) : (
+            /* Capital and Reserves */
             <div className="pt-3">
               <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide pb-1">
                 Capital and Reserves
@@ -686,6 +755,7 @@ export function FinancialStatementsWorkbench({
                 highlight
               />
             </div>
+            )}
 
             {/* Balance check */}
             <div className="mt-4 pt-3 border-t border-gray-200 dark:border-neutral-700">
@@ -738,7 +808,7 @@ export function FinancialStatementsWorkbench({
             >
               <p className="font-semibold">
                 {tax.finalTaxChargeSupported
-                  ? "Simple-scope machine checks passed - qualified review still required"
+                  ? "Simple-scope machine checks passed - the directors' review is still required"
                   : "Final tax charge and Revenue-ready handoff blocked"}
               </p>
               <p className="mt-1">
@@ -938,47 +1008,49 @@ export function FinancialStatementsWorkbench({
   <TabPanel id="equity-changes">
     <Card className="shadow-sm border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
       <Card.Header>
-        <Card.Title>Statement of Changes in Equity</Card.Title>
+        <Card.Title>{membersFunds ? "Statement of Changes in Members' Funds" : "Statement of Changes in Equity"}</Card.Title>
         <Card.Description>
-          Movements in shareholders&apos; funds for the period
+          {membersFunds ? "Movements in members' funds for the period" : "Movements in shareholders' funds for the period"}
         </Card.Description>
       </Card.Header>
       <Card.Content>
         {equity ? (
           <HorizontalScrollRegion label="Statement of changes in equity table" className="-mx-1">
             <table className="min-w-[42rem] w-full text-sm border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden" role="table">
-              <caption className="sr-only">Statement of Changes in Equity</caption>
+              <caption className="sr-only">{membersFunds ? "Statement of Changes in Members' Funds" : "Statement of Changes in Equity"}</caption>
               <thead>
                 <tr className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                   <th scope="col" className="text-left px-4 py-2.5 w-[40%]">Movement</th>
-                  <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Share Capital</th>
-                  <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Retained Earnings</th>
+                  {showShareCapital && <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Share Capital</th>}
+                  <th scope="col" className="text-right px-4 py-2.5 w-[20%]">{membersFunds ? "Members' Funds" : "Retained Earnings"}</th>
                   <th scope="col" className="text-right px-4 py-2.5 w-[20%]">Total</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
                   <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-gray-100">Opening Balance</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.openingShareCapital)}</td>
+                  {showShareCapital && <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.openingShareCapital)}</td>}
                   <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.openingRetainedEarnings)}</td>
                   <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900 dark:text-gray-100">{eur(equity.openingTotal)}</td>
                 </tr>
                 <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Profit for the Year</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
+                  <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">{membersFunds ? "Surplus/(deficit) for the Year" : "Profit for the Year"}</td>
+                  {showShareCapital && <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>}
                   <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.profitForYear)}</td>
                 </tr>
-                <tr className="border-b border-gray-100 dark:border-neutral-800">
-                  <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Dividends Paid</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
-                </tr>
+                {showDividends && (
+                  <tr className="border-b border-gray-100 dark:border-neutral-800">
+                    <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Dividends Paid</td>
+                    {showShareCapital && <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>}
+                    <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-red-700 dark:text-red-400">{equity.dividendsPaid !== 0 ? eur(-Math.abs(equity.dividendsPaid)) : eur(0)}</td>
+                  </tr>
+                )}
                 {equity.otherReserveMovements !== 0 && (
                   <tr className="border-b border-gray-100 dark:border-neutral-800">
                     <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Other Posted Reserve Movements</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
+                    {showShareCapital && <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>}
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.otherReserveMovements)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.otherReserveMovements)}</td>
                   </tr>
@@ -986,7 +1058,7 @@ export function FinancialStatementsWorkbench({
                 {equity.sharesIssued !== 0 && (
                   <tr className="border-b border-gray-100 dark:border-neutral-800">
                     <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">Shares Issued</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
+                    {showShareCapital && <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>}
                     <td className="px-4 py-2.5 text-right font-mono text-[var(--muted-foreground)]">-</td>
                     <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.sharesIssued)}</td>
                   </tr>
@@ -995,7 +1067,7 @@ export function FinancialStatementsWorkbench({
               <tfoot>
                 <tr className="bg-gray-100 dark:bg-neutral-800 border-t-2 border-gray-300 dark:border-neutral-600 font-bold">
                   <td className="px-4 py-3 text-gray-900 dark:text-gray-100">Closing Balance</td>
-                  <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingShareCapital)}</td>
+                  {showShareCapital && <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingShareCapital)}</td>}
                   <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingRetainedEarnings)}</td>
                   <td className="px-4 py-3 text-right font-mono text-gray-900 dark:text-gray-100">{eur(equity.closingTotal)}</td>
                 </tr>
@@ -1093,7 +1165,7 @@ export function FinancialStatementsWorkbench({
 
             {/* Results and Dividends */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Results and Dividends</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">{membersFunds ? "Results" : "Results and Dividends"}</h3>
               <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                 {directorsReport.resultsAndDividends}
               </p>

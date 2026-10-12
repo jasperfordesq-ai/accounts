@@ -258,12 +258,12 @@ const revenueDocument = {
     label: "Unsupported CT1 sections",
     value: null,
     status: "RequiresReview" as const,
-    sourceReference: "Qualified accountant live ROS review",
-    blockingReason: "A qualified accountant must complete unsupported CT1 sections in ROS.",
+    sourceReference: "Live ROS review of the unsupported CT1 sections",
+    blockingReason: "The unsupported CT1 sections must be completed in ROS.",
     isProtectedManualEntry: false,
   }],
   attachments: [{ code: "ct1-support", fileName: "ct1-support.json", mediaType: "application/json", byteSize: 500, sha256: B, sourceReference: "Corporation Tax support worksheet" }],
-  blockingIssues: ["A qualified accountant must complete unsupported CT1 sections in ROS."],
+  blockingIssues: ["The unsupported CT1 sections must be completed in ROS."],
   externalCompletionWarnings: ["This artifact is corporation-tax support only; it is not a CT1 return and cannot be submitted to ROS."],
   sources: [{
     code: "REVENUE-AGENT-LINK",
@@ -373,6 +373,6 @@ export const externalFilingHandoffWorkspaceFixture: ExternalFilingHandoffWorkspa
   ],
   sourceGaps: [
     "Raw PPSN/IPN/RBO identifiers stay outside the general handoff artifact and require protected manual CORE entry.",
-    "The bounded tax computation does not populate unsupported CT1 sections; a qualified accountant must complete them in ROS.",
+    "The bounded tax computation does not populate unsupported CT1 sections; they must be completed in ROS.",
   ],
 };

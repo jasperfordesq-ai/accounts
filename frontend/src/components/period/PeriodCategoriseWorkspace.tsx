@@ -12,6 +12,7 @@ import type {
   TransactionSortField,
 } from "@/lib/api";
 import { DataGrid, ReadOnlyNotice } from "@/components/workbench";
+import { isAssignableCategory } from "@/lib/accountCategoryTargets";
 import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
 
 interface TransactionRuleForm {
@@ -194,6 +195,7 @@ export function PeriodCategoriseWorkspace({
                     value={bulkCategoryId}
                     categories={categories}
                     ariaLabel="Bulk category"
+                    assignableOnly
                     className="min-w-64"
                     onChange={onBulkCategoryChange}
                   />
@@ -301,6 +303,7 @@ function TransactionRulesPanel({
           value={ruleForm.categoryId}
           categories={categories}
           ariaLabel="Rule category"
+          assignableOnly
           className="md:col-span-4"
           onChange={(categoryId) => onRuleFormChange({ ...ruleForm, categoryId })}
         />
@@ -567,6 +570,7 @@ function TransactionTable({
                       value={transaction.categoryId ?? ""}
                       categories={categories}
                       ariaLabel={`Categorise ${transaction.description}`}
+                      assignableOnly
                       placeholder="Uncategorised"
                       disabled={categories.length === 0 || categorisingId === transaction.id}
                       className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-xs"
@@ -642,6 +646,7 @@ function CategorySelect({
   placeholder = "Choose category",
   allLabel,
   disabled = false,
+  assignableOnly = false,
   onChange,
 }: {
   value: string | number;
@@ -651,8 +656,13 @@ function CategorySelect({
   placeholder?: string;
   allLabel?: string;
   disabled?: boolean;
+  // Offer only accounts the server accepts as a target, keeping the current value visible.
+  assignableOnly?: boolean;
   onChange: (value: string) => void;
 }) {
+  const options = assignableOnly
+    ? categories.filter((category) => isAssignableCategory(category) || String(category.id) === String(value))
+    : categories;
   return (
     <select
       value={value}
@@ -662,7 +672,7 @@ function CategorySelect({
       aria-label={ariaLabel}
     >
       <option value="">{allLabel ?? placeholder}</option>
-      {categories.map((category) => (
+      {options.map((category) => (
         <option key={category.id} value={category.id}>
           {categoryLabel(category)}
         </option>

@@ -16,7 +16,7 @@ public class CroFilingPackage
     public DateTime? SubmittedAt { get; set; }
     public string? CroSubmissionReference { get; set; }
     public string? RejectionReason { get; set; }
-    public DateTime? CorrectionDeadline { get; set; } // 14 days from rejection
+    public DateTime? CorrectionDeadline { get; set; } // 14 days from rejection; the open-correction marker derives the send-back time from it, so never make it user-editable
     public bool AccountsPdfGenerated { get; set; }
     public bool SignaturePageGenerated { get; set; }
     public bool PaymentCompleted { get; set; }

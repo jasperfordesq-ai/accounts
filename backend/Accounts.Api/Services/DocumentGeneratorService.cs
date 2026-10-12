@@ -121,7 +121,7 @@ public class DocumentGeneratorService(
                         // Directors' Report (unless micro)
                         if (regime != ElectedRegime.Micro)
                         {
-                            ComposeDirectorsReport(col, period, directors, directorsReport);
+                            ComposeDirectorsReport(col, period, directors, directorsReport, company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg);
                             col.Item().PageBreak();
                         }
 
@@ -254,7 +254,8 @@ public class DocumentGeneratorService(
         ColumnDescriptor col,
         AccountingPeriod period,
         List<CompanyOfficer> signingDirectors,
-        DirectorsReportService.DirectorsReportData report)
+        DirectorsReportService.DirectorsReportData report,
+        bool charity = false)
     {
         col.Item().Text("DIRECTORS' REPORT").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
@@ -268,7 +269,7 @@ public class DocumentGeneratorService(
         col.Item().PaddingTop(10).Text("Principal Activities").Bold();
         col.Item().Text(report.PrincipalActivities);
 
-        col.Item().PaddingTop(10).Text("Results and Dividends").Bold();
+        col.Item().PaddingTop(10).Text(charity ? "Results" : "Results and Dividends").Bold();
         col.Item().Text(report.ResultsAndDividends);
 
         col.Item().PaddingTop(10).Text("Directors").Bold();
@@ -359,9 +360,21 @@ public class DocumentGeneratorService(
             AddBsLine(table, ref row, "Cash at bank and in hand", bs.CurrentAssets.Cash, priorBs?.CurrentAssets.Cash);
             AddBsTotal(table, ref row, "", bs.CurrentAssets.Total, priorBs?.CurrentAssets.Total);
 
-            // Creditors within year
+            // Creditors within year. On the charity chart a bank overdraft is shown separately within
+            // them (never netted against cash).
             AddBsSection(table, ref row, "CREDITORS: amounts falling due within one year", false);
-            AddBsLine(table, ref row, "", -bs.CreditorsWithinYear.Total, priorBs != null ? -priorBs.CreditorsWithinYear.Total : null);
+            var bankOverdraft = bs.CreditorsWithinYear.BankOverdraft ?? 0m;
+            var priorBankOverdraft = priorBs?.CreditorsWithinYear.BankOverdraft ?? 0m;
+            if (bankOverdraft != 0 || priorBankOverdraft != 0)
+            {
+                AddBsLine(table, ref row, "Bank overdraft", -bankOverdraft, priorBs != null ? -priorBankOverdraft : null);
+                AddBsLine(table, ref row, "Trade and other creditors", -(bs.CreditorsWithinYear.Total - bankOverdraft), priorBs != null ? -(priorBs.CreditorsWithinYear.Total - priorBankOverdraft) : null);
+                AddBsTotal(table, ref row, "", -bs.CreditorsWithinYear.Total, priorBs != null ? -priorBs.CreditorsWithinYear.Total : null);
+            }
+            else
+            {
+                AddBsLine(table, ref row, "", -bs.CreditorsWithinYear.Total, priorBs != null ? -priorBs.CreditorsWithinYear.Total : null);
+            }
 
             AddBsTotal(table, ref row, "NET CURRENT ASSETS", bs.NetCurrentAssets, priorBs?.NetCurrentAssets);
             AddBsDoubleTotal(table, ref row, "TOTAL ASSETS LESS CURRENT LIABILITIES", bs.TotalAssetsLessCurrentLiabilities, priorBs?.TotalAssetsLessCurrentLiabilities);
@@ -374,11 +387,31 @@ public class DocumentGeneratorService(
 
             AddBsDoubleTotal(table, ref row, "NET ASSETS", bs.NetAssets, priorBs?.NetAssets);
 
-            // Capital and Reserves
-            AddBsSection(table, ref row, "CAPITAL AND RESERVES", true);
-            AddBsLine(table, ref row, "Called up share capital", bs.CapitalAndReserves.ShareCapital, priorBs?.CapitalAndReserves.ShareCapital);
-            AddBsLine(table, ref row, "Profit and loss account", bs.CapitalAndReserves.RetainedEarnings, priorBs?.CapitalAndReserves.RetainedEarnings);
-            AddBsDoubleTotal(table, ref row, "SHAREHOLDERS' FUNDS", bs.CapitalAndReserves.Total, priorBs?.CapitalAndReserves.Total);
+            if (bs.MembersFunds is { } funds)
+            {
+                // Charity chart: a company limited by guarantee has members' funds, not share capital.
+                var priorFunds = priorBs?.MembersFunds;
+                decimal? Prior(Func<FinancialStatementsService.MembersFundsSection, decimal> value) =>
+                    priorBs == null ? null : priorFunds == null ? 0m : value(priorFunds);
+                AddBsSection(table, ref row, "MEMBERS' FUNDS", true);
+                if (bs.CapitalAndReserves.ShareCapital != 0 || (priorBs?.CapitalAndReserves.ShareCapital ?? 0) != 0)
+                    AddBsLine(table, ref row, "Called up share capital", bs.CapitalAndReserves.ShareCapital, priorBs?.CapitalAndReserves.ShareCapital);
+                AddBsLine(table, ref row, "Members' funds brought forward", funds.FundsBroughtForward, Prior(f => f.FundsBroughtForward));
+                AddBsLine(table, ref row, "Surplus/(deficit) for the financial year", funds.SurplusForYear, Prior(f => f.SurplusForYear));
+                if (funds.OtherMovements != 0 || (priorFunds?.OtherMovements ?? 0) != 0)
+                    AddBsLine(table, ref row, "Other movements in members' funds", funds.OtherMovements, Prior(f => f.OtherMovements));
+                if (funds.RestrictedFunds != 0 || (priorFunds?.RestrictedFunds ?? 0) != 0)
+                    AddBsLine(table, ref row, "Restricted funds", funds.RestrictedFunds, Prior(f => f.RestrictedFunds));
+                AddBsDoubleTotal(table, ref row, "TOTAL MEMBERS' FUNDS", funds.Total, priorBs?.CapitalAndReserves.Total);
+            }
+            else
+            {
+                // Capital and Reserves
+                AddBsSection(table, ref row, "CAPITAL AND RESERVES", true);
+                AddBsLine(table, ref row, "Called up share capital", bs.CapitalAndReserves.ShareCapital, priorBs?.CapitalAndReserves.ShareCapital);
+                AddBsLine(table, ref row, "Profit and loss account", bs.CapitalAndReserves.RetainedEarnings, priorBs?.CapitalAndReserves.RetainedEarnings);
+                AddBsDoubleTotal(table, ref row, "SHAREHOLDERS' FUNDS", bs.CapitalAndReserves.Total, priorBs?.CapitalAndReserves.Total);
+            }
 
             if (!bs.Balances)
             {
@@ -463,7 +496,9 @@ public class DocumentGeneratorService(
         AccountingPeriod? priorPeriod,
         FinancialStatementsService.ProfitAndLoss? priorPl)
     {
-        col.Item().Text("PROFIT AND LOSS ACCOUNT").Bold().FontSize(14);
+        // Charity chart (company limited by guarantee): the income and expenditure presentation.
+        var charity = company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg;
+        col.Item().Text(charity ? "INCOME AND EXPENDITURE ACCOUNT" : "PROFIT AND LOSS ACCOUNT").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
 
         col.Item().PaddingTop(15).Table(table =>
@@ -485,22 +520,24 @@ public class DocumentGeneratorService(
             if (priorPl is not null)
                 table.Cell().Row(row).Column(3).AlignRight().Text("\u20ac").Bold().FontSize(9);
 
-            AddLine("Turnover", pl.Turnover, priorPl?.Turnover);
+            AddLine(charity ? "Income" : "Turnover", pl.Turnover, priorPl?.Turnover);
             AddLine("Cost of sales", -pl.CostOfSales, priorPl is null ? null : -priorPl.CostOfSales);
-            AddLine("Gross profit", pl.GrossProfit, priorPl?.GrossProfit, bold: true, topBorder: true);
+            AddLine(charity ? "Gross surplus/(deficit)" : "Gross profit", pl.GrossProfit, priorPl?.GrossProfit, bold: true, topBorder: true);
 
             if (pl.OtherIncome != 0 || (priorPl?.OtherIncome ?? 0) != 0)
                 AddLine("Other operating income", pl.OtherIncome, priorPl?.OtherIncome, paddingTop: 8);
 
             AddLine("Administrative expenses", -pl.TotalOverheads, priorPl is null ? null : -priorPl.TotalOverheads, paddingTop: 8);
-            AddLine("Operating profit", pl.OperatingProfit, priorPl?.OperatingProfit, bold: true, topBorder: true);
+            AddLine(charity ? "Operating surplus/(deficit)" : "Operating profit", pl.OperatingProfit, priorPl?.OperatingProfit, bold: true, topBorder: true);
 
             if (pl.InterestPayable > 0 || (priorPl?.InterestPayable ?? 0) > 0)
                 AddLine("Interest payable", -pl.InterestPayable, priorPl is null ? null : -priorPl.InterestPayable);
 
-            AddLine("Profit before taxation", pl.ProfitBeforeTax, priorPl?.ProfitBeforeTax, bold: true, topBorder: true, paddingTop: 5);
-            AddLine("Tax on profit", -pl.TaxCharge, priorPl is null ? null : -priorPl.TaxCharge);
-            AddLine("Profit for the financial year", pl.ProfitAfterTax, priorPl?.ProfitAfterTax, bold: true, topBorder: true, bottomBorder: true, paddingTop: 5);
+            AddLine(charity ? "Surplus/(deficit) before taxation" : "Profit before taxation", pl.ProfitBeforeTax, priorPl?.ProfitBeforeTax, bold: true, topBorder: true, paddingTop: 5);
+            // A charity shows the tax line only when there is tax; the generic layout always shows it.
+            if (!charity || pl.TaxCharge != 0 || (priorPl?.TaxCharge ?? 0) != 0)
+                AddLine(charity ? "Tax on surplus" : "Tax on profit", -pl.TaxCharge, priorPl is null ? null : -priorPl.TaxCharge);
+            AddLine(charity ? "Surplus/(deficit) for the financial year" : "Profit for the financial year", pl.ProfitAfterTax, priorPl?.ProfitAfterTax, bold: true, topBorder: true, bottomBorder: true, paddingTop: 5);
 
             void AddLine(
                 string label,
@@ -592,7 +629,7 @@ public class DocumentGeneratorService(
                 .Italic();
 
         col.Item().PaddingTop(10).Text("Opinion").Bold().FontSize(10);
-        col.Item().Text($"We have audited the financial statements of {company.LegalName} for the financial year ended {period.PeriodEnd:dd MMMM yyyy}, which comprise the Profit and Loss Account, the Balance Sheet, the Cash Flow Statement, the Statement of Changes in Equity and the related notes, including a summary of significant accounting policies. The financial reporting framework that has been applied in their preparation is Irish law and FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\".").FontSize(9);
+        col.Item().Text($"We have audited the financial statements of {company.LegalName} for the financial year ended {period.PeriodEnd:dd MMMM yyyy}, which comprise the {(company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg ? "Income and Expenditure Account" : "Profit and Loss Account")}, the Balance Sheet, the Cash Flow Statement, the Statement of Changes in Equity and the related notes, including a summary of significant accounting policies. The financial reporting framework that has been applied in their preparation is Irish law and FRS 102 \"The Financial Reporting Standard applicable in the UK and Republic of Ireland\".").FontSize(9);
         col.Item().PaddingTop(6).Text("In our opinion the financial statements: give a true and fair view of the assets, liabilities and financial position of the company as at the financial year end date and of its profit or loss for the financial year then ended; have been properly prepared in accordance with FRS 102; and have been properly prepared in accordance with the requirements of the Companies Act 2014. [To be confirmed by the auditor.]").FontSize(9);
 
         col.Item().PaddingTop(10).Text("Basis for Opinion").Bold().FontSize(10);
@@ -645,7 +682,7 @@ public class DocumentGeneratorService(
 
             row++; table.Cell().Row(row).Column(1).Text("Cash flows from operating activities").FontSize(9).Bold();
 
-            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text("Operating profit").FontSize(9);
+            row++; table.Cell().Row(row).Column(1).PaddingLeft(15).Text(company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg ? "Operating surplus/(deficit)" : "Operating profit").FontSize(9);
             table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(cf.OperatingProfit)).FontSize(9);
 
             foreach (var adj in cf.OperatingAdjustments)
@@ -699,65 +736,79 @@ public class DocumentGeneratorService(
 
     private static void ComposeStatementOfChangesInEquity(ColumnDescriptor col, Company company, AccountingPeriod period, FinancialStatementsService.EquityChanges eq)
     {
-        col.Item().Text("STATEMENT OF CHANGES IN EQUITY").Bold().FontSize(14);
+        var membersFunds = company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg;
+        col.Item().Text(membersFunds ? "STATEMENT OF CHANGES IN MEMBERS' FUNDS" : "STATEMENT OF CHANGES IN EQUITY").Bold().FontSize(14);
         col.Item().Text($"for the financial year ended {period.PeriodEnd:dd MMMM yyyy}").FontSize(10).Italic();
+
+        // Members' funds presentation: a company limited by guarantee shows no share capital column
+        // unless share capital (legacy data) is actually present.
+        var showShareCapital = !membersFunds
+            || eq.OpeningShareCapital != 0 || eq.SharesIssued != 0 || eq.ClosingShareCapital != 0;
+        uint reserves = showShareCapital ? 3u : 2u;
+        var total = reserves + 1;
 
         col.Item().PaddingTop(15).Table(table =>
         {
             table.ColumnsDefinition(columns =>
             {
                 columns.RelativeColumn(4);
-                columns.ConstantColumn(80);
+                if (showShareCapital)
+                    columns.ConstantColumn(80);
                 columns.ConstantColumn(90);
                 columns.ConstantColumn(80);
             });
 
             uint row = 1;
-            table.Cell().Row(row).Column(2).AlignRight().Text("Share capital €").Bold().FontSize(8);
-            table.Cell().Row(row).Column(3).AlignRight().Text("Retained earnings €").Bold().FontSize(8);
-            table.Cell().Row(row).Column(4).AlignRight().Text("Total €").Bold().FontSize(8);
+            if (showShareCapital)
+                table.Cell().Row(row).Column(2).AlignRight().Text("Share capital €").Bold().FontSize(8);
+            table.Cell().Row(row).Column(reserves).AlignRight().Text(membersFunds ? "Members' funds €" : "Retained earnings €").Bold().FontSize(8);
+            table.Cell().Row(row).Column(total).AlignRight().Text("Total €").Bold().FontSize(8);
 
             row++;
             table.Cell().Row(row).Column(1).Text("Balance at beginning of year").FontSize(9);
-            table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(eq.OpeningShareCapital)).FontSize(9);
-            table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(eq.OpeningRetainedEarnings)).FontSize(9);
-            table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.OpeningTotal)).FontSize(9);
+            if (showShareCapital)
+                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(eq.OpeningShareCapital)).FontSize(9);
+            table.Cell().Row(row).Column(reserves).AlignRight().Text(FormatEuro(eq.OpeningRetainedEarnings)).FontSize(9);
+            table.Cell().Row(row).Column(total).AlignRight().Text(FormatEuro(eq.OpeningTotal)).FontSize(9);
 
             row++;
-            table.Cell().Row(row).Column(1).Text("Profit for the financial year").FontSize(9);
-            table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(eq.ProfitForYear)).FontSize(9);
-            table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.ProfitForYear)).FontSize(9);
+            table.Cell().Row(row).Column(1).Text(membersFunds ? "Surplus/(deficit) for the financial year" : "Profit for the financial year").FontSize(9);
+            table.Cell().Row(row).Column(reserves).AlignRight().Text(FormatEuro(eq.ProfitForYear)).FontSize(9);
+            table.Cell().Row(row).Column(total).AlignRight().Text(FormatEuro(eq.ProfitForYear)).FontSize(9);
 
             if (eq.SharesIssued != 0)
             {
                 row++;
                 table.Cell().Row(row).Column(1).Text("Issue of share capital").FontSize(9);
-                table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(eq.SharesIssued)).FontSize(9);
-                table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.SharesIssued)).FontSize(9);
+                if (showShareCapital)
+                    table.Cell().Row(row).Column(2).AlignRight().Text(FormatEuro(eq.SharesIssued)).FontSize(9);
+                table.Cell().Row(row).Column(total).AlignRight().Text(FormatEuro(eq.SharesIssued)).FontSize(9);
             }
 
             if (eq.DividendsPaid != 0)
             {
                 row++;
                 table.Cell().Row(row).Column(1).Text("Dividends paid").FontSize(9);
-                table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
-                table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
+                table.Cell().Row(row).Column(reserves).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
+                table.Cell().Row(row).Column(total).AlignRight().Text(FormatEuro(-eq.DividendsPaid)).FontSize(9);
             }
 
             if (eq.OtherReserveMovements != 0)
             {
                 row++;
                 table.Cell().Row(row).Column(1).Text("Other posted reserve movements").FontSize(9);
-                table.Cell().Row(row).Column(2).AlignRight().Text("-").FontSize(9);
-                table.Cell().Row(row).Column(3).AlignRight().Text(FormatEuro(eq.OtherReserveMovements)).FontSize(9);
-                table.Cell().Row(row).Column(4).AlignRight().Text(FormatEuro(eq.OtherReserveMovements)).FontSize(9);
+                if (showShareCapital)
+                    table.Cell().Row(row).Column(2).AlignRight().Text("-").FontSize(9);
+                table.Cell().Row(row).Column(reserves).AlignRight().Text(FormatEuro(eq.OtherReserveMovements)).FontSize(9);
+                table.Cell().Row(row).Column(total).AlignRight().Text(FormatEuro(eq.OtherReserveMovements)).FontSize(9);
             }
 
             row++;
             table.Cell().Row(row).Column(1).Text("Balance at end of year").FontSize(9).Bold();
-            table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingShareCapital)).FontSize(9).Bold();
-            table.Cell().Row(row).Column(3).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingRetainedEarnings)).FontSize(9).Bold();
-            table.Cell().Row(row).Column(4).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingTotal)).FontSize(9).Bold();
+            if (showShareCapital)
+                table.Cell().Row(row).Column(2).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingShareCapital)).FontSize(9).Bold();
+            table.Cell().Row(row).Column(reserves).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingRetainedEarnings)).FontSize(9).Bold();
+            table.Cell().Row(row).Column(total).AlignRight().BorderTop(1).BorderBottom(2).Text(FormatEuro(eq.ClosingTotal)).FontSize(9).Bold();
         });
     }
 
@@ -966,7 +1017,7 @@ public class DocumentGeneratorService(
                     if (directorsReport != null)
                     {
                         col.Item().PageBreak();
-                        ComposeDirectorsReport(col, period, directors, directorsReport);
+                        ComposeDirectorsReport(col, period, directors, directorsReport, company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg);
                     }
                     col.Item().PageBreak();
                     ComposeBalanceSheet(col, company, period, balanceSheet, priorBs, directors);

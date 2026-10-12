@@ -68,6 +68,7 @@ import {
   type ResourceState,
 } from "@/lib/resourceState";
 import { InteractionAnnouncement } from "@/components/InteractionAnnouncement";
+import { initialAnnualReturnReference, isCharityCorrectionOpen } from "@/lib/croCorrection";
 import {
   captureInteractionFocus,
   patchSearchHref,
@@ -203,7 +204,7 @@ export default function CharityReportingPage({
       || newTransfers !== 0
       || newGains !== 0
     );
-    const filingReferenceDraft = annualReturnReference !== (filingStatus?.annualReturnReference ?? "");
+    const filingReferenceDraft = annualReturnReference !== (filingStatus ? initialAnnualReturnReference(filingStatus) : "");
     const trusteeReviewDraft = trusteeReviewArtifact !== ""
       || trusteeReviewReference !== (artifactStatus?.package?.trusteeReviewReference ?? "")
       || trusteeReviewAccepted !== (artifactStatus?.package?.trusteeReviewAccepted ?? false);
@@ -262,7 +263,7 @@ export default function CharityReportingPage({
     if (result.values["filing-status"] !== undefined) {
       const charityStatus = result.values["filing-status"].charity;
       setFilingStatus(charityStatus);
-      setAnnualReturnReference(charityStatus.annualReturnReference ?? "");
+      setAnnualReturnReference(initialAnnualReturnReference(charityStatus));
     }
     if (result.values["artifact-status"] !== undefined) {
       const nextArtifactStatus = result.values["artifact-status"];
@@ -586,6 +587,9 @@ export default function CharityReportingPage({
                     aria-label="Charities Regulator annual return reference"
                     disabled={workflowEvidenceUnavailable}
                   />
+                  {filingStatus && isCharityCorrectionOpen(filingStatus) && filingStatus.annualReturnReference && (
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">Previous submission: {filingStatus.annualReturnReference}</p>
+                  )}
                 </div>}
               </div>
               <div className="flex flex-wrap gap-2">

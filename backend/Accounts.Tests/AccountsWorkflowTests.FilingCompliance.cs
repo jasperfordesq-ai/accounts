@@ -429,6 +429,49 @@ public partial class AccountsWorkflowTests
     }
 
     [Fact]
+    public async Task Finalising_AfterTheDirectorsApprovalIsWithdrawn_CorrectsTheBoardDate()
+    {
+        await using var db = CreateDbContext();
+        var (period, statements, context) = await SeedFinalisablePeriodAsync(db);
+        db.CroFilingPackages.Add(new CroFilingPackage
+        {
+            PeriodId = period.Id,
+            AccountsPdfGenerated = true,
+            AccountsPdfArtifact = Encoding.ASCII.GetBytes("%PDF-1.7\naccounts"),
+            AccountsPdfSha256 = new string('a', 64),
+            ArtifactSourceFingerprintSha256 = new string('b', 64)
+        });
+        await db.SaveChangesAsync();
+        var owner = new AuthenticatedUser(UserId: 1, TenantId: 1, TenantName: "Firm", Email: "owner@example.ie", DisplayName: "Firm Owner", Role: "Owner");
+        var approvals = new DirectorsApprovalService(db, new DirectorsApprovalTests.FakePageRenderer(), new AuditService(db));
+        var director = await db.CompanyOfficers.SingleAsync(o => o.CompanyId == period.CompanyId && o.Role == OfficerRole.Director);
+        var page = await approvals.GeneratePageAsync(period.CompanyId, period.Id,
+            new DirectorsApprovalPageInput(period.PeriodEnd, director.Id, null, "Board minute 7"), owner);
+        var signed = Encoding.ASCII.GetBytes("%PDF-1.7\nsigned");
+        var minute = Encoding.ASCII.GetBytes("%PDF-1.7\nminute");
+        await approvals.RecordApprovalAsync(period.CompanyId, period.Id, new DirectorsApprovalRecordInput(
+            page.Id, signed, DirectorsApprovalIntegrity.Sha256(signed), minute, DirectorsApprovalIntegrity.Sha256(minute)), owner);
+        var corrected = new DateOnly(2026, 2, 10);
+
+        var refused = await Assert.ThrowsAsync<BusinessRuleException>(() => PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, corrected),
+            db, new AuditService(db), statements, context, DisabledApiAccess()));
+        Assert.Contains("withdraw it on the Filing tab", refused.Message);
+
+        await approvals.WithdrawAsync(period.CompanyId, period.Id,
+            new DirectorsApprovalWithdrawalInput("entered-in-error", "The board met on a different date."), owner);
+        var result = await PeriodStatusEndpoint.UpdateAsync(
+            period.CompanyId, period.Id,
+            new PeriodStatusUpdate(PeriodStatus.Finalised, null, null, corrected),
+            db, new AuditService(db), statements, context, DisabledApiAccess());
+
+        Assert.Equal(StatusCodes.Status200OK, ResultStatusCode(result));
+        var reloaded = await db.AccountingPeriods.AsNoTracking().SingleAsync(p => p.Id == period.Id);
+        Assert.Equal(corrected, reloaded.ApprovalDate);
+    }
+
+    [Fact]
     public async Task Finalising_WithoutADate_DefaultsTheBoardApprovalDateToTodayInIreland()
     {
         await using var db = CreateDbContext();
@@ -2325,6 +2368,11 @@ public partial class AccountsWorkflowTests
             workflow.UpdateCharityStatusAsync(period.CompanyId, period.Id, FilingStatus.Submitted, "Reviewer", auditUserId: "reviewer@example.ie"));
         Assert.Contains("Charity annual return reference is required", submitWithoutReference.Message);
 
+        // A stale send-back left on the package: recording the submission ends it.
+        var sentBack = await db.CharityFilingPackages.SingleAsync(p => p.PeriodId == period.Id);
+        sentBack.CorrectionDeadline = DateTime.UtcNow.AddDays(3);
+        sentBack.RejectionReason = "Example earlier send-back.";
+        await db.SaveChangesAsync();
         var submitted = await workflow.UpdateCharityStatusAsync(
             period.CompanyId,
             period.Id,
@@ -2333,6 +2381,8 @@ public partial class AccountsWorkflowTests
             annualReturnReference: "  CRA-AR-2025-001  ",
             auditUserId: "reviewer@example.ie");
         var submittedStatus = submitted.FilingStatus;
+        Assert.Null(submitted.CorrectionDeadline);
+        Assert.Null(submitted.RejectionReason);
         var accepted = await workflow.UpdateCharityStatusAsync(period.CompanyId, period.Id, FilingStatus.Accepted, "Reviewer", auditUserId: "reviewer@example.ie");
         var status = await workflow.GetStatusAsync(period.CompanyId, period.Id);
 

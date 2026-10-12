@@ -102,7 +102,10 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
                 && dividend.DateDeclared <= period.PeriodEnd
                 && (dividend.DatePaid is null || dividend.DatePaid > period.PeriodEnd))
             .Sum(dividend => dividend.Amount);
-        var resultsText = ResultsAndDividendsText(profitAfterTax, paidDividends, declaredNotPaid);
+        // Charity chart (company limited by guarantee): surplus/deficit wording, and no dividends paragraph.
+        var resultsText = company.ChartOfAccountsVariant == ChartOfAccountsVariant.CharityClg
+            ? CharityResultsText(profitAfterTax, paidDividends, declaredNotPaid)
+            : ResultsAndDividendsText(profitAfterTax, paidDividends, declaredNotPaid);
 
         var accountingRecords =
             $"The directors acknowledge their responsibilities under Sections 281 to 285 of the Companies Act 2014 "
@@ -200,6 +203,30 @@ public class DirectorsReportService(AccountsDbContext db, FinancialStatementsSer
         officer.Role.ToString(),
         officer.AppointedDate!.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         officer.ResignedDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+    private static string CharityResultsText(decimal surplusOrDeficitAfterTax, decimal dividendsPaid, decimal dividendsDeclaredNotPaid)
+    {
+        var result = surplusOrDeficitAfterTax switch
+        {
+            > 0 => $"The surplus for the financial year after taxation was {Euro(surplusOrDeficitAfterTax)}.",
+            < 0 => $"The deficit for the financial year after taxation was {Euro(Math.Abs(surplusOrDeficitAfterTax))}.",
+            _ => "The company recorded neither a surplus nor a deficit for the financial year after taxation."
+        };
+        // A company limited by guarantee pays no dividends. If dividends are nevertheless recorded, state
+        // them in the standard form rather than the "no dividends" sentence, so the contradiction surfaces.
+        if (dividendsPaid > 0 || dividendsDeclaredNotPaid > 0)
+        {
+            var recorded = dividendsPaid > 0
+                ? $" Dividends of {Euro(dividendsPaid)} were paid during the financial year."
+                : string.Empty;
+            var declared = dividendsDeclaredNotPaid > 0
+                ? $" Dividends of {Euro(dividendsDeclaredNotPaid)} were declared during the financial year but remained unpaid at the reporting date."
+                : string.Empty;
+            return result + recorded + declared;
+        }
+
+        return result + " The company is limited by guarantee, has no share capital and pays no dividends.";
+    }
 
     private static string ResultsAndDividendsText(
         decimal profitOrLossAfterTax,
