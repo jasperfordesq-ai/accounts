@@ -74,11 +74,11 @@ administration, privacy, chart adoption, historic anchors, …) answers:
 
 ```json
 { "code": "APPROVAL_REQUIRED", "approvalId": "…", "summary": "Delete officers, company Example Limited (CRO 123456), officer A Director (Director)",
-  "expiresAt": "…", "command": "filingbridge-mcp approve …", "approvalsUrl": "https://…/settings/approvals?id=…" }
+  "expiresAt": "…", "command": "filingbridge-mcp approve …" }
 ```
 
 The approval is bound to SHA-256 of (agent family, method, path, canonical JSON body). The person runs
-the command in their own terminal (or, from phase 2, uses the web approvals page), sees the server's
+the command in their own terminal (from phase 2 also a web approvals page, linked from the 428), sees the server's
 summary and enters password + authenticator code. The agent then repeats the identical call with
 `X-FilingBridge-Approval`; one conditional update spends it. Any mismatch, expiry (5 minutes) or
 second use gets a fresh 428. The browser's 10-minute recent-TOTP window is never consulted for
@@ -104,7 +104,7 @@ agents, so nothing elevates an agent for a period of time.
 | `Connector:RefreshIdleDays` / `FamilyAbsoluteDays` | 30 / 90 | |
 | `Connector:ApprovalMinutes` | 5 | 2–10 |
 | `Connector:WriteBudgetPerMinute` | 30 | 5–120 |
-| `Connector:PublicBaseUrl` | — | Builds `approvalsUrl` |
+| `Connector:PublicBaseUrl` | — | Public origin; used from phase 2 for the web approvals link and OAuth metadata |
 
 Compose: secret `connector_signing_key` (`CONNECTOR_SIGNING_KEY_FILE`) mounted into the API only.
 Private Server generates it at setup and on the first environment write after an update, and

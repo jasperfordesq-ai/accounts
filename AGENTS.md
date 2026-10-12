@@ -108,6 +108,19 @@ and never changes the independent 600/1,000 statutory/Public Production audit. N
 application ports in a VPC firewall, use Tailscale Funnel, run `compose.yml`, or weaken the shared
 tenant/auth/RLS/audit/recovery controls.
 
+## MCP connector (2026-10-12)
+
+`mcp/` is a product-grade MCP connector that lets Claude/Codex agents act as the person who
+connected them (spec `Docs/superpowers/specs/2026-10-12-mcp-connector-design.md`, architecture
+`Docs/architecture/mcp-connector.md`, package `mcp/README.md` + `mcp/HANDOVER.md`). Rules for
+agents changing it: every new API route must become a tool or a written exclusion in
+`mcp/src/route-coverage.ts` (the test fails otherwise); human-confirmation routes live only in
+`Services/PrivilegedRouteCatalog.cs` and the connector mirrors it by test; personal fields must be
+classified in `mcp/src/field-policy.ts`; never add an approval tool, a "submit" tool, or a way for an
+agent to re-authenticate itself. Run `npm test --prefix mcp` and `node mcp/scripts/canary.mjs`.
+Phase 2 (OAuth 2.1 + in-stack Streamable HTTP for Claude.ai, web approvals/agents pages) and phase 3
+(Claude Desktop bundle, Private Server enable command and VM acceptance) remain.
+
 ## Active Goal Handoff
 
 Goal: finish the Irish statutory accounts platform so it is production-ready code-wise,

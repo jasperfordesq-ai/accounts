@@ -201,6 +201,21 @@ foreach ($pattern in $forbiddenRoutePatterns) {
     Assert-DoesNotMatch $revenueEndpoints $pattern "Revenue endpoint routes" $failures
 }
 
+# The MCP connector must keep the same boundary: no tool may be named or described as a submission,
+# and the agent instructions must carry the recorded-workflow sentence verbatim.
+$mcpInstructionsPath = "mcp/src/instructions.ts"
+$mcpInstructions = Read-RepoFile $resolvedRoot $mcpInstructionsPath $failures
+Assert-ContainsText $mcpInstructions "CRO and ROS final submission remain external actions recorded in workflow state." "MCP connector instructions" $failures
+$mcpToolFiles = @(Get-ChildItem -LiteralPath (Join-Path $resolvedRoot "mcp/src") -Filter "tools-*.ts" -File -ErrorAction SilentlyContinue)
+if ($mcpToolFiles.Count -eq 0) {
+    $failures.Add("MCP connector tool catalogue files (mcp/src/tools-*.ts) were not found.") | Out-Null
+}
+foreach ($file in $mcpToolFiles) {
+    $content = [IO.File]::ReadAllText($file.FullName)
+    Assert-DoesNotMatch $content "name:\s*['""][a-z_]*submit" "MCP tool names in $($file.Name)" $failures
+    Assert-DoesNotMatch $content "\b(?:Cro|Ros|Core|Revenue)SubmissionClient\b|submitTo(?:Cro|Ros|Revenue)" "MCP tool catalogue $($file.Name)" $failures
+}
+
 $report = [ordered]@{
     status = if ($failures.Count -eq 0) { "passed" } else { "failed" }
     checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")

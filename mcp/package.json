@@ -1,0 +1,53 @@
+{
+  "name": "filingbridge-mcp",
+  "version": "0.1.0",
+  "description": "The FilingBridge connector: a Model Context Protocol server that lets an AI client prepare Irish statutory accounts, CRO filing outputs and Revenue CT1 support in FilingBridge as the person running it.",
+  "license": "AGPL-3.0-or-later",
+  "author": "Jasper Ford",
+  "contributors": [
+    "hOUR Timebank CLG (Ireland)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jasperfordesq-ai/accounts.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://github.com/jasperfordesq-ai/accounts/tree/main/mcp#readme",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "accounts",
+    "ireland",
+    "filingbridge"
+  ],
+  "private": true,
+  "files": [
+    "dist",
+    "!dist/tests",
+    "README.md"
+  ],
+  "type": "module",
+  "bin": {
+    "filingbridge-mcp": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "generate:openapi-types": "openapi-typescript ../backend/Accounts.Api/OpenApi/accounts-api-v1.json -o src/generated/openapi-types.ts",
+    "test": "tsc -p tsconfig.json && node --test dist/tests/*.test.js",
+    "canary": "node scripts/canary.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@napi-rs/keyring": "1.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -219,7 +219,7 @@ public sealed class ConnectorMiddlewareTests
     public async Task Csrf_IsSkippedOnlyForConnectorSessions()
     {
         await using var fixture = await ConnectorTestFixture.CreateAsync();
-        var owner = await fixture.Auth.GetPrincipalAsync(fixture.Owner.Id) with { CsrfToken = "expected-token" };
+        var owner = (await fixture.Auth.GetPrincipalAsync(fixture.Owner.Id) ?? throw new InvalidOperationException()) with { CsrfToken = "expected-token" };
         var options = Options.Create(new AuthSessionConfig());
 
         var browser = fixture.NewHttpContext("POST", "/api/companies/1/officers", "{}");

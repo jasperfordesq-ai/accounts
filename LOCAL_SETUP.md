@@ -73,6 +73,24 @@ Workspace: Accounts v2 Demo Tenant
 
 The local admin is not forced through the password-change screen. If you choose to change the password later, use at least 20 characters, including upper case, lower case, number, and symbol characters.
 
+## Connect an AI agent (MCP connector)
+
+The development API enables the MCP connector (`appsettings.Development.json`). Build the
+connector once, then connect it as the local admin. The Owner account needs an authenticator, so
+sign in through the web app first and enrol one if you have not already.
+
+```bash
+npm ci --prefix mcp
+npm run build --prefix mcp
+node mcp/dist/cli.js connect --profile local --base-url http://localhost:3000 --tenant-slug main-demo --email admin@accounts.local --access-level admin
+node mcp/dist/cli.js status --profile local --base-url http://localhost:3000
+```
+
+Then add it to Claude Code or Codex as described in [`mcp/README.md`](mcp/README.md). Irreversible
+actions return an approval id; approve it yourself with
+`node mcp/dist/cli.js approve <id> --profile local --base-url http://localhost:3000`.
+Architecture and guarantees: [`Docs/architecture/mcp-connector.md`](Docs/architecture/mcp-connector.md).
+
 ## Seeded Charity Workspace
 
 The local database auto-migrates and seeds demo data on startup. The main charity-style company is:

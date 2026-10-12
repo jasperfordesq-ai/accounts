@@ -99,7 +99,9 @@ public sealed class ConnectorActionApprovalMiddleware(RequestDelegate next)
             });
         }
 
-        var publicBase = config?.PublicBaseUrl?.TrimEnd('/');
+        // The web approvals page ships in phase 2; until then no link is advertised so neither the
+        // agent nor the person is sent to a page that does not exist.
+        string? approvalsUrl = null;
         return context.Response.WriteAsJsonAsync(new
         {
             error = "This action needs a person to approve it. Ask them to run the command below in their own terminal, then repeat the identical call with approvalId.",
@@ -109,7 +111,7 @@ public sealed class ConnectorActionApprovalMiddleware(RequestDelegate next)
             resourceId = approval.ResourceId,
             expiresAt = DateTime.SpecifyKind(approval.ExpiresAtUtc, DateTimeKind.Utc),
             command = $"filingbridge-mcp approve {approval.Id}",
-            approvalsUrl = string.IsNullOrWhiteSpace(publicBase) ? null : $"{publicBase}/settings/approvals?id={approval.Id}"
+            approvalsUrl
         });
     }
 }

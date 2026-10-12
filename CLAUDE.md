@@ -59,6 +59,7 @@ accounts/
 │       │   ├── companies/[id], companies/new, .../periods/[periodId]/{year-end,classify,statements,notes,charity}
 │       ├── components/             # AppNavbar, AuthProvider (session + route guard), ErrorBoundary, ...
 │       └── lib/                    # api.ts (typed client), auth.ts, proxy helpers, validation
+├── mcp/                            # MCP connector (TypeScript): stdio server + CLI for Claude/Codex agents
 ├── scripts/                        # PowerShell: backup/restore Postgres, production smoke, image verify
 ├── deploy/caddy/Caddyfile.example  # Reverse-proxy / HTTPS ingress example
 ├── .github/workflows/ci.yml        # CI: backend build+test, frontend lint/type/test/build, prod smoke
@@ -191,7 +192,7 @@ Auth, security & platform services:
 ## API endpoints
 
 The committed OpenAPI 3.1 contract is the canonical route and transport-schema inventory:
-`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 193 paths and 228
+`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 204 paths and 241
 schemas. `Docs/architecture/generated-api-contracts.md` documents regeneration and frontend drift
 checks; avoid maintaining a second exhaustive hand-written route count here.
 
@@ -380,7 +381,9 @@ Public Production retains the following contract:
 
 ## Generated/current inventory
 
-- Transport inventory: committed OpenAPI 3.1 contract (193 paths, 228 schemas at this revision).
+- Transport inventory: committed OpenAPI 3.1 contract (204 paths, 241 schemas at this revision).
+- MCP connector inventory: `mcp/src/route-coverage.ts` maps every contract operation to a tool or a
+  written exclusion (236 tools at this revision); see `Docs/architecture/mcp-connector.md`.
 - Database inventory: EF model plus append-only migrations; migration/model drift is tested rather
   than represented by a manually maintained count.
 - Test inventory: use test-run output and retained CI evidence for the exact candidate; historical
