@@ -721,6 +721,10 @@ public class FilingWorkflowService(
             db.CharityFilingPackages.Add(pkg);
         }
         var oldValue = CharityFilingAuditSnapshot(pkg);
+        // The regulator sends back or rejects a return it received: re-recording a send-back would restart
+        // its deadline, and a rejection from any other state would escape it.
+        if (status is FilingStatus.CorrectionRequired or FilingStatus.Rejected && pkg.FilingStatus != FilingStatus.Submitted)
+            throw new BusinessRuleException("A Charity annual return send-back or rejection can only be recorded for a return recorded as submitted.");
 
         if (status == FilingStatus.Approved)
         {

@@ -92,6 +92,8 @@ public sealed partial class DirectorsApprovalTests
         var p = await SeedPeriodAsync(db);
         (await db.Companies.SingleAsync(c => c.Id == p.CompanyId)).IsCharitableOrganisation = true;
         db.RevenueFilingPackages.Add(new RevenueFilingPackage { PeriodId = p.Id });
+        // The regulator sends back only a return recorded as submitted.
+        db.CharityFilingPackages.Add(new CharityFilingPackage { PeriodId = p.Id, FilingStatus = FilingStatus.Submitted, AnnualReturnReference = "AR-EXAMPLE-1" });
         await db.SaveChangesAsync();
         await LockAsync(db, p.Id);
         await using var host = await LockedPeriodHost.StartAsync(db, VerifiedOwner() with { AllowedCompanyIds = new HashSet<int> { p.CompanyId } });

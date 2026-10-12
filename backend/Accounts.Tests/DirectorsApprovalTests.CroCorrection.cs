@@ -687,6 +687,27 @@ public sealed partial class DirectorsApprovalTests
         Assert.Equal((FilingStatus.Approved, "AR-EXAMPLE-1", deadline), (stored.FilingStatus, stored.AnnualReturnReference, stored.CorrectionDeadline!.Value));
     }
 
+    [Theory]
+    [MemberData(nameof(SendBackFromAnotherState))]
+    public async Task ACharitySendBackOrRejection_IsOnlyRecordedForASubmittedReturn(FilingStatus from, FilingStatus to)
+    {
+        await using var db = CreateDb();
+        var passed = DateTime.UtcNow.AddDays(-1);
+        var period = await CharityCorrectionApprovedAsync(db, passed);
+        var pkg = await db.CharityFilingPackages.SingleAsync(c => c.PeriodId == period.Id);
+        pkg.FilingStatus = from;
+        await db.SaveChangesAsync();
+        var statements = new FinancialStatementsService(db);
+        var workflow = new FilingWorkflowService(db, statements, new IxbrlService(db, statements));
+
+        var error = await Assert.ThrowsAsync<BusinessRuleException>(() => workflow.UpdateCharityStatusAsync(
+            period.CompanyId, period.Id, to, "Firm Reviewer", reason: "Example reason for the record.", auditUserId: "user:1"));
+
+        Assert.Equal("A Charity annual return send-back or rejection can only be recorded for a return recorded as submitted.", error.Message);
+        var stored = await db.CharityFilingPackages.AsNoTracking().SingleAsync(c => c.PeriodId == period.Id);
+        Assert.Equal((from, passed, "Example charity correction."), (stored.FilingStatus, stored.CorrectionDeadline!.Value, stored.RejectionReason));
+    }
+
     [Fact]
     public async Task CharityTrusteeReview_DuringACorrection_KeepsTheTracker()
     {
