@@ -29,7 +29,7 @@ test('profiles pin where a sign-in may go', () => {
   assert.throws(() => parseArgs(['--profile', 'local', '--base-url', 'http://127.0.0.1.evil.example:3000'], env), /loopback/);
   assert.throws(
     () => parseArgs(['--profile', 'private', '--base-url', 'https://accounts.example.ie'], env),
-    (error: unknown) => error instanceof Error && error.message.includes('.ts.net'),
+    /only reaches the Private Server's loopback address or an https .*A profile is a pin/,
   );
   assert.throws(() => parseArgs(['--profile', 'private', '--base-url', 'http://filingbridge.tail1234.ts.net'], env), /loopback/);
   assert.equal(parseArgs(['--profile', 'private', '--base-url', 'http://127.0.0.1:3500'], env).baseUrl, 'http://127.0.0.1:3500');
