@@ -144,6 +144,15 @@ public sealed partial class DirectorsApprovalTests
             builder.Services.AddScoped<PeriodConcurrencyTokenService>();
             builder.Services.AddScoped(sp => Service(sp.GetRequiredService<AccountsDbContext>()));
             builder.Services.AddScoped(sp => WorkflowOn(sp.GetRequiredService<AccountsDbContext>()));
+            builder.Services.AddScoped(sp => new FilingReleaseGate(sp.GetRequiredService<AccountsDbContext>(), FilingGateFixture.Candidate, new AuditService(sp.GetRequiredService<AccountsDbContext>())));
+            builder.Services.AddScoped(sp => new AuditService(sp.GetRequiredService<AccountsDbContext>()));
+            builder.Services.AddScoped<FilingReadinessProfileService>();
+            builder.Services.ConfigureHttpJsonOptions(json =>
+            {
+                json.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                json.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                json.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+            });
 
             var app = builder.Build();
             app.UseMiddleware<ExceptionMiddleware>();
@@ -157,10 +166,9 @@ public sealed partial class DirectorsApprovalTests
             app.UseMiddleware<PeriodOwnershipMiddleware>();
             app.UseMiddleware<PeriodConcurrencyMiddleware>();
             app.UseMiddleware<PeriodLockMiddleware>();
-            app.MapPost("/api/companies/{companyId:int}/periods/{periodId:int}/filing/directors-approval-withdrawal",
-                DirectorsApprovalEndpoints.WithdrawApprovalEndpointAsync);
-            app.MapPost("/api/companies/{companyId:int}/periods/{periodId:int}/filing/cro-not-delivered",
-                FilingWorkflowEndpoints.TreatCroAsNotDeliveredEndpointAsync);
+            // The production route groups, so every filing route resolves to its real handler.
+            app.MapDirectorsApprovalEndpoints();
+            app.MapFilingWorkflowEndpoints();
             await app.StartAsync();
             var address = Assert.Single(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses);
             return new LockedPeriodHost(app, new HttpClient { BaseAddress = new Uri(address) });
