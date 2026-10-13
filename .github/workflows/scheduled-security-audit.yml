@@ -125,7 +125,7 @@ jobs:
           exit-code: "0"
 
       - name: Generate backend SPDX SBOM
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0
         with:
           image: accounts-api-scheduled-audit:${{ github.run_id }}
           format: spdx-json
@@ -133,7 +133,7 @@ jobs:
           upload-artifact: false
 
       - name: Generate frontend SPDX SBOM
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0
         with:
           image: accounts-frontend-scheduled-audit:${{ github.run_id }}
           format: spdx-json
