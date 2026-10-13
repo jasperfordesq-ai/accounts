@@ -129,7 +129,7 @@ Assert-True ($password -match '[!@#%*_=+\-]') "Owner password must contain a sym
 $redacted = Protect-PrivateServerText 'password=example token: abc Authorization: Bearer opaque ?token=queryvalue'
 Assert-True ($redacted -notmatch 'example|abc|opaque|queryvalue') "redactor must remove common credential forms"
 $help = Get-PrivateServerHelp
-foreach ($command in @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "connector enable [--origin local|tailscale] | disable | status", "diagnose", "support-bundle", "uninstall", "purge-data", "DryRun")) {
+foreach ($command in @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "connector enable [--origin local|tailscale] | disable | status", "mfa require | off | status", "diagnose", "support-bundle", "uninstall", "purge-data", "DryRun")) {
     Assert-True ($help -match [regex]::Escape($command)) "help must document $command"
 }
 Assert-True ($help -match 'does not submit to CRO/ROS') "help must preserve the no-direct-filing boundary"
@@ -418,6 +418,7 @@ try {
     Assert-True ($state.connectorEnabled -eq $false) "setup must leave the MCP connector disabled"
     Assert-True ($envText -match "(?m)^ACCOUNTS_MCP_IMAGE='filingbridge-private-mcp:") "environment must pin the MCP connector image"
     Assert-True ($envText -match "(?m)^PRIVATE_CONNECTOR_ENABLED='false'\r?$") "environment must keep the MCP connector off by default"
+    Assert-True ($envText -match "(?m)^PRIVATE_REQUIRE_PRIVILEGED_MFA='false'\r?$") "environment must record privileged MFA as off by default"
     Assert-True ($envText -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "connector origin must default to the exact loopback origin"
     Assert-True ($envText -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_HOST='localhost:35490'\r?$") "connector host must match the default loopback origin"
     Assert-True ($envText -match "(?m)^ACCOUNTS_MCP_API_KEY_FILE='.+accounts_mcp_api_key'\r?$" -and $envText -match "(?m)^ACCOUNTS_MCP_API_KEY_HASH_FILE='.+accounts_mcp_api_key_hash'\r?$") "environment must reference the MCP connector key files"
@@ -531,7 +532,10 @@ try {
         $null = @(& icacls.exe $backupDirectory "/grant" "*S-1-1-0:(OI)(CI)R" "/Q" 2>&1)
         Assert-True ($LASTEXITCODE -eq 0) "test must be able to add an unexpected backup-directory ACL"
     }
+    # The complete backup carries a recorded MFA requirement so replacement-host recovery can prove it keeps it.
+    Invoke-FilingBridgePrivateServer -Command mfa -Action require -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     Invoke-FilingBridgePrivateServer -Command backup -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OutputDirectory $backupDirectory -BackupRecipient "age1testrecipient" 6>$null
+    Invoke-FilingBridgePrivateServer -Command mfa -Action off -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
         $backupAcl = Get-Acl -LiteralPath $backupDirectory
         $backupSids = @($backupAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value })
@@ -574,6 +578,7 @@ try {
     Assert-True ($recoveredMcpKey -ne [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8)) "replacement host must regenerate the MCP connector service key"
     Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8) -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $recoveredMcpKey)) "replacement host must bind the regenerated MCP key to its API hash"
     Assert-True ($recoveredState.connectorEnabled -eq $false) "replacement host must start with the MCP connector disabled"
+    Assert-True ($recoveredState.requirePrivilegedMfa -eq $true -and [IO.File]::ReadAllText((Join-Path $recoveredStateDirectory "private.env"), $testUtf8) -match "(?m)^PRIVATE_REQUIRE_PRIVILEGED_MFA='true'\r?$") "replacement host must keep the recorded MFA requirement"
     $hostRecoveryCalls = ($global:FbOperatorCalls | ForEach-Object { $_.description }) -join "`n"
     Assert-True ($hostRecoveryCalls -match 'disposable verification database') "replacement-host recovery must independently restore-test the database before selection"
     Assert-True ($hostRecoveryCalls -match 'Read important-table fingerprints from the recovered database') "replacement-host recovery must compare live post-start business-data fingerprints"
@@ -839,10 +844,25 @@ try {
     $connectorFixture = Read-ConnectorFixture
     Assert-True ($connectorFixture.State.connectorPublicOrigin -eq "http://localhost:35490" -and $connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "disabling Tailscale must return the connector issuer to loopback"
 
+    # The recorded MFA choice must survive every later environment rewrite (connector, Tailscale).
+    Assert-Throws { Invoke-FilingBridgePrivateServer -Command mfa -Action maybe -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } 'mfa requires one action' "mfa must reject unknown actions"
+    $global:FbOperatorCalls.Clear()
+    Invoke-FilingBridgePrivateServer -Command mfa -Action require -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -DryRun 6>$null
+    Assert-True (@($global:FbOperatorCalls | Where-Object { $_.mutating }).Count -eq 0 -and -not [bool](& $privateServerModule { param($value) Get-FbProperty $value "requirePrivilegedMfa" $false } (Read-ConnectorFixture).State)) "mfa require dry-run must not change state or containers"
+    $global:FbOperatorCalls.Clear()
+    Invoke-FilingBridgePrivateServer -Command mfa -Action require -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
+    $mfaFixture = Read-ConnectorFixture
+    Assert-True ($mfaFixture.State.requirePrivilegedMfa -eq $true -and $mfaFixture.Environment -match "(?m)^PRIVATE_REQUIRE_PRIVILEGED_MFA='true'\r?$") "mfa require must record the choice and rewrite the environment"
+    $mfaCalls = @($global:FbOperatorCalls | Where-Object { $_.file -eq "docker" } | ForEach-Object { $_.arguments -join " " })
+    Assert-True (@($mfaCalls | Where-Object { $_ -match '\bup -d --no-deps --force-recreate --wait --wait-timeout 300 api$' }).Count -eq 1) "mfa require must recreate only the API"
+    $mfaStatus = @(Invoke-FilingBridgePrivateServer -Command mfa -Action status -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { [string]$_ })
+    Assert-True (($mfaStatus -join "`n") -match 'Reviewer: required') "mfa status must report the required setting"
+
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command connector -Action disable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     $connectorFixture = Read-ConnectorFixture
     Assert-True ($connectorFixture.State.connectorEnabled -eq $false -and $connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_ENABLED='false'\r?$") "connector disable must turn the connector off"
+    Assert-True ($connectorFixture.Environment -match "(?m)^PRIVATE_REQUIRE_PRIVILEGED_MFA='true'\r?$") "a connector change must keep the recorded MFA requirement"
     $disableCalls = @($global:FbOperatorCalls | Where-Object { $_.file -eq "docker" } | ForEach-Object { $_.arguments -join " " })
     Assert-True (@($disableCalls | Where-Object { $_ -match '\bup -d --no-deps --force-recreate --wait --wait-timeout 300 api$' }).Count -eq 1) "connector disable must recreate only the API"
 

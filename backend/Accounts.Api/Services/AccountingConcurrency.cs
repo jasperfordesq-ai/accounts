@@ -45,6 +45,14 @@ public static class AccountingConflict
 
 public sealed class PeriodConcurrencyTokenService(AccountsDbContext db)
 {
+    // A refused or failed request is audited against the period but changed nothing in it. If it
+    // advanced the token, a refusal answered before PeriodConcurrencyMiddleware runs (an approval
+    // prompt, a role refusal) would carry no new ETag and leave the caller's token stale, so the
+    // approved repeat of the same request would be refused as a concurrency conflict.
+    private const string RequestAuditEntityType = "ApiRequest";
+    private const string RejectedRequestAction = "ApiWriteRejected";
+    private const string FailedRequestAction = "ApiWriteFailed";
+
     public async Task<string?> GetAsync(
         int companyId,
         int periodId,
@@ -69,6 +77,8 @@ public sealed class PeriodConcurrencyTokenService(AccountsDbContext db)
             var latestAudit = await db.AuditLogs
                 .AsNoTracking()
                 .Where(item => item.CompanyId == companyId && item.PeriodId == periodId)
+                .Where(item => item.EntityType != RequestAuditEntityType
+                    || (item.Action != RejectedRequestAction && item.Action != FailedRequestAction))
                 .OrderByDescending(item => item.Id)
                 .Select(item => new { item.Id, item.IntegrityHash })
                 .FirstOrDefaultAsync(cancellationToken);
@@ -106,6 +116,8 @@ public sealed class PeriodConcurrencyTokenService(AccountsDbContext db)
                     SELECT l."Id", l."IntegrityHash"
                     FROM audit_logs AS l
                     WHERE l."CompanyId" = p."CompanyId" AND l."PeriodId" = p."Id"
+                      AND NOT (l."EntityType" = @requestEntityType
+                               AND l."Action" IN (@rejectedAction, @failedAction))
                     ORDER BY l."Id" DESC
                     LIMIT 1
                 ) AS a ON TRUE
@@ -113,6 +125,9 @@ public sealed class PeriodConcurrencyTokenService(AccountsDbContext db)
                 """;
             AddParameter(command, "periodId", periodId);
             AddParameter(command, "companyId", companyId);
+            AddParameter(command, "requestEntityType", RequestAuditEntityType);
+            AddParameter(command, "rejectedAction", RejectedRequestAction);
+            AddParameter(command, "failedAction", FailedRequestAction);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken)) return null;
 

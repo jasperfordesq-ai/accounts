@@ -209,6 +209,29 @@ public sealed class IdentityLifecycleAndMfaTests
     }
 
     [Fact]
+    public async Task Reauthentication_WithPrivilegedMfaOff_AcceptsPasswordAloneAndClaimsNoTotp()
+    {
+        await using var fixture = await IdentityFixture.CreateAsync(requireMfa: false);
+
+        var accepted = await fixture.Identity.ReauthenticateAsync(fixture.OwnerPrincipal, OwnerPassword, null);
+        var wrongPassword = await fixture.Identity.ReauthenticateAsync(fixture.OwnerPrincipal, "Wrong Password Value 9!", null);
+
+        Assert.True(accepted.Succeeded);
+        Assert.Null(accepted.User!.MfaVerifiedAtUtc);
+        Assert.False(wrongPassword.Succeeded);
+    }
+
+    [Fact]
+    public async Task Reauthentication_WithPrivilegedMfaOn_StillRequiresTotp()
+    {
+        await using var fixture = await IdentityFixture.CreateAsync(requireMfa: true);
+
+        var refused = await fixture.Identity.ReauthenticateAsync(fixture.OwnerPrincipal, OwnerPassword, null);
+
+        Assert.False(refused.Succeeded);
+    }
+
+    [Fact]
     public async Task AccountLockAndUnlockRevokeSessionsAndPersistedMfaChallenges()
     {
         await using var fixture = await IdentityFixture.CreateAsync(requireMfa: false);

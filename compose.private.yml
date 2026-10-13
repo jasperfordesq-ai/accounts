@@ -137,7 +137,9 @@ services:
       AuthSession__AbsoluteLifetimeMinutes: "480"
       AuthSession__RecentMfaMinutes: "10"
       AuthSession__MfaChallengeMinutes: "5"
-      AuthSession__RequirePrivilegedMfa: "true"
+      # The launcher writes the installation's recorded choice ('mfa require|off', default off while
+      # pre-release). An environment that does not carry it fails safe to requiring MFA.
+      AuthSession__RequirePrivilegedMfa: "${PRIVATE_REQUIRE_PRIVILEGED_MFA:-true}"
       IdentitySecurity__RequireInProduction: "true"
       IdentitySecurity__BreachedPasswordCheckEnabled: "false"
       IdentitySecurity__BreachedPasswordFailClosed: "false"

@@ -179,7 +179,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<void> {
       return;
     }
     const password = await prompt(io, 'Password (not shown): ', true);
-    const totpCode = (await prompt(io, 'Authenticator code (not shown): ', true)).trim();
+    const totpCode = (await prompt(io, 'Authenticator code (press Enter if two-factor sign-in is off): ', true)).trim();
     const outcome = await session.approve(config.approvalId!, password, totpCode);
     io.stdout.write(
       `Approved: ${outcome.summary ?? preview.summary}\n`
