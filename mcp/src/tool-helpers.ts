@@ -24,7 +24,7 @@ export const REPLACES =
   ' Replaces the whole record: read it first and send every field you want to keep, because an omitted field is cleared or reset.';
 
 export const APPROVAL_NOTE =
-  ' FilingBridge asks the person to approve this exact request (password, and an authenticator code if two-factor sign-in is on) before it happens;'
+  ' FilingBridge asks the person to approve this exact request (password, and an authenticator code if two-factor sign-in is on) before it happens; '
   + 'see the approval flow in the server instructions.';
 
 interface CrudOptions {

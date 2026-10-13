@@ -142,6 +142,7 @@ test('every agent-facing description of approving says the authenticator code de
     assert.doesNotMatch(text, /password and (an )?authenticator code\)?[ .;]/);
     assert.match(text, /authenticator code if two-factor sign-in is on/);
   }
+  assert.match(APPROVAL_NOTE, /before it happens; see the approval flow/);
 });
 
 /** A client whose lookup never answers until its signal fires, like a stalled FilingBridge. */
