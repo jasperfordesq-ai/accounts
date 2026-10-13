@@ -107,7 +107,8 @@ The approval is bound to SHA-256 of (agent family, method, path, canonical JSON 
 the command in their own terminal or opens the web approvals page linked from the 428, sees the server's
 summary and enters password + authenticator code. Meanwhile the agent calls the read-only core tool
 `approval_wait`, which polls `GET /api/auth/connector/approvals/{id}` and returns as soon as the approval
-is granted (or used, or expired, or after at most 120 seconds with `waiting`), so the person never has
+is granted (or used, or expired, or after at most 50 seconds with `waiting`, inside the 60-second request timeout MCP clients apply
+to a JSON answer), so the person never has
 to tell the agent to carry on. The agent then repeats the identical call with
 `X-FilingBridge-Approval`; one conditional update spends it. Any mismatch, expiry (15 minutes by
 default) or second use gets a fresh 428.

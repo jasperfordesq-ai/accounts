@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ApiClient } from '../client.js';
 import { ApprovalRequiredError } from '../client.js';
-import { APPROVAL_WAIT_TOOL, MAX_WAIT_SECONDS, parseApprovalWaitArgs, runApprovalWait } from '../approval-wait.js';
+import { APPROVAL_WAIT_TOOL, DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS, parseApprovalWaitArgs, runApprovalWait } from '../approval-wait.js';
 
 const ID = '04c0338f-a98e-4800-9815-327b0fa63dfc';
 const T0 = Date.parse('2026-10-13T11:00:00Z');
@@ -98,7 +98,18 @@ test('approval_wait refuses arguments it does not know and identifiers FilingBri
   assert.throws(() => parseApprovalWaitArgs({ approvalId: ID, password: 'x' }), /Unknown argument "password"/);
   assert.throws(() => parseApprovalWaitArgs({ approvalId: ID, waitSeconds: MAX_WAIT_SECONDS + 1 }), /waitSeconds/);
   assert.throws(() => parseApprovalWaitArgs({ approvalId: ID, waitSeconds: 1.5 }), /waitSeconds/);
-  assert.deepEqual(parseApprovalWaitArgs({ approvalId: ID }), { approvalId: ID, waitMs: 90_000 });
+  assert.deepEqual(parseApprovalWaitArgs({ approvalId: ID }), { approvalId: ID, waitMs: DEFAULT_WAIT_SECONDS * 1000 });
+});
+
+test('approval_wait always answers before the 60-second request timeout MCP clients apply', () => {
+  // The answer is one JSON body, so nothing reaches the client until the wait ends: a wait the
+  // client gives up on first is reported to the agent as a timeout, not as "waiting".
+  const CLIENT_REQUEST_TIMEOUT_SECONDS = 60;
+  const MARGIN_SECONDS = 10;
+  assert.ok(MAX_WAIT_SECONDS + MARGIN_SECONDS <= CLIENT_REQUEST_TIMEOUT_SECONDS);
+  assert.ok(DEFAULT_WAIT_SECONDS <= MAX_WAIT_SECONDS);
+  assert.equal(APPROVAL_WAIT_TOOL.inputSchema.properties.waitSeconds.maximum, MAX_WAIT_SECONDS);
+  assert.match(APPROVAL_WAIT_TOOL.description, new RegExp(`default ${DEFAULT_WAIT_SECONDS}, at most ${MAX_WAIT_SECONDS}\\)`));
 });
 
 test('approval_wait is read-only and cannot grant: it never sends anything but a GET', async () => {
@@ -148,7 +159,7 @@ test('cancelling approval_wait abandons the pending lookup at once', async () =>
   const seen: { signal?: AbortSignal | undefined } = {};
   const controller = new AbortController();
   const started = Date.now();
-  const pending = runApprovalWait(stalledClient(seen), { approvalId: ID, waitSeconds: 60 }, { signal: controller.signal });
+  const pending = runApprovalWait(stalledClient(seen), { approvalId: ID, waitSeconds: MAX_WAIT_SECONDS }, { signal: controller.signal });
   setTimeout(() => controller.abort(), 50);
   const result = await pending;
   assert.equal(result.status, 'waiting');

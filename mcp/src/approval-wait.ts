@@ -8,8 +8,13 @@ import type { ToolAnnotations } from './tools.js';
 /** Approval identifiers are GUIDs issued by FilingBridge. */
 const APPROVAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const DEFAULT_WAIT_SECONDS = 90;
-export const MAX_WAIT_SECONDS = 120;
+/**
+ * The answer is a single JSON body, so nothing reaches the client until the wait ends, and MCP
+ * clients give up on a request after 60 seconds by default (the TypeScript SDK, Claude Code and
+ * Claude Desktop). Waits stay well inside that; the agent calls again on "waiting".
+ */
+export const DEFAULT_WAIT_SECONDS = 45;
+export const MAX_WAIT_SECONDS = 50;
 const POLL_MS = 3000;
 
 /**
@@ -23,7 +28,8 @@ export const APPROVAL_WAIT_TOOL = {
   description:
     'Wait while the person approves an action FilingBridge refused with APPROVAL_REQUIRED. First show the person '
     + 'the approvalsUrl (or the approve command) from that refusal, then call this with its approvalId. It returns as '
-    + 'soon as the approval is granted, used or expired, or after waitSeconds (default 90, at most 120) with status '
+    + 'soon as the approval is granted, used or expired, or after waitSeconds '
+    + `(default ${DEFAULT_WAIT_SECONDS}, at most ${MAX_WAIT_SECONDS}) with status `
     + '"waiting", in which case call it again. When it returns "approved", repeat the refused call with exactly the '
     + 'same arguments plus approvalId. This tool only reads; it cannot approve anything.',
   inputSchema: {
