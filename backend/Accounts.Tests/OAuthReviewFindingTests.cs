@@ -110,6 +110,27 @@ public sealed class OAuthReviewFindingTests
         Assert.NotNull(fixture.OAuth.Describe(clientId, Redirect, "code", Pkce().Challenge, "S256", null, null).Value);
     }
 
+    [Fact]
+    public async Task Retention_RemovesFinishedAuthorizationCodes()
+    {
+        await using var fixture = await ConnectorTestFixture.CreateAsync();
+        var clientId = Register(fixture);
+        await AuthorizeAsync(fixture, clientId, Pkce().Challenge, "Read", "Withheld");
+        var privacy = new PrivacyGovernanceService(
+            fixture.Db,
+            Microsoft.Extensions.Options.Options.Create(new Accounts.Api.Rules.PrivacyGovernanceConfig()),
+            Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Microsoft.Extensions.Options.IOptions<Accounts.Api.Rules.AuthSessionConfig>>(fixture.Services),
+            fixture.Clock,
+            Microsoft.Extensions.Options.Options.Create(fixture.ConnectorConfig));
+
+        Assert.Equal(0, (await privacy.RunRetentionForTenantAsync(fixture.Tenant.Id)).DeletedConnectorRecords);
+        fixture.Clock.Advance(TimeSpan.FromDays(2));
+        var result = await privacy.RunRetentionForTenantAsync(fixture.Tenant.Id);
+
+        Assert.Equal(1, result.DeletedConnectorRecords);
+        Assert.Empty(await fixture.Db.OAuthAuthorizationCodes.ToListAsync());
+    }
+
     private static string Register(ConnectorTestFixture fixture, string name = "Client") =>
         (string)((IReadOnlyDictionary<string, object>)fixture.OAuth.Register(new OAuthRegisterInput([Redirect], name, null, null, null)).Value!)["client_id"];
 
