@@ -126,6 +126,7 @@ public sealed class ConnectorSessionService
     private readonly TimeProvider timeProvider;
     private readonly DatabaseTenantBootstrapResolver? tenantBootstrap;
     private readonly ConnectorTokenCodec? codec;
+    private readonly byte[]? refreshHashKey;
 
     public ConnectorSessionService(
         AccountsDbContext db,
@@ -145,9 +146,16 @@ public sealed class ConnectorSessionService
         config = options.Value;
         this.timeProvider = timeProvider;
         this.tenantBootstrap = tenantBootstrap;
-        codec = AuthSessionKey.HasStrongKey(config.SigningKey)
-            ? new ConnectorTokenCodec(AuthSessionKey.DecodeRequired(config.SigningKey))
-            : null;
+        if (AuthSessionKey.HasStrongKey(config.SigningKey))
+        {
+            var connectorKey = AuthSessionKey.DecodeRequired(config.SigningKey);
+            codec = new ConnectorTokenCodec(connectorKey);
+            // Refresh-token hashes are keyed from the connector signing key, which Private Server
+            // restore and host recovery rotate. A restored database therefore cannot revive an agent
+            // that was disconnected after the backup point.
+            refreshHashKey = System.Security.Cryptography.HMACSHA256.HashData(
+                connectorKey, System.Text.Encoding.ASCII.GetBytes("accounts:connector:refresh-token-hash:v1"));
+        }
     }
 
     public bool IsAvailable => config.Enabled && codec is not null;
@@ -226,7 +234,8 @@ public sealed class ConnectorSessionService
         string dataScope,
         string? deviceLabel,
         string? clientVersion,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? clientIdHash = null)
     {
         var now = UtcNow();
         var familyId = Guid.NewGuid();
@@ -246,6 +255,7 @@ public sealed class ConnectorSessionService
             MfaMethod = principal.MfaMethod,
             DeviceLabel = Truncate(deviceLabel, 120),
             ClientVersion = Truncate(clientVersion, 40),
+            ClientIdHash = clientIdHash,
             CreatedAtUtc = now,
             ExpiresAtUtc = RefreshExpiry(now, now)
         };
@@ -295,7 +305,12 @@ public sealed class ConnectorSessionService
         await LogoutAsync(authenticated.Value.User, authenticated.Value.Session, null, cancellationToken);
     }
 
-    public async Task<ConnectorLoginResponse?> RefreshAsync(string? rawRefresh, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Rotates a refresh token. <paramref name="expectedClientIdHash"/> is the OAuth client presenting
+    /// it (null for the CLI route): an agent issued to one OAuth client can only be refreshed by that
+    /// client, and an OAuth-issued agent cannot be refreshed through the CLI route.
+    /// </summary>
+    public async Task<ConnectorLoginResponse?> RefreshAsync(string? rawRefresh, CancellationToken cancellationToken = default, string? expectedClientIdHash = null)
     {
         if (!IsAvailable) return null;
         var tenantId = ConnectorTokenCodec.ReadRefreshTokenTenant(rawRefresh);
@@ -318,6 +333,7 @@ public sealed class ConnectorSessionService
             return null;
         }
         if (current.ExpiresAtUtc <= now) return null;
+        if (!string.Equals(current.ClientIdHash, expectedClientIdHash, StringComparison.Ordinal)) return null;
 
         var principal = await LoadValidPrincipalAsync(current.UserId, current.TenantId, current.PasswordLastChangedAtTicks, now, cancellationToken);
         if (principal is null)
@@ -350,6 +366,7 @@ public sealed class ConnectorSessionService
             MfaMethod = current.MfaMethod,
             DeviceLabel = current.DeviceLabel,
             ClientVersion = current.ClientVersion,
+            ClientIdHash = current.ClientIdHash,
             CreatedAtUtc = now,
             LastUsedAtUtc = now,
             ExpiresAtUtc = RefreshExpiry(now, current.FamilyCreatedAtUtc),
@@ -358,6 +375,19 @@ public sealed class ConnectorSessionService
         if (successor.ExpiresAtUtc <= now) return null;
         db.ConnectorSessions.Add(successor);
         await db.SaveChangesAsync(cancellationToken);
+
+        // Rotation is two writes (revoke predecessor, insert successor). A disconnect, reuse
+        // detection or security revocation that ran between them saw no active row, so re-check
+        // the family now that the successor exists and end it if anything else revoked the family.
+        var familyEndedElsewhere = await db.ConnectorSessions.AsNoTracking().AnyAsync(session =>
+            session.FamilyId == current.FamilyId
+            && session.RevokedAtUtc != null
+            && session.RevocationReason != ConnectorRevocationReasons.Rotated, cancellationToken);
+        if (familyEndedElsewhere)
+        {
+            await RevokeFamilyInternalAsync(current.FamilyId, ConnectorRevocationReasons.SecurityStateRevoked, UtcNow(), cancellationToken);
+            return null;
+        }
 
         var connectedPrincipal = principal with
         {
@@ -792,7 +822,10 @@ public sealed class ConnectorSessionService
         return idle < absolute ? idle : absolute;
     }
 
-    private string HashRefreshToken(string raw) => mfaSecurity.HashOpaqueToken("connector-refresh:" + raw.Trim());
+    private string HashRefreshToken(string raw) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.HMACSHA256.HashData(
+            refreshHashKey ?? throw new InvalidOperationException("The connector is not configured."),
+            System.Text.Encoding.UTF8.GetBytes(raw.Trim())));
 
     private Task AuditAsync(AuthenticatedUser user, string action, object details, CancellationToken cancellationToken) =>
         auditService.LogAsync(

@@ -13,6 +13,7 @@ import {
 import { TOOLS } from './catalogue.js';
 import { annotationsFor, describeTool, downloadsOff, localOnlyRefusal, runTool, toolInputSchema, uploadsOff, type ToolDefinition } from './tools.js';
 import { ApiClient } from './client.js';
+import type { ETagCache } from './etag-cache.js';
 import type { TokenSource } from './token-source.js';
 import { CONNECTOR_VERSION } from './version.js';
 import { INSTRUCTIONS } from './instructions.js';
@@ -41,12 +42,15 @@ import {
 } from './session-level.js';
 import { inToolsets, type ToolGroup } from './toolsets.js';
 import type { FileMode } from './files.js';
+import type { ConnectorProfile } from './config.js';
 
 export interface ServerOptions {
   /** Where the API is reached: the frontend origin in stdio mode, the API itself in serve --http. */
   baseUrl: string;
   /** The address people open FilingBridge at, for links. Defaults to baseUrl. */
   publicUrl?: string | undefined;
+  /** The profile the connector was started with; named in the approve command shown to the person. */
+  profile?: ConnectorProfile | undefined;
   tokens: TokenSource;
   /** Added to every API request (serve --http: the service key). */
   serviceHeaders?: Readonly<Record<string, string>> | undefined;
@@ -57,6 +61,12 @@ export interface ServerOptions {
   uploadRoot?: string | undefined;
   verbose?: boolean;
   fetchImpl?: typeof fetch;
+  /**
+   * The period concurrency tokens this server's client reads and sends.
+   * serve --http passes the caller's own cache, kept across that caller's
+   * requests, so a write carries the If-Match its earlier read learned.
+   */
+  etags?: ETagCache | undefined;
   /** Replaced in tests; the default asks FilingBridge. */
   posture?: () => Promise<SessionPosture>;
   /** Where diagnostics go when verbose; stderr by default. */
@@ -107,8 +117,10 @@ export function createServer(options: ServerOptions): Server {
   const client = new ApiClient({
     tokens: options.tokens,
     baseUrl: options.baseUrl,
+    profile: options.profile,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.serviceHeaders ? { serviceHeaders: options.serviceHeaders } : {}),
+    ...(options.etags ? { etags: options.etags } : {}),
   });
   const publicUrl = options.publicUrl ?? options.baseUrl;
   const inline = options.fileMode === 'inline';

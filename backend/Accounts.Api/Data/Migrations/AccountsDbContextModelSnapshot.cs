@@ -1414,6 +1414,10 @@ namespace Accounts.Api.Data.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<string>("ClientIdHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("ClientKind")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -4019,6 +4023,9 @@ namespace Accounts.Api.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
+
+                    b.Property<int>("SessionVersion")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TenantId")
                         .HasColumnType("integer");

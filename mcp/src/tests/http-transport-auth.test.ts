@@ -97,7 +97,8 @@ test('the bearer is forwarded verbatim with the service key, and no browser head
       }
     }
     for (const line of service.logs) {
-      assert.doesNotMatch(line, /good-access-token|svc-key/, 'neither the bearer nor the service key is logged');
+      assert.doesNotMatch(line, /svc-key/, 'the service key is not logged');
+      assert.ok(!line.includes(GOOD_TOKEN) && !line.includes(GOOD_TOKEN.split('.')[1]!), 'the bearer is not logged');
     }
     const logged = JSON.parse(service.logs.at(-1)!) as { event: string; status: number; rpc: string[] };
     assert.equal(logged.event, 'http_request');
@@ -214,10 +215,12 @@ test('the posture is asked once per bearer within the TTL, and forgotten when th
 
     revoked = true;
     const call = await raw(service.port, 'POST', '/mcp', headers, rpc('tools/call', { name: 'company_list', arguments: {} }));
-    assert.equal(call.status, 200, 'the tool call itself reports the refusal as a tool error');
-    assert.equal((call.json() as { result: { isError: boolean } }).result.isError, true);
+    assert.equal(call.status, 401, 'the tool call is answered with the challenge, so the client refreshes');
+    assert.match(String(call.headers['www-authenticate']), /invalid_token/);
+    const sessionCallsBefore = sessionCalls();
     const next = await raw(service.port, 'POST', '/mcp', headers, rpc('tools/list'));
     assert.equal(next.status, 401, 'and the next request is told to re-authenticate');
+    assert.equal(sessionCalls(), sessionCallsBefore + 1, 'the posture was forgotten, so the API is asked again');
     assert.match(String(next.headers['www-authenticate']), /invalid_token/);
   } finally {
     await service.close();

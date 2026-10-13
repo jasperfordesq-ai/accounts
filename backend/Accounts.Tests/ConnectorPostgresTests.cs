@@ -106,7 +106,8 @@ public sealed class ConnectorPostgresTests
         {
             var oauth = NewOAuth(db, keys);
             clientId = (string)((IReadOnlyDictionary<string, object>)oauth.Register(new OAuthRegisterInput([redirect], "Race", null, null, null)).Value!)["client_id"];
-            var passwordTicks = (await db.UserAccounts.AsNoTracking().SingleAsync(account => account.Id == user.UserId)).PasswordLastChangedAt.Ticks;
+            var account = await db.UserAccounts.AsNoTracking().SingleAsync(candidate => candidate.Id == user.UserId);
+            var passwordTicks = account.PasswordLastChangedAt.Ticks;
             rawCode = "fbac1." + Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(user.TenantId.ToString())).TrimEnd('=') + "." + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             db.OAuthAuthorizationCodes.Add(new OAuthAuthorizationCode
             {
@@ -122,6 +123,7 @@ public sealed class ConnectorPostgresTests
                 AccessLevel = ConnectorAccessLevels.Write,
                 DataScope = ConnectorDataScopes.Withheld,
                 PasswordLastChangedAtTicks = passwordTicks,
+                SessionVersion = account.SessionVersion,
                 CreatedAtUtc = DateTime.UtcNow,
                 ExpiresAtUtc = DateTime.UtcNow.AddSeconds(60)
             });

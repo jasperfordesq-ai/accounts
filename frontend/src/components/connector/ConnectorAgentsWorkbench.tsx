@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, Card } from "@heroui/react";
 import { Bot, ChevronLeft, ChevronRight, PlugZap, Unplug } from "lucide-react";
@@ -84,29 +84,62 @@ export function ConnectorAgentsWorkbench() {
     };
   }, [isOwner]);
 
+  // Each load takes a number; only the latest one may touch state. An Owner switching users (or
+  // paging) can leave an earlier request in flight, and its late answer must not replace the view
+  // of whoever is selected now.
+  const sessionsRequest = useRef(0);
+  const activityRequest = useRef(0);
+
   const loadSessions = useCallback(async () => {
+    const request = ++sessionsRequest.current;
     setSessionsLoading(true);
     try {
-      setSessions(await getConnectorSessions(targetUserId));
+      const next = await getConnectorSessions(targetUserId);
+      if (request !== sessionsRequest.current) return;
+      setSessions(next);
       setSessionsError(null);
     } catch (error) {
+      if (request !== sessionsRequest.current) return;
       setSessionsError(errorMessage(error, "Connected agents could not be loaded."));
     } finally {
-      setSessionsLoading(false);
+      if (request === sessionsRequest.current) setSessionsLoading(false);
     }
   }, [targetUserId]);
 
   const loadActivity = useCallback(async (page: number) => {
+    const request = ++activityRequest.current;
     setActivityLoading(true);
     try {
-      setActivity(await getConnectorActivity({ userId: targetUserId, page, pageSize: ACTIVITY_PAGE_SIZE }));
+      const next = await getConnectorActivity({ userId: targetUserId, page, pageSize: ACTIVITY_PAGE_SIZE });
+      if (request !== activityRequest.current) return;
+      setActivity(next);
       setActivityError(null);
     } catch (error) {
+      if (request !== activityRequest.current) return;
       setActivityError(errorMessage(error, "Agent activity could not be loaded."));
     } finally {
-      setActivityLoading(false);
+      if (request === activityRequest.current) setActivityLoading(false);
     }
   }, [targetUserId]);
+
+  /** Shows another user's agents: the previous user's cards and activity go at once, not on arrival. */
+  function selectUser(userId: number | null) {
+    const nextTarget = userId && userId !== user?.userId ? userId : null;
+    if (nextTarget === targetUserId) {
+      setSelectedUserId(userId);
+      return;
+    }
+    sessionsRequest.current += 1;
+    activityRequest.current += 1;
+    setSelectedUserId(userId);
+    setActivityPage(1);
+    setSessions([]);
+    setSessionsError(null);
+    setSessionsLoading(true);
+    setActivity(null);
+    setActivityError(null);
+    setActivityLoading(true);
+  }
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -124,7 +157,9 @@ export function ConnectorAgentsWorkbench() {
     if (!pendingDisconnect || disconnecting) return;
     setDisconnecting(true);
     try {
-      await revokeConnectorSession(pendingDisconnect.familyId, targetUserId);
+      // The agent belongs to the user on its own card, whoever the picker shows by now.
+      const owner = pendingDisconnect.userId === user?.userId ? null : pendingDisconnect.userId;
+      await revokeConnectorSession(pendingDisconnect.familyId, owner);
       toast.success(`${agentName(pendingDisconnect)} has been disconnected.`);
       setPendingDisconnect(null);
       await loadSessions();
@@ -153,10 +188,7 @@ export function ConnectorAgentsWorkbench() {
                 <select
                   className={selectClass}
                   value={selectedUserId ?? user?.userId ?? ""}
-                  onChange={(event) => {
-                    setSelectedUserId(Number(event.target.value) || null);
-                    setActivityPage(1);
-                  }}
+                  onChange={(event) => selectUser(Number(event.target.value) || null)}
                 >
                   {user && <option value={user.userId}>{user.displayName} (you)</option>}
                   {users

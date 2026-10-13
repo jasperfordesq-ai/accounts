@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
-import { StreamableHTTPServerTransport, type StreamableHTTPServerTransportOptions } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import {
+  WebStandardStreamableHTTPServerTransport,
+  type WebStandardStreamableHTTPServerTransportOptions,
+} from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { accessTokenExpiresAtMs } from './access-token.js';
 import { ApiClient, ApiError } from './client.js';
 import { ConnectionError } from './errors.js';
+import { CallerETagCaches } from './etag-cache.js';
 import { registerSecret, redactSecrets } from './redact.js';
 import { createServer } from './server.js';
 import { fetchSessionPosture, type SessionPosture } from './session-level.js';
@@ -23,8 +28,15 @@ import { LOOPBACK_HOSTS } from './config.js';
  * credential or refreshes a token: the client owns its tokens, and a refused
  * bearer is answered 401 so the client re-authenticates.
  *
- * Each request gets its own MCP Server around a StaticBearer, so no state,
- * token or posture leaks from one caller to another. The API is called
+ * Each request gets its own MCP Server around a StaticBearer. What outlives a
+ * request is keyed by the SHA-256 of its bearer and lives no longer than that
+ * bearer: the posture (≤ POSTURE_TTL_MS) and the caller's period ETags, so a
+ * write carries the If-Match its caller's earlier read learned. Nothing is
+ * shared between bearers, and a bearer the API refuses loses both at once.
+ *
+ * A bearer past its own expiry, or one the API refuses during a tool call, is
+ * answered with the OAuth 401 challenge rather than a tool error, so the
+ * client refreshes its token instead of showing the model a failure. The API is called
  * directly with the service key (X-Accounts-Api-Key) and the caller's bearer;
  * no inbound header other than the bearer is ever forwarded, so a browser's
  * Origin, Referer, Cookie or Sec-Fetch-* never reaches the API.
@@ -209,6 +221,38 @@ async function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/**
+ * The inbound request as the SDK's web-standard transport reads it. The body
+ * is not attached: it has been read and parsed already and is passed as
+ * parsedBody. Only the transport sees these headers; none reaches the API.
+ */
+function toWebRequest(req: IncomingMessage): Request {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) for (const item of value) headers.append(name, item);
+    else headers.set(name, value);
+  }
+  return new Request(`http://${req.headers['host'] ?? 'connector.invalid'}${req.url ?? '/'}`, {
+    method: req.method ?? 'POST',
+    headers,
+  });
+}
+
+/** Writes the transport's answer (JSON or empty, never a stream: enableJsonResponse). */
+async function writeWebResponse(res: ServerResponse, response: Response): Promise<void> {
+  if (res.headersSent) return;
+  const body = Buffer.from(await response.arrayBuffer());
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, name) => {
+    headers[name] = value;
+  });
+  headers['content-length'] = String(body.length);
+  headers['cache-control'] ??= 'no-store';
+  res.writeHead(response.status, headers);
+  res.end(body);
+}
+
 /** JSON-RPC method names in a body, for the request log (never arguments). */
 function rpcSummary(body: unknown): string[] {
   const messages = Array.isArray(body) ? body : [body];
@@ -245,21 +289,31 @@ export function createHttpHandler(config: HttpServiceConfig): HttpHandler {
   const invalidChallenge = `Bearer error="invalid_token", resource_metadata="${metadataUrl}"`;
 
   const postures = new Map<string, CachedPosture>();
+  const callerEtags = new CallerETagCaches(now);
   let metadata: { document: Record<string, unknown>; expires: number } | null = null;
 
-  function rememberPosture(key: string, posture: SessionPosture): void {
+  function rememberPosture(key: string, posture: SessionPosture, tokenExpiresAt: number): void {
     if (postures.size >= POSTURE_CACHE_MAX) {
       const oldest = postures.keys().next().value;
       if (oldest !== undefined) postures.delete(oldest);
     }
-    postures.set(key, { posture, expires: now() + POSTURE_TTL_MS });
+    // Never trusted past the token itself: an expired token must reach the
+    // expiry check below, not ride a cached posture into a tool call.
+    postures.set(key, { posture, expires: Math.min(now() + POSTURE_TTL_MS, tokenExpiresAt) });
   }
 
-  /** A fetch that forgets a bearer's posture as soon as the API refuses it. */
-  function observingFetch(key: string): typeof fetch {
+  /**
+   * A fetch that forgets everything kept for a bearer as soon as the API
+   * refuses it, and tells the request it belongs to.
+   */
+  function observingFetch(key: string, onRefused: () => void = () => {}): typeof fetch {
     return (async (input: string | URL | Request, init?: RequestInit) => {
       const response = await baseFetch(input, init);
-      if (response.status === 401) postures.delete(key);
+      if (response.status === 401) {
+        postures.delete(key);
+        callerEtags.drop(key);
+        onRefused();
+      }
       return response;
     }) as typeof fetch;
   }
@@ -273,13 +327,35 @@ export function createHttpHandler(config: HttpServiceConfig): HttpHandler {
     });
   }
 
-  async function checkBearer(token: string, key: string): Promise<BearerCheck> {
+  const expiredToken: BearerCheck = {
+    ok: false,
+    status: 401,
+    invalidToken: true,
+    body: { error: 'invalid_token', error_description: 'The access token has expired; refresh it.' },
+  };
+
+  async function checkBearer(token: string, key: string, tokenExpiresAt: number | null): Promise<BearerCheck> {
+    // Before any cache or API call: the client can only refresh if it is
+    // challenged, and a token past its expiry is refused by the API anyway.
+    if (tokenExpiresAt === null) {
+      return {
+        ok: false,
+        status: 401,
+        invalidToken: true,
+        body: { error: 'invalid_token', error_description: 'The access token is not a FilingBridge connector access token.' },
+      };
+    }
+    if (tokenExpiresAt <= now()) {
+      postures.delete(key);
+      callerEtags.drop(key);
+      return expiredToken;
+    }
     const cached = postures.get(key);
     if (cached && cached.expires > now()) return { ok: true, posture: cached.posture };
     if (cached) postures.delete(key);
     try {
       const posture = await fetchSessionPosture(clientFor(token, key));
-      rememberPosture(key, posture);
+      rememberPosture(key, posture, tokenExpiresAt);
       return { ok: true, posture };
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -348,7 +424,8 @@ export function createHttpHandler(config: HttpServiceConfig): HttpHandler {
     }
 
     const key = tokenKey(token);
-    const check = await checkBearer(token, key);
+    const tokenExpiresAt = accessTokenExpiresAtMs(token);
+    const check = await checkBearer(token, key, tokenExpiresAt);
     if (!check.ok) {
       sendJson(res, check.status, check.body, check.invalidToken ? { 'www-authenticate': invalidChallenge } : {});
       return;
@@ -382,6 +459,7 @@ export function createHttpHandler(config: HttpServiceConfig): HttpHandler {
     }
     note({ rpc: rpcSummary(parsed) });
 
+    let refused = false;
     const server = createServer({
       baseUrl: config.apiUrl,
       publicUrl: config.publicUrl,
@@ -389,24 +467,55 @@ export function createHttpHandler(config: HttpServiceConfig): HttpHandler {
       serviceHeaders,
       fileMode: 'inline',
       toolsets: config.toolsets,
-      fetchImpl: observingFetch(key),
+      fetchImpl: observingFetch(key, () => {
+        refused = true;
+      }),
+      // tokenExpiresAt is known here: checkBearer refuses a token without one.
+      etags: callerEtags.for(key, tokenExpiresAt!),
       posture: async () => check.posture,
     });
     // Stateless (sessionIdGenerator left undefined): every request carries
     // its own bearer and gets its own server, so there is no session to keep.
-    const transportOptions: StreamableHTTPServerTransportOptions = {
+    const transportOptions: WebStandardStreamableHTTPServerTransportOptions = {
+      // JSON, not SSE: the whole answer exists before anything is written, so
+      // a bearer refused mid-call can still be answered with a 401 challenge.
       enableJsonResponse: true,
       // Checked above as well; the SDK's own check is kept as a second line.
       enableDnsRebindingProtection: true,
       allowedHosts: [...allowedHosts],
     };
-    const transport = new StreamableHTTPServerTransport(transportOptions);
+    const transport = new WebStandardStreamableHTTPServerTransport(transportOptions);
+    let gone = false;
+    let settleGone: () => void = () => {};
+    const disconnected = new Promise<null>((resolve) => {
+      settleGone = () => resolve(null);
+    });
     res.on('close', () => {
+      gone = true;
+      settleGone();
       void transport.close();
       void server.close();
     });
     await server.connect(transport as Transport);
-    await transport.handleRequest(req, res, parsed);
+    const response = await Promise.race([
+      transport.handleRequest(toWebRequest(req), { parsedBody: parsed }),
+      disconnected,
+    ]);
+    if (gone || response === null) return;
+
+    if (refused) {
+      // The API refused this bearer during the call (revoked, or expired in
+      // flight). A tool error would leave the client holding a dead token;
+      // the challenge makes it refresh and retry.
+      note({ refused: 'bearer_during_call' });
+      await response.body?.cancel();
+      sendJson(res, 401, {
+        error: 'invalid_token',
+        error_description: 'FilingBridge refused the access token during the request; refresh it and retry.',
+      }, { 'www-authenticate': invalidChallenge });
+      return;
+    }
+    await writeWebResponse(res, response);
   }
 
   const handler = (async (req: IncomingMessage, res: ServerResponse) => {
@@ -467,6 +576,7 @@ export function createHttpHandler(config: HttpServiceConfig): HttpHandler {
   }) as HttpHandler;
   handler.reset = () => {
     postures.clear();
+    callerEtags.clear();
     metadata = null;
   };
   return handler;

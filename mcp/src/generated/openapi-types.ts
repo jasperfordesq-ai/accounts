@@ -11216,6 +11216,11 @@ export interface components {
             deletedSubjectRequestMetadata: number | string;
             /** Format: int32 */
             clearedStaleLoginFailureStates: number | string;
+            /**
+             * Format: int32
+             * @default 0
+             */
+            deletedConnectorRecords: number | string;
         };
         RevenueCt1SupportHandoffFacts: {
             companyName: string;

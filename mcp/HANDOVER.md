@@ -17,7 +17,9 @@ FilingBridge's backend (commit da1df56 and the in-flight PrivilegedRouteCatalog 
   builds one MCP `Server` around any token source, ready for phase 2's per-request HTTP mode.
 - **Client** (`client.ts`, `etag-cache.ts`): `X-FilingBridge-Client: mcp-connector/0.1.0` on every
   request; no Origin, Referer or cookie ever; `X-Correlation-ID` per call; `Idempotency-Key` on every POST
-  (reused on the one retry after a dropped connection); `X-FilingBridge-Reason`; `X-FilingBridge-Approval`;
+  and on the PUTs that require one; a change that meets a dropped connection is repeated (with the same key)
+  only on the routes `idempotency.ts` lists as replaying it, which a test parses from the endpoint source;
+  anywhere else it is `OUTCOME_UNKNOWN` with `action: reread`; `X-FilingBridge-Reason`; `X-FilingBridge-Approval`;
   period `ETag` remembered and sent as `If-Match`, dropped on 409/412 with `action: reread`; one renewal
   on 401; 428 → `ApprovalRequiredError`; every refusal coded with `{code, retryable, action}`.
 - **Catalogue** (`tools-*.ts`, `bodies.ts`, `enums.ts`): 233 route tools + 3 core tools. Body field lists
@@ -111,10 +113,18 @@ parses the C# to keep them in step.
 
 - `src/http-server.ts`: `serve --http` (`--host`, `--port`; env `FILINGBRIDGE_API_URL`,
   `FILINGBRIDGE_API_KEY_FILE`, `FILINGBRIDGE_PUBLIC_URL`, `FILINGBRIDGE_ALLOWED_HOSTS`). Node `http` server,
-  SDK `StreamableHTTPServerTransport` stateless (`sessionIdGenerator` left undefined) with JSON responses,
+  SDK `WebStandardStreamableHTTPServerTransport` stateless (`sessionIdGenerator` left undefined) with JSON
+  responses (the service writes the answer itself, so it can still turn it into a 401),
   one `createServer()` per request around a `StaticBearer`. Bearer validated by
-  `GET /api/auth/connector/session` (posture cached ≤ 60 s per SHA-256 of the token, evicted the moment
-  the API answers 401). 401 / `invalid_token` challenges per the phase 2 contract; 403 for a Host not
+  `GET /api/auth/connector/session` (posture cached ≤ 60 s per SHA-256 of the token and never past the
+  token's own `expiresAtUnixSeconds`, evicted the moment the API answers 401). A token past its expiry, or
+  whose payload expiry cannot be read (`access-token.ts`), is 401 `invalid_token` before any API call; an
+  API 401 during a tools/call answers the whole HTTP request with the 401 challenge instead of a tool
+  error, so the client refreshes. Period ETags are kept per caller (`CallerETagCaches`: SHA-256 of the
+  bearer, ≤ 1000 callers, ≤ token expiry and ≤ 15 min, dropped on a 401) because the API treats `If-Match`
+  as optional: without it a later write would overwrite another person's edit. Never shared between
+  bearers; a refreshed token starts empty (costs a re-read, never a wrong version). PR #88 review
+  (Greptile). 401 / `invalid_token` challenges per the phase 2 contract; 403 for a Host not
   allowed (checked by the service itself, with the SDK's deprecated host check kept as a second line);
   413 over 5 MiB; GET/DELETE `/mcp` 405 after authentication (stateless: no stream, no session).
 - Protected-resource metadata: fetched from `GET /api/oauth/metadata/protected-resource` with the

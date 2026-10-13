@@ -217,8 +217,11 @@ Routes: `GET /healthz` (open), `POST /mcp` (Streamable HTTP, stateless, JSON res
 answer 405 once authenticated), `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728, fetched from
 the API and cached five minutes). Without a bearer `/mcp` answers 401 with
 `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`; a bearer
-FilingBridge refuses answers 401 `error="invalid_token"`. Each request gets its own MCP server around its
-own bearer; the session's posture is asked of FilingBridge and cached for at most 60 seconds per token. No
+FilingBridge refuses, or one past its own expiry, answers 401 `error="invalid_token"`, and so does a tool
+call during which FilingBridge refuses the bearer, so the client refreshes rather than seeing a tool error.
+Each request gets its own MCP server around its own bearer; the session's posture is asked of FilingBridge
+and cached for at most 60 seconds per token (never past the token's expiry), and the period versions a
+caller has read are kept for that caller's bearer only, so its later writes carry `If-Match`. No
 inbound header but the bearer is forwarded: a browser's `Origin`, `Referer`, `Cookie` and `Sec-Fetch-*`
 never reach the API. Bodies over 5 MiB answer 413. One JSON line per request goes to stderr (method, path,
 status, time, JSON-RPC method and tool name; never a token, argument or result).
@@ -239,9 +242,11 @@ adjustments; confirming year-end reviews; recording directors' approval, signing
 external validation, filed dates; chart adoption; historic anchors; user administration; privacy and
 operations runs; every external-filing-handoff record) need a person's approval for that exact request.
 
-1. The agent calls the tool. FilingBridge refuses with `APPROVAL_REQUIRED`, an `approvalId` and the command
-   `filingbridge-mcp approve <id>`, and, where the web application is deployed with the remote
-   connector, a link to the approvals page (`/settings/approvals?id=<id>`) where you can grant it instead.
+1. The agent calls the tool. FilingBridge refuses with `APPROVAL_REQUIRED` and an `approvalId`; the stdio
+   connector hands the agent the command for this connection, `filingbridge-mcp approve <id> --profile
+   <profile> --base-url <origin>`, naming the profile and address it was started with (the remote connector
+   passes on FilingBridge's own command). Where the web application is deployed with the remote connector,
+   the response also links the approvals page (`/settings/approvals?id=<id>`), where you can grant it instead.
 2. You run `node mcp/dist/cli.js approve <id> --profile ... --base-url ...` **in your own terminal**. It shows
    the target host and FilingBridge's own description of the action, then asks for your password and your
    authenticator code. It refuses to run without a terminal and never accepts a piped password, so an agent
@@ -257,8 +262,12 @@ With `--data-scope withheld` (the default) the connector removes, from every res
 resource reads: officer addresses; the registered office address; who quarantined a company and why; user
 emails and display names; director-loan counterparties, terms, review notes and reviewers; related-party
 names and terms; audit-log actors, request ids and before/after values; CRO officer and shareholder
-particulars; the reviewer named on the company list. It is an allowlist per model, so a new column is
-withheld until someone classifies it. Writes that would set any of those fields are refused before anything
+particulars; the reviewer named on the company list and on notes. Director-loan blockers and warnings
+(which FilingBridge begins with the counterparty's name) come back labelled `Arrangement #<id>` instead, and
+the text of the director-transactions (section 307) and related-party notes is replaced by a withheld
+marker in `note_list`, `note_generate` and `fetch`; every other note is returned as written. It is an
+allowlist per model, so a new column is withheld until someone classifies it, and a free-text field must be
+withheld or rewritten. Writes that would set any of those fields are refused before anything
 is sent, and FilingBridge refuses them too. Updates that replace a whole record containing withheld fields
 (`company_update`, `officer_update`, `director_loan_update`) need full scope, because sending them blind
 would erase what the agent cannot see. File downloads, the directors' report data, the section 307 note,
@@ -322,7 +331,7 @@ Prompts: `year_end_walkthrough`, `categorise_uncategorised`, `pre_filing_check`,
 
 ```bash
 npm test --prefix mcp                     # tsc + node:test on dist
-node mcp/scripts/canary.mjs               # 11 mutations that must each turn the suite red
+node mcp/scripts/canary.mjs               # 18 mutations that must each turn the suite red
 node mcp/scripts/live-e2e.mjs [baseUrl]   # the built connector over stdio against a throwaway API
 npm run generate:openapi-types --prefix mcp   # after the contract changes
 ```

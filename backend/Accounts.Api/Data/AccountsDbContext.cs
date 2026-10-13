@@ -305,6 +305,7 @@ public class AccountsDbContext : DbContext
             e.Property(session => session.DeviceLabel).HasMaxLength(120);
             e.Property(session => session.ClientVersion).HasMaxLength(40);
             e.Property(session => session.RevocationReason).HasMaxLength(40);
+            e.Property(session => session.ClientIdHash).HasMaxLength(64);
             e.HasOne(session => session.User).WithMany().HasForeignKey(session => session.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(session => session.RefreshTokenHash).IsUnique();
             e.HasIndex(session => new { session.TenantId, session.UserId, session.RevokedAtUtc, session.ExpiresAtUtc });
