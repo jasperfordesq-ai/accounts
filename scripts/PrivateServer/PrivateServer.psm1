@@ -3512,6 +3512,8 @@ function Invoke-FbRecoverHost {
             releaseManifest = [string]$release.path; releaseManifestSha256 = [string]$release.sha256
             reviewedRelease = [bool]$release.reviewed; releaseIntegrityStatus = [string]$release.integrityStatus; images = $release.images
             tailscaleEnabled = $false; tailscaleDnsName = ""; connectorEnabled = $false; connectorPublicOrigin = $localOrigin
+            # A security choice, unlike host-bound Tailscale/connector settings: recovery keeps it.
+            requirePrivilegedMfa = [bool](Get-FbProperty $oldState "requirePrivilegedMfa" $false)
             backupRecipient = [string](Get-FbProperty $external "recipient" "")
             recoveredFromInstanceId = $sourceInstanceId; recoveredAtUtc = $now; createdAtUtc = $now; updatedAtUtc = $now
         }

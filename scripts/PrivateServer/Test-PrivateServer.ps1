@@ -532,7 +532,10 @@ try {
         $null = @(& icacls.exe $backupDirectory "/grant" "*S-1-1-0:(OI)(CI)R" "/Q" 2>&1)
         Assert-True ($LASTEXITCODE -eq 0) "test must be able to add an unexpected backup-directory ACL"
     }
+    # The complete backup carries a recorded MFA requirement so replacement-host recovery can prove it keeps it.
+    Invoke-FilingBridgePrivateServer -Command mfa -Action require -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     Invoke-FilingBridgePrivateServer -Command backup -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OutputDirectory $backupDirectory -BackupRecipient "age1testrecipient" 6>$null
+    Invoke-FilingBridgePrivateServer -Command mfa -Action off -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
         $backupAcl = Get-Acl -LiteralPath $backupDirectory
         $backupSids = @($backupAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | ForEach-Object { $_.IdentityReference.Value })
@@ -575,6 +578,7 @@ try {
     Assert-True ($recoveredMcpKey -ne [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8)) "replacement host must regenerate the MCP connector service key"
     Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8) -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $recoveredMcpKey)) "replacement host must bind the regenerated MCP key to its API hash"
     Assert-True ($recoveredState.connectorEnabled -eq $false) "replacement host must start with the MCP connector disabled"
+    Assert-True ($recoveredState.requirePrivilegedMfa -eq $true -and [IO.File]::ReadAllText((Join-Path $recoveredStateDirectory "private.env"), $testUtf8) -match "(?m)^PRIVATE_REQUIRE_PRIVILEGED_MFA='true'\r?$") "replacement host must keep the recorded MFA requirement"
     $hostRecoveryCalls = ($global:FbOperatorCalls | ForEach-Object { $_.description }) -join "`n"
     Assert-True ($hostRecoveryCalls -match 'disposable verification database') "replacement-host recovery must independently restore-test the database before selection"
     Assert-True ($hostRecoveryCalls -match 'Read important-table fingerprints from the recovered database') "replacement-host recovery must compare live post-start business-data fingerprints"
@@ -844,7 +848,7 @@ try {
     Assert-Throws { Invoke-FilingBridgePrivateServer -Command mfa -Action maybe -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } 'mfa requires one action' "mfa must reject unknown actions"
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command mfa -Action require -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -DryRun 6>$null
-    Assert-True (@($global:FbOperatorCalls | Where-Object { $_.mutating }).Count -eq 0 -and $null -eq (Read-ConnectorFixture).State.PSObject.Properties["requirePrivilegedMfa"]) "mfa require dry-run must not change state or containers"
+    Assert-True (@($global:FbOperatorCalls | Where-Object { $_.mutating }).Count -eq 0 -and -not [bool](& $privateServerModule { param($value) Get-FbProperty $value "requirePrivilegedMfa" $false } (Read-ConnectorFixture).State)) "mfa require dry-run must not change state or containers"
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command mfa -Action require -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     $mfaFixture = Read-ConnectorFixture
