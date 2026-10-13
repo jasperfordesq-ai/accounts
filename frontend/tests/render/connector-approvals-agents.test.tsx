@@ -125,6 +125,10 @@ describe("agent approvals page", () => {
     await user.click(within(dialog).getByRole("button", { name: "Approve action" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("The approval was not granted.");
+    // A refused code is cleared so the person types a fresh one, and the dialog says why that matters.
+    expect(within(dialog).getByLabelText("Authenticator code")).toHaveValue("");
+    expect(within(dialog).getByText(/Each authenticator code works once/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Expires in \d+:\d{2}/)).toBeInTheDocument();
     expect(sessionExpired).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
     window.removeEventListener(SESSION_EXPIRED_EVENT, sessionExpired);

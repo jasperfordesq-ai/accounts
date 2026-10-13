@@ -15,7 +15,7 @@ public sealed class ConnectorConfig
     public int AccessTokenMinutes { get; set; } = 15;
     public int RefreshIdleDays { get; set; } = 30;
     public int FamilyAbsoluteDays { get; set; } = 90;
-    public int ApprovalMinutes { get; set; } = 5;
+    public int ApprovalMinutes { get; set; } = 15;
     public int WriteBudgetPerMinute { get; set; } = 30;
     public int ActivityRetentionDays { get; set; } = 400;
 
@@ -33,7 +33,7 @@ public sealed class ConnectorConfig
         && config.RefreshIdleDays is >= 1 and <= 90
         && config.FamilyAbsoluteDays is >= 1 and <= 365
         && config.FamilyAbsoluteDays >= config.RefreshIdleDays
-        && config.ApprovalMinutes is >= 2 and <= 10
+        && config.ApprovalMinutes is >= 2 and <= 30
         && config.WriteBudgetPerMinute is >= 5 and <= 120
         && config.ActivityRetentionDays is >= 30 and <= 3650
         && config.OAuthRedirectHosts.All(host => !string.IsNullOrWhiteSpace(host)

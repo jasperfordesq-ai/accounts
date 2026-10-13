@@ -158,7 +158,7 @@ public sealed class ConnectorApprovalTests
         Assert.Null(await fixture.Connectors.GrantApprovalAsync(session.User, approvalId, "Wrong password value 1!", fixture.NextTotp()));
         Assert.Null(await fixture.Connectors.GrantApprovalAsync(session.User, approvalId, ConnectorTestFixture.OwnerPassword, "000000"));
         Assert.Null(await fixture.Connectors.GrantApprovalAsync(session.User, Guid.NewGuid(), ConnectorTestFixture.OwnerPassword, fixture.NextTotp()));
-        fixture.Clock.Advance(TimeSpan.FromMinutes(6));
+        fixture.Clock.Advance(TimeSpan.FromMinutes(fixture.ConnectorConfig.ApprovalMinutes + 1));
         Assert.Null(await fixture.Connectors.GrantApprovalAsync(session.User, approvalId, ConnectorTestFixture.OwnerPassword, fixture.NextTotp()));
         Assert.Null((await fixture.Db.ConnectorActionApprovals.AsNoTracking().SingleAsync()).ApprovedAtUtc);
     }

@@ -199,7 +199,7 @@ public class ProductionSafetyService(
             && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(connectorKey, AuthSessionKey.DecodeRequired(identityKey)))
             failures.Add("Connector:SigningKey must differ from IdentitySecurity:IdentityHmacKey.");
         if (!ConnectorConfig.IsValid(config))
-            failures.Add("Connector lifetimes are out of range: AccessTokenMinutes 5-30, RefreshIdleDays 1-90, FamilyAbsoluteDays 1-365 and at least RefreshIdleDays, ApprovalMinutes 2-10, WriteBudgetPerMinute 5-120, ActivityRetentionDays 30-3650.");
+            failures.Add("Connector lifetimes are out of range: AccessTokenMinutes 5-30, RefreshIdleDays 1-90, FamilyAbsoluteDays 1-365 and at least RefreshIdleDays, ApprovalMinutes 2-30, WriteBudgetPerMinute 5-120, ActivityRetentionDays 30-3650.");
         if (!string.IsNullOrWhiteSpace(config.PublicBaseUrl)
             && (!Uri.TryCreate(config.PublicBaseUrl, UriKind.Absolute, out var publicBase)
                 || !(publicBase.Scheme == Uri.UriSchemeHttps || publicBase.IsLoopback)))

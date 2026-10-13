@@ -36,13 +36,14 @@ test('the listing follows the session level, the data scope and the configured d
   const read = await connect(() => json(200, {}), {}, posture('read', 'withheld'));
   const readNames = (await read.client.listTools()).tools.map((t) => t.name);
   assert.ok(readNames.includes('session_info') && readNames.includes('search') && readNames.includes('fetch'));
+  assert.ok(readNames.includes('approval_wait'), 'a read session can still wait on an approval it was refused');
   assert.ok(readNames.includes('company_list'));
   assert.ok(!readNames.includes('debtor_create'), 'no writes at read level');
   assert.ok(!readNames.includes('accounts_package_download'), 'no downloads while withheld');
 
   const full = await connect(() => json(200, {}), { downloadDir: '/tmp/x', uploadRoot: '/tmp/y' }, posture('admin', 'full'));
   const fullNames = (await full.client.listTools()).tools.map((t) => t.name);
-  assert.equal(fullNames.length, TOOLS.length + 3, 'everything is offered to a full admin session with both directories');
+  assert.equal(fullNames.length, TOOLS.length + 4, 'everything is offered to a full admin session with both directories');
 
   const narrowed = await connect(() => json(200, {}), { toolsets: ['year_end'] }, posture('admin', 'full'));
   const narrowedNames = (await narrowed.client.listTools()).tools.map((t) => t.name);

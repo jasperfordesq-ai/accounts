@@ -77,16 +77,16 @@ export class ApprovalRequiredError extends Error {
     approvalsUrl: string | null;
   }) {
     super(
-      `${details.summary}\n\n`
-        + 'FilingBridge will not do this until the person you are acting for approves it. Ask them '
-        + `to run this in their own terminal:\n\n    ${details.command}\n\n`
+      `APPROVAL_REQUIRED: ${details.summary}\n\n`
+        + 'FilingBridge will not do this until the person you are acting for approves it. Show them '
         + (details.approvalsUrl
-          ? `or to approve it on the approvals page: ${details.approvalsUrl}\n\n`
-          : '')
-        + 'They will see what they are approving and confirm it with their password and '
-        + 'authenticator code. Then call this tool again with exactly the same arguments plus '
-        + `approvalId: ${details.approvalId}. The approval expires at ${details.expiresAt} and `
-        + 'covers only this one action. Do not run the command yourself and never ask for the password.',
+          ? `this link to approve it in their browser:\n\n    ${details.approvalsUrl}\n\nor this command for their own terminal:\n\n    ${details.command}\n\n`
+          : `this command to run in their own terminal:\n\n    ${details.command}\n\n`)
+        + 'They confirm it with their password and an authenticator code. Then call approval_wait with '
+        + `approvalId ${details.approvalId}; it returns when they have approved. Then call this tool again `
+        + `with exactly the same arguments plus approvalId: ${details.approvalId}. The approval expires at `
+        + `${details.expiresAt} and covers only this one action. Do not run the command yourself and never `
+        + 'ask for the password or authenticator code.',
     );
     this.name = 'ApprovalRequiredError';
     this.approvalId = details.approvalId;
@@ -116,6 +116,11 @@ export interface RequestOptions {
   replaySafe?: boolean | undefined;
   /** Overrides the cached period token. */
   ifMatch?: string | undefined;
+  /**
+   * Abandons the request when it fires. Only reads use it: a change whose
+   * request was abandoned may still have been applied.
+   */
+  signal?: AbortSignal | undefined;
 }
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -352,8 +357,17 @@ export class ApiClient {
 
       let response: Response;
       try {
-        response = await this.#fetch(url, { method, headers, ...(body === undefined ? {} : { body }) });
+        response = await this.#fetch(url, {
+          method,
+          headers,
+          ...(body === undefined ? {} : { body }),
+          ...(options.signal ? { signal: options.signal } : {}),
+        });
       } catch (cause) {
+        // The caller gave up (a deadline or a cancelled tool call): never retried.
+        if (options.signal?.aborted) {
+          throw new ConnectorError('REQUEST_ABANDONED', `The ${method} to FilingBridge was abandoned before it answered.`, { retryable: true });
+        }
         // A request that never reached FilingBridge changed nothing, and a
         // read changes nothing either way. A change on a route that replays a
         // repeated Idempotency-Key is safe to ask once more: FilingBridge

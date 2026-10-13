@@ -93,6 +93,10 @@
       "description": "Read the record behind a reference returned by search, such as filingbridge://period/34?companyId=12."
     },
     {
+      "name": "approval_wait",
+      "description": "Wait while the person approves an action FilingBridge refused with APPROVAL_REQUIRED."
+    },
+    {
       "name": "company_list",
       "description": "Every company this account may access, with its type, size flags, period count and latest period."
     },

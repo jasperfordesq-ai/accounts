@@ -22,7 +22,7 @@ FilingBridge's backend (commit da1df56 and the in-flight PrivilegedRouteCatalog 
   anywhere else it is `OUTCOME_UNKNOWN` with `action: reread`; `X-FilingBridge-Reason`; `X-FilingBridge-Approval`;
   period `ETag` remembered and sent as `If-Match`, dropped on 409/412 with `action: reread`; one renewal
   on 401; 428 → `ApprovalRequiredError`; every refusal coded with `{code, retryable, action}`.
-- **Catalogue** (`tools-*.ts`, `bodies.ts`, `enums.ts`): 233 route tools + 3 core tools. Body field lists
+- **Catalogue** (`tools-*.ts`, `bodies.ts`, `enums.ts`): 233 route tools + 4 core tools (session_info, search, fetch, approval_wait). Body field lists
   were generated once from the contract and are now hand-maintained; `bodyFields()` makes every field
   name a compile-time check against `src/generated/openapi-types.ts`, and descriptions come from the C#
   input records and their validation messages.
@@ -51,7 +51,7 @@ FilingBridge's backend (commit da1df56 and the in-flight PrivilegedRouteCatalog 
 | classification | 11 | operations | 3 | system | 2 |
 | | | | | connector | 5 |
 
-236 tools in all. Contract: 253 operations = 233 route tools + 2 core routes (`GET /api/search` →
+237 tools in all. Contract: 253 operations = 233 route tools + 2 core routes (`GET /api/search` →
 `search`, `GET /api/auth/connector/session` → `session_info`) + 18 exclusions:
 
 - browser sign-in (cookie/CSRF) routes: `POST /api/auth/login`, `mfa/challenge`, `reauthenticate`,
@@ -173,7 +173,7 @@ parses the C# to keep them in step.
   treats an empty value or an unexpanded `${…}` placeholder for `--download-dir` / `--upload-root` (and
   `FILINGBRIDGE_DOWNLOAD_DIR` / `FILINGBRIDGE_UPLOAD_ROOT`) as not set (`configuredDirectory` in
   `config.ts`). Every other flag still refuses an empty value.
-- `tools`: the three core tools plus every catalogue tool, name and first sentence of the description,
+- `tools`: the four core tools plus every catalogue tool, name and first sentence of the description,
   written by `npm run manifest:tools` (`src/manifest-tools.ts`, `scripts/manifest-tools.mjs`);
   `manifest.test.ts` fails when it drifts, and `pack:mcpb` refuses a stale manifest.
 - `npm run pack:mcpb` (`scripts/pack-mcpb.mjs`): fresh `tsc` into a temp stage, `dist/tests` removed,
