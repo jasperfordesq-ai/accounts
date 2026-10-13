@@ -266,9 +266,10 @@ is removed from browser history immediately and only a keyed hash is stored in P
 link through a private channel and never paste it into a support bundle.
 
 Two-factor sign-in (MFA) is **off by default** on the pre-release Private Server: privileged roles
-sign in, re-verify and approve agent actions with their password alone. Set
-`FILINGBRIDGE_REQUIRE_MFA=true` in the installation environment to require it again; Public
-Production always requires it and refuses to start without it.
+sign in, re-verify and approve agent actions with their password alone. Run
+`<launcher> mfa require` to require it (and `mfa off` / `mfa status`); the choice is recorded in
+installation state and survives updates, connector and Tailscale changes. Public Production always
+requires it and refuses to start without it.
 
 When MFA is on, privileged roles must enrol it and retain recovery codes. If the sole Owner loses both the
 authenticator and recovery codes, use physical-host recovery rather than direct database editing:

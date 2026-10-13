@@ -706,6 +706,8 @@ function Write-FbEnvironmentFile {
         ACCOUNTS_API_KEY_FILE                         = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_api_key")
         CONNECTOR_SIGNING_KEY_FILE                    = ConvertTo-FbDockerPath (Join-Path $secretDirectory "connector_signing_key")
         PRIVATE_CONNECTOR_ENABLED                     = if ([bool](Get-FbProperty $State "connectorEnabled" $false)) { "true" } else { "false" }
+        # Recorded in state by 'mfa require|off' so every environment rewrite keeps the choice.
+        PRIVATE_REQUIRE_PRIVILEGED_MFA                = if ([bool](Get-FbProperty $State "requirePrivilegedMfa" $false)) { "true" } else { "false" }
         PRIVATE_CONNECTOR_PUBLIC_ORIGIN               = $connectorOrigin
         PRIVATE_CONNECTOR_PUBLIC_HOST                 = $connectorHost
         ACCOUNTS_MCP_API_KEY_FILE                     = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_mcp_api_key")
@@ -3888,6 +3890,48 @@ function Invoke-FbConnector {
     Write-Host "The MCP connector is disabled. Agents are refused immediately; their sessions remain listed and revocable at $(Get-FbConnectorPublicOrigin $State)/settings/agents."
 }
 
+function Invoke-FbMfa {
+    param($State, [string]$ComposeFile, [string]$Action, [switch]$DryRun)
+    $normalized = if ([string]::IsNullOrWhiteSpace($Action)) { "status" } else { $Action.Trim().ToLowerInvariant() }
+    if ($normalized -notin @("require", "off", "status")) { throw "mfa requires one action: require, off, or status." }
+    $launcher = Get-FbLauncherName
+    $wasRequired = [bool](Get-FbProperty $State "requirePrivilegedMfa" $false)
+    if ($normalized -eq "status") {
+        Write-Host "Two-factor sign-in for Owner, Accountant and Reviewer: $(if ($wasRequired) { 'required' } else { 'off' })"
+        if (-not $wasRequired) { Write-Host "Privileged users sign in and approve actions with their password alone. Require it with: $launcher mfa require" }
+        return
+    }
+    $required = $normalized -eq "require"
+    $description = if ($required) { "Require two-factor sign-in for privileged roles" } else { "Turn off two-factor sign-in for privileged roles" }
+    if ($DryRun) {
+        Write-Host "DRY RUN: $description; rewrite the environment, recreate api, and wait for health"
+        return
+    }
+    Set-FbStateValue $State "requirePrivilegedMfa" $required
+    Write-FbEnvironmentFile $State
+    Save-FbState $State
+    try {
+        $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", "api") $description -Mutating
+        Wait-FbHttpHealth -Port ([int]$State.port)
+    } catch {
+        $failure = $_
+        Set-FbStateValue $State "requirePrivilegedMfa" $wasRequired
+        Write-FbEnvironmentFile $State
+        Save-FbState $State
+        try {
+            $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", "api") "Restore the previous two-factor setting" -Mutating
+        } catch {
+            throw "mfa $normalized failed and the previous setting could not be re-applied. Run '$launcher diagnose'. Original failure: $($failure.Exception.Message) Restore failure: $($_.Exception.Message)"
+        }
+        throw "mfa $normalized failed; the previous setting was restored. $($failure.Exception.Message)"
+    }
+    if ($required) {
+        Write-Host "Two-factor sign-in is now required. Privileged users without an authenticator are asked to enrol one at their next sign-in."
+    } else {
+        Write-Host "Two-factor sign-in is off. Privileged users sign in and approve actions with their password alone."
+    }
+}
+
 function Get-PrivateServerHelp {
     [CmdletBinding()]
     param()
@@ -3909,6 +3953,7 @@ Usage:
   <launcher> owner-recovery [-OwnerEmail <email>]
   <launcher> tailscale enable | disable | status
   <launcher> connector enable [--origin local|tailscale] | disable | status
+  <launcher> mfa require | off | status
   <launcher> diagnose | support-bundle | uninstall | purge-data
   <launcher> <command> -DryRun
 
@@ -3927,6 +3972,8 @@ Safety:
   supported way to turn it on. It is reached only through the loopback frontend or
   Tailscale Serve at <origin>/mcp. Claude.ai custom connectors need public ingress
   and are not supported on a Private Server.
+  Two-factor sign-in for privileged roles is off by default while the product is
+  pre-release; 'mfa require' turns it on and the choice survives updates.
 
 Private Server does not submit to CRO/ROS and does not replace qualified-accountant,
 source-law, external-validation, or public-production acceptance gates.
@@ -3969,7 +4016,7 @@ function Invoke-FilingBridgePrivateServer {
         $DryRun = $true
     }
     if ($normalized -in @("help", "-h", "--help", "/?")) { Write-Host (Get-PrivateServerHelp); return }
-    $supported = @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "connector", "diagnose", "support-bundle", "uninstall", "purge-data")
+    $supported = @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "connector", "mfa", "diagnose", "support-bundle", "uninstall", "purge-data")
     if ($normalized -notin $supported) { throw "Unknown command '$Command'. Run 'FilingBridge.cmd help' for supported commands." }
     $installationLock = Enter-FbInstallationLock $StateDirectory
     try {
@@ -4017,6 +4064,7 @@ function Invoke-FilingBridgePrivateServer {
             "owner-recovery" { Invoke-FbOwnerRecovery $state $composeFile $OwnerEmail $Confirmation -NonInteractive:$NonInteractive -DryRun:$DryRun }
             "tailscale" { Invoke-FbTailscale $state $composeFile $Action -DryRun:$DryRun }
             "connector" { Invoke-FbConnector $state $composeFile $Action $PublicOrigin -DryRun:$DryRun }
+            "mfa" { Invoke-FbMfa $state $composeFile $Action -DryRun:$DryRun }
             "diagnose" { Invoke-FbDiagnose $state $composeFile $RepositoryRoot }
             "support-bundle" { Invoke-FbSupportBundle $state $composeFile $OutputDirectory $TailLines }
             "uninstall" { Invoke-FbUninstall $state $composeFile -DryRun:$DryRun }
