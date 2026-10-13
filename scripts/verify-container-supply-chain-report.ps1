@@ -253,11 +253,14 @@ Assert-True $evidence.controls.productionSmokeVerified "controls.productionSmoke
 
 $images = @($evidence.images)
 $retainedFileNames = [System.Collections.Generic.List[string]]::new()
-if ($images.Count -ne 2) {
-    Add-Failure "images must contain exactly backend and frontend entries."
+if ($images.Count -ne 3) {
+    Add-Failure "images must contain exactly backend, frontend, and mcp entries."
 }
-if (@($images.component | Sort-Object) -join "," -ne "backend,frontend") {
-    Add-Failure "images must contain backend and frontend components."
+if (@($images.component | Sort-Object) -join "," -ne "backend,frontend,mcp") {
+    Add-Failure "images must contain backend, frontend, and mcp components."
+}
+if (@($images | ForEach-Object { [string]$_.digest } | Select-Object -Unique).Count -ne $images.Count) {
+    Add-Failure "Backend, frontend, and MCP connector digests must identify distinct images."
 }
 
 foreach ($image in $images) {
@@ -324,10 +327,10 @@ foreach ($image in $images) {
     }
 }
 
-$expectedRetainedFileCount = if ($promoted) { 6 } else { 4 }
+$expectedRetainedFileCount = if ($promoted) { 9 } else { 6 }
 if ($retainedFileNames.Count -ne $expectedRetainedFileCount -or
     @($retainedFileNames | Select-Object -Unique).Count -ne $expectedRetainedFileCount) {
-    Add-Failure "Backend and frontend scan, SBOM, and provenance evidence must use distinct retained files."
+    Add-Failure "Backend, frontend, and MCP connector scan, SBOM, and provenance evidence must use distinct retained files."
 }
 
 if ($promoted) {

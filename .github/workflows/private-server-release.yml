@@ -105,9 +105,12 @@ jobs:
           report="$RUNNER_TEMP/container-supply-chain/container-supply-chain-report.json"
           backend="$(jq -r '.images[] | select(.component == "backend") | .exactDigestReference' "$report")"
           frontend="$(jq -r '.images[] | select(.component == "frontend") | .exactDigestReference' "$report")"
+          mcp="$(jq -r '.images[] | select(.component == "mcp") | .exactDigestReference' "$report")"
+          [[ "$mcp" =~ ^ghcr\.io/jasperfordesq-ai/accounts-mcp@sha256:[0-9a-f]{64}$ ]] || { echo "Candidate evidence lacks the exact MCP connector image digest." >&2; exit 1; }
           docker logout ghcr.io >/dev/null 2>&1 || true
           docker pull --platform linux/amd64 "$backend"
           docker pull --platform linux/amd64 "$frontend"
+          docker pull --platform linux/amd64 "$mcp"
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker run --rm --platform linux/amd64 --entrypoint sh "$POSTGRES_IMAGE" -ec '
             test -f /etc/alpine-release
@@ -298,8 +301,8 @@ jobs:
             throw "Trusted candidate supply-chain evidence is invalid or mismatched."
           }
           $retainedEvidence = @($verification.retainedEvidenceFiles)
-          if ($retainedEvidence.Count -lt 6) {
-            throw "Trusted verification must retain backend/frontend scan, SBOM, and provenance evidence."
+          if ($retainedEvidence.Count -lt 9) {
+            throw "Trusted verification must retain backend/frontend/MCP connector scan, SBOM, and provenance evidence."
           }
           $retainedNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
           foreach ($retained in $retainedEvidence) {
@@ -320,13 +323,15 @@ jobs:
           }
           $backendEvidence = @($report.images | Where-Object component -CEQ 'backend')
           $frontendEvidence = @($report.images | Where-Object component -CEQ 'frontend')
-          if ($backendEvidence.Count -ne 1 -or $frontendEvidence.Count -ne 1 -or
-              @($verification.verifiedImageDigests).Count -ne 2 -or
+          $mcpEvidence = @($report.images | Where-Object component -CEQ 'mcp')
+          if ($backendEvidence.Count -ne 1 -or $frontendEvidence.Count -ne 1 -or $mcpEvidence.Count -ne 1 -or
+              @($verification.verifiedImageDigests).Count -ne 3 -or
               @($verification.verifiedImageDigests) -cnotcontains [string]$backendEvidence[0].exactDigestReference -or
-              @($verification.verifiedImageDigests) -cnotcontains [string]$frontendEvidence[0].exactDigestReference) {
+              @($verification.verifiedImageDigests) -cnotcontains [string]$frontendEvidence[0].exactDigestReference -or
+              @($verification.verifiedImageDigests) -cnotcontains [string]$mcpEvidence[0].exactDigestReference) {
             throw "Trusted candidate image evidence is incomplete or ambiguous."
           }
-          foreach ($imageEvidence in @($backendEvidence[0], $frontendEvidence[0])) {
+          foreach ($imageEvidence in @($backendEvidence[0], $frontendEvidence[0], $mcpEvidence[0])) {
             foreach ($selectedFile in @($imageEvidence.scan.file, $imageEvidence.sbom.file, $imageEvidence.provenance.file)) {
               $selectedName = [string]$selectedFile.fileName
               $verifiedSelected = @($retainedEvidence | Where-Object fileName -CEQ $selectedName)
@@ -358,8 +363,10 @@ jobs:
           if ([string]$manifest.images.backend.exactDigestReference -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-api@sha256:[0-9a-f]{64}$' -or
               [string]$manifest.images.frontend.exactDigestReference -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-frontend@sha256:[0-9a-f]{64}$' -or
               [string]$manifest.images.postgres.exactDigestReference -cnotmatch '^postgres@sha256:[0-9a-f]{64}$' -or
+              [string]$manifest.images.mcp.exactDigestReference -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-mcp@sha256:[0-9a-f]{64}$' -or
               [string]$manifest.images.backend.exactDigestReference -cne [string]$backendEvidence[0].exactDigestReference -or
               [string]$manifest.images.frontend.exactDigestReference -cne [string]$frontendEvidence[0].exactDigestReference -or
+              [string]$manifest.images.mcp.exactDigestReference -cne [string]$mcpEvidence[0].exactDigestReference -or
               [string]$manifest.images.postgres.exactDigestReference -cne $env:POSTGRES_IMAGE) {
             throw "Prepared release image identity is invalid."
           }
@@ -546,7 +553,8 @@ jobs:
           - Attested subject: \`$ATTESTED_SUBJECT_NAME\` with SHA-256 \`$ATTESTED_SUBJECT_SHA256\`
           - Provenance for that subject: $ATTESTATION_URL
           - The attested subject's manifest candidate was independently byte-matched to \`$CANDIDATE_SHA\`.
-          - Runtime images are pinned by digest in \`release.json\`.
+          - Runtime images (API, frontend, MCP connector, PostgreSQL) are pinned by digest in \`release.json\`.
+          - The MCP connector service ships disabled; \`connector enable\` is the only way to turn it on.
           - Tailscale Serve is optional private ingress; Funnel is unsupported.
           - Direct CRO/ROS submission remains unsupported.
           - Statutory use remains blocked pending the live qualified-accountant and external-validation gates.

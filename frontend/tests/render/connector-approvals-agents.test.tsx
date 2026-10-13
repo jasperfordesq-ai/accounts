@@ -172,6 +172,22 @@ describe("connected agents page", () => {
     authState.user = { userId: 7, displayName: "Ada Accountant", role: "Accountant", tenantName: "Example Firm" };
   });
 
+  it("shows the MCP resource the server advertises, not the address this page was opened on", async () => {
+    installFetchMock((request) => {
+      if (request.url === "/.well-known/oauth-protected-resource/mcp") {
+        return { body: { resource: "https://filingbridge.tail1234.ts.net/mcp", authorization_servers: ["https://filingbridge.tail1234.ts.net"] } };
+      }
+      if (request.url === "/api/auth/connector/sessions") return { body: [] };
+      if (request.url.startsWith("/api/auth/connector/activity")) return { body: { data: [], page: 1, pageSize: 25, hasMore: false } };
+      return { status: 404, body: {} };
+    });
+    render(<ConnectorAgentsWorkbench />);
+
+    await waitFor(() => expect(screen.getByTestId("mcp-remote-url")).toHaveTextContent("https://filingbridge.tail1234.ts.net/mcp"));
+    expect(screen.getByText(/claude mcp add --transport http filingbridge https:\/\/filingbridge\.tail1234\.ts\.net\/mcp/)).toBeInTheDocument();
+    expect(screen.getByText("filingbridge-mcp connect --base-url https://filingbridge.tail1234.ts.net")).toBeInTheDocument();
+  });
+
   it("disconnects an agent after confirmation and refreshes the list", async () => {
     const user = userEvent.setup();
     let revoked = false;
@@ -190,6 +206,7 @@ describe("connected agents page", () => {
     expect(screen.getByText("Personal data withheld")).toBeInTheDocument();
     expect(await screen.findByText("Adding the new director")).toBeInTheDocument();
     expect(screen.getByTestId("mcp-remote-url")).toHaveTextContent(`${window.location.origin}/mcp`);
+    expect(screen.getByText(`filingbridge-mcp connect --base-url ${window.location.origin}`)).toBeInTheDocument();
     expect(screen.queryByLabelText("Show agents connected by")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Disconnect Claude" }));

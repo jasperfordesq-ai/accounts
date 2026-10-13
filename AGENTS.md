@@ -118,8 +118,10 @@ agents changing it: every new API route must become a tool or a written exclusio
 `Services/PrivilegedRouteCatalog.cs` and the connector mirrors it by test; personal fields must be
 classified in `mcp/src/field-policy.ts`; never add an approval tool, a "submit" tool, or a way for an
 agent to re-authenticate itself. Run `npm test --prefix mcp` and `node mcp/scripts/canary.mjs`.
-Phase 2 (OAuth 2.1 + in-stack Streamable HTTP for Claude.ai, web approvals/agents pages) and phase 3
-(Claude Desktop bundle, Private Server enable command and VM acceptance) remain.
+Phase 2 added OAuth 2.1, the in-stack Streamable HTTP service and the web approvals/agents pages;
+phase 3 added Private Server wiring (`filingbridge connector enable`) and the Claude Desktop bundle.
+Live VM acceptance (`Docs/operations/mcp-connector-acceptance.md`) remains and needs a reviewed
+pre-release.
 
 ## Active Goal Handoff
 

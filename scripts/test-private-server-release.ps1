@@ -122,11 +122,16 @@ try {
     $frontendTrivy = New-EvidenceFile "frontend-trivy.json" '{"Results":[]}'
     $frontendSbom = New-EvidenceFile "frontend-sbom.spdx.json" '{"spdxVersion":"SPDX-2.3"}'
     $frontendProvenance = New-EvidenceFile "frontend-provenance.jsonl" '{"verified":true}'
+    $mcpTrivy = New-EvidenceFile "mcp-trivy.json" '{"Results":[]}'
+    $mcpSbom = New-EvidenceFile "mcp-sbom.spdx.json" '{"spdxVersion":"SPDX-2.3"}'
+    $mcpProvenance = New-EvidenceFile "mcp-provenance.jsonl" '{"verified":true}'
     $retained = @(
         $backendTrivy, $backendSbom, $backendProvenance,
-        $frontendTrivy, $frontendSbom, $frontendProvenance)
+        $frontendTrivy, $frontendSbom, $frontendProvenance,
+        $mcpTrivy, $mcpSbom, $mcpProvenance)
     $backendReference = "ghcr.io/jasperfordesq-ai/accounts-api@sha256:" + ("1" * 64)
     $frontendReference = "ghcr.io/jasperfordesq-ai/accounts-frontend@sha256:" + ("2" * 64)
+    $mcpReference = "ghcr.io/jasperfordesq-ai/accounts-mcp@sha256:" + ("4" * 64)
     $postgresReference = "postgres@sha256:" + ("3" * 64)
     $reportPath = Join-Path $evidenceRoot "container-supply-chain-report.json"
     $report = [ordered]@{
@@ -148,12 +153,52 @@ try {
                 scan = [ordered]@{ file = $frontendTrivy }
                 sbom = [ordered]@{ file = $frontendSbom }
                 provenance = [ordered]@{ file = $frontendProvenance }
+            },
+            [ordered]@{
+                component = "mcp"
+                exactDigestReference = $mcpReference
+                scan = [ordered]@{ file = $mcpTrivy }
+                sbom = [ordered]@{ file = $mcpSbom }
+                provenance = [ordered]@{ file = $mcpProvenance }
             })
         blockingFailures = @()
     }
+    $verificationPath = Join-Path $evidenceRoot "container-supply-chain-verification-report.json"
+    function Write-SupplyChainFixture($ReportValue, [string[]]$VerifiedDigests, [object[]]$RetainedFiles) {
+        Write-Json $reportPath $ReportValue
+        $fixtureReportItem = Get-Item -LiteralPath $reportPath
+        Write-Json $verificationPath ([ordered]@{
+            status = "passed"
+            allowUnpromoted = $false
+            promotionMode = "promoted"
+            releaseEligible = $true
+            commitSha = $commitSha
+            githubActionsRunUrl = $runUrl
+            evidenceReport = [ordered]@{
+                fileName = $fixtureReportItem.Name
+                byteSize = [long]$fixtureReportItem.Length
+                sha256 = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+            verifiedImageDigests = $VerifiedDigests
+            retainedEvidenceFiles = $RetainedFiles
+            failures = @()
+        })
+    }
+
+    # Evidence from a CI run that predates the MCP connector image (two images) is refused.
+    $twoImageReport = [ordered]@{}
+    foreach ($key in $report.Keys) { $twoImageReport[$key] = $report[$key] }
+    $twoImageReport.images = @($report.images | Where-Object { $_.component -ne "mcp" })
+    Write-SupplyChainFixture $twoImageReport @($backendReference, $frontendReference) @($retained | Select-Object -First 6)
+    $twoImageBuilder = Join-Path $sourceRoot "scripts/build-private-server-release.ps1"
+    Assert-Throws {
+        & $twoImageBuilder -Version "0.1.0-test.0" -CandidateCommitSha $commitSha `
+            -GitHubActionsRunUrl $runUrl -SupplyChainEvidenceDirectory $evidenceRoot `
+            -PostgresImage $postgresReference -OutputDirectory (Join-Path $testRoot "two-image-output") | Out-Null
+    } "one MCP connector image"
+
     Write-Json $reportPath $report
     $reportItem = Get-Item -LiteralPath $reportPath
-    $verificationPath = Join-Path $evidenceRoot "container-supply-chain-verification-report.json"
     Write-Json $verificationPath ([ordered]@{
         status = "passed"
         allowUnpromoted = $false
@@ -166,7 +211,7 @@ try {
             byteSize = [long]$reportItem.Length
             sha256 = (Get-FileHash -LiteralPath $reportPath -Algorithm SHA256).Hash.ToLowerInvariant()
         }
-        verifiedImageDigests = @($backendReference, $frontendReference)
+        verifiedImageDigests = @($backendReference, $frontendReference, $mcpReference)
         retainedEvidenceFiles = $retained
         failures = @()
     })
@@ -187,6 +232,22 @@ try {
         -OutputDirectory $outputRoot | ConvertFrom-Json
     if (-not (Test-Path -LiteralPath $buildResult.archivePath -PathType Leaf)) {
         throw "Private Server release builder did not create the archive."
+    }
+    if ([string]$buildResult.mcpImage -cne $mcpReference) {
+        throw "Private Server release builder did not report the MCP connector image."
+    }
+    $builtManifestArchive = [IO.Compression.ZipFile]::OpenRead([string]$buildResult.archivePath)
+    try {
+        $builtManifestEntry = @($builtManifestArchive.Entries | Where-Object { $_.FullName -eq "release.json" })
+        $builtManifestReader = New-Object IO.StreamReader($builtManifestEntry[0].Open())
+        try { $builtManifest = $builtManifestReader.ReadToEnd() | ConvertFrom-Json } finally { $builtManifestReader.Dispose() }
+        $builtEvidence = @($builtManifestArchive.Entries | Where-Object { $_.FullName -like "evidence/container-supply-chain/mcp-*" })
+    } finally { $builtManifestArchive.Dispose() }
+    if ([string]$builtManifest.images.mcp.exactDigestReference -cne $mcpReference) {
+        throw "release.json must pin images.mcp to the verified MCP connector digest."
+    }
+    if ($builtEvidence.Count -ne 3) {
+        throw "The release bundle must retain the MCP connector scan, SBOM, and provenance evidence."
     }
 
     $verifyArguments = @(
@@ -220,6 +281,26 @@ try {
     $tamperedResult = Invoke-ChildScript $currentPowerShell $verifier @("-ArchivePath", $tamperedArchive)
     if ($tamperedResult.ExitCode -eq 0 -or ($tamperedResult.Output -join " ") -notmatch "backend image") {
         throw "Release verifier did not reject a substituted backend repository."
+    }
+
+    foreach ($mcpTamper in @(
+        @{ Name = "tampered-mcp"; Mutate = { param($m) $m.images.mcp.exactDigestReference = "ghcr.io/attacker/accounts-mcp@sha256:" + ("9" * 64) } },
+        @{ Name = "missing-mcp"; Mutate = { param($m) $m.images.PSObject.Properties.Remove("mcp") } }
+    )) {
+        $mcpTamperDirectory = Join-Path $testRoot $mcpTamper.Name
+        Expand-Archive -LiteralPath $buildResult.archivePath -DestinationPath $mcpTamperDirectory
+        $mcpTamperManifestPath = Join-Path $mcpTamperDirectory "release.json"
+        $mcpTamperManifest = Get-Content -LiteralPath $mcpTamperManifestPath -Raw | ConvertFrom-Json
+        & $mcpTamper.Mutate $mcpTamperManifest
+        Write-Json $mcpTamperManifestPath $mcpTamperManifest
+        $mcpTamperArchive = Join-Path $testRoot "$($mcpTamper.Name).zip"
+        [IO.Compression.ZipFile]::CreateFromDirectory($mcpTamperDirectory, $mcpTamperArchive)
+        $mcpTamperHash = (Get-FileHash -LiteralPath $mcpTamperArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::WriteAllText("$mcpTamperArchive.sha256", "$mcpTamperHash  $($mcpTamper.Name).zip`r`n", [Text.Encoding]::ASCII)
+        $mcpTamperResult = Invoke-ChildScript $currentPowerShell $verifier @("-ArchivePath", $mcpTamperArchive)
+        if ($mcpTamperResult.ExitCode -eq 0 -or ($mcpTamperResult.Output -join " ") -notmatch "mcp image is not an exact digest reference") {
+            throw "Release verifier did not reject the $($mcpTamper.Name) release manifest."
+        }
     }
 
     $duplicateCaseArchive = Join-Path $testRoot "duplicate-case.zip"

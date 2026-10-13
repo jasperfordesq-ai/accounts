@@ -129,20 +129,23 @@ Assert-True ($password -match '[!@#%*_=+\-]') "Owner password must contain a sym
 $redacted = Protect-PrivateServerText 'password=example token: abc Authorization: Bearer opaque ?token=queryvalue'
 Assert-True ($redacted -notmatch 'example|abc|opaque|queryvalue') "redactor must remove common credential forms"
 $help = Get-PrivateServerHelp
-foreach ($command in @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "diagnose", "support-bundle", "uninstall", "purge-data", "DryRun")) {
+foreach ($command in @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "connector enable [--origin local|tailscale] | disable | status", "diagnose", "support-bundle", "uninstall", "purge-data", "DryRun")) {
     Assert-True ($help -match [regex]::Escape($command)) "help must document $command"
 }
 Assert-True ($help -match 'does not submit to CRO/ROS') "help must preserve the no-direct-filing boundary"
 Assert-True ($help -match 'qualified-accountant') "help must preserve the professional-review boundary"
+Assert-True ($help -match 'Claude\.ai custom connectors need public ingress') "help must state that Claude.ai is not supported on a Private Server"
+Assert-True ($moduleSource -notmatch '(?im)connector[^\r\n]*\bfunnel\b') "connector commands must never involve Tailscale Funnel"
 
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("filingbridge-operator-test-" + [Guid]::NewGuid().ToString("N"))
 $stateDirectory = Join-Path $testRoot ("state path with spaces " + [char]0x00E1)
 $global:FbOperatorCalls = New-Object System.Collections.Generic.List[object]
-$global:FbFakeServices = @("db", "api", "frontend")
+$global:FbFakeServices = @("db", "api", "frontend", "mcp")
 $global:FbFakeContainerIds = @{
     db = ("d" * 64)
     api = ("a" * 64)
     frontend = ("f" * 64)
+    mcp = ("e" * 64)
 }
 $global:FbFakeState = $null
 $global:FbExpectedOwnershipProject = ""
@@ -181,11 +184,11 @@ $fakeInvoker = {
     if ($FilePath -eq "docker" -and $argumentStrings -contains "compose") {
         if ($argumentStrings -contains "down") { $global:FbFakeServices = @() }
         elseif ($argumentStrings -contains "stop") {
-            $stopped = @($argumentStrings | Where-Object { $_ -in @("db", "api", "frontend") })
+            $stopped = @($argumentStrings | Where-Object { $_ -in @("db", "api", "frontend", "mcp") })
             $global:FbFakeServices = @($global:FbFakeServices | Where-Object { $_ -notin $stopped })
         }
         elseif ($argumentStrings -contains "start" -or $argumentStrings -contains "up") {
-            $started = @($argumentStrings | Where-Object { $_ -in @("db", "api", "frontend") })
+            $started = @($argumentStrings | Where-Object { $_ -in @("db", "api", "frontend", "mcp") })
             $global:FbFakeServices = @($global:FbFakeServices + $started | Select-Object -Unique)
         }
     }
@@ -197,7 +200,7 @@ $fakeInvoker = {
         }
         return [pscustomobject]@{ ExitCode = 1; Output = @("unknown synthetic container") }
     }
-    if ($Description -match '^Resolve existing (db|api|frontend) runtime container$') {
+    if ($Description -match '^Resolve existing (db|api|frontend|mcp) runtime container$') {
         $projectIndex = [Array]::IndexOf($argumentStrings, "--project-name")
         $environmentIndex = [Array]::IndexOf($argumentStrings, "--env-file")
         $global:FbExpectedOwnershipProject = [string]$argumentStrings[$projectIndex + 1]
@@ -206,14 +209,14 @@ $fakeInvoker = {
         $global:FbExpectedOwnershipInstance = [string]$ownershipState.instanceId
         return [pscustomobject]@{ ExitCode = 0; Output = @($global:FbFakeContainerIds[$Matches[1]]) }
     }
-    if ($Description -match '^Verify existing (db|api|frontend) runtime container ownership$') {
+    if ($Description -match '^Verify existing (db|api|frontend|mcp) runtime container ownership$') {
         $service = $Matches[1]
         return [pscustomobject]@{
             ExitCode = 0
             Output = @("$global:FbExpectedOwnershipProject|$service|PrivateServer|$global:FbExpectedOwnershipInstance")
         }
     }
-    if ($Description -match '^Read (db|api|frontend) reboot runtime evidence$') {
+    if ($Description -match '^Read (db|api|frontend|mcp) reboot runtime evidence$') {
         $service = $Matches[1]
         $boot = [DateTimeOffset]::Parse([string]$env:FILINGBRIDGE_TEST_BOOT_ID, [Globalization.CultureInfo]::InvariantCulture)
         return [pscustomobject]@{
@@ -230,11 +233,11 @@ $fakeInvoker = {
     if ($Description -eq 'Inspect frontend published port') {
         return [pscustomobject]@{ ExitCode = 0; Output = @("127.0.0.1:$global:FbExpectedFrontendPort") }
     }
-    if ($Description -match '^Inspect (api|db) host port bindings$') {
+    if ($Description -match '^Inspect (api|db|mcp) host port bindings$') {
         $service = $Matches[1]
-        $containerPort = if ($service -eq "api") { "8080/tcp" } else { "5432/tcp" }
+        $containerPort = switch ($service) { "api" { "8080/tcp" } "mcp" { "3100/tcp" } default { "5432/tcp" } }
         $value = if ($global:FbFakePublishedService -ceq $service) {
-            '{"' + $containerPort + '":[{"HostIp":"0.0.0.0","HostPort":"' + $(if ($service -eq "api") { "18080" } else { "15432" }) + '"}]}'
+            '{"' + $containerPort + '":[{"HostIp":"0.0.0.0","HostPort":"' + $(switch ($service) { "api" { "18080" } "mcp" { "13100" } default { "15432" } }) + '"}]}'
         } else { '{"' + $containerPort + '":null}' }
         return [pscustomobject]@{ ExitCode = 0; Output = @($value) }
     }
@@ -327,6 +330,7 @@ try {
             backend = [ordered]@{ exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-api@sha256:$('1' * 64)" }
             frontend = [ordered]@{ exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-frontend@sha256:$('2' * 64)" }
             postgres = [ordered]@{ exactDigestReference = "postgres@sha256:$('3' * 64)" }
+            mcp = [ordered]@{ exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-mcp@sha256:$('4' * 64)" }
         }
         files = @($requiredReleaseFiles | ForEach-Object {
             $releaseFile = Join-Path $releaseRoot $_
@@ -361,6 +365,18 @@ try {
         Invoke-FilingBridgePrivateServer -Command setup -RepositoryRoot $releaseRoot -StateDirectory (Join-Path $testRoot "bad-manifest-state") -ReleaseManifest $syntheticManifestPath -TenantName "Manifest Charity" -OwnerEmail "manifest@example.ie" -OwnerName "Manifest Owner" -NonInteractive -SkipPrerequisiteChecks -DryRun -Port 35492 6>$null
     } 'exact FilingBridge GHCR API' "release manifest must not redirect image pulls to another registry namespace"
     $releaseManifestObject.images.backend.exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-api@sha256:$('1' * 64)"
+    $releaseManifestObject.images.mcp.exactDigestReference = "ghcr.io/attacker/accounts-mcp@sha256:$('4' * 64)"
+    [IO.File]::WriteAllText($syntheticManifestPath, ($releaseManifestObject | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command setup -RepositoryRoot $releaseRoot -StateDirectory (Join-Path $testRoot "bad-mcp-manifest-state") -ReleaseManifest $syntheticManifestPath -TenantName "Manifest Charity" -OwnerEmail "manifest@example.ie" -OwnerName "Manifest Owner" -NonInteractive -SkipPrerequisiteChecks -DryRun -Port 35492 6>$null
+    } 'exact FilingBridge GHCR MCP connector' "release manifest must not redirect the MCP connector image to another registry namespace"
+    $releaseManifestObject.images.Remove("mcp")
+    [IO.File]::WriteAllText($syntheticManifestPath, ($releaseManifestObject | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command setup -RepositoryRoot $releaseRoot -StateDirectory (Join-Path $testRoot "no-mcp-manifest-state") -ReleaseManifest $syntheticManifestPath -TenantName "Manifest Charity" -OwnerEmail "manifest@example.ie" -OwnerName "Manifest Owner" -NonInteractive -SkipPrerequisiteChecks -DryRun -Port 35492 6>$null
+    } 'has no images\.mcp' "a release whose Compose runs the MCP connector must pin images.mcp"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $testRoot "no-mcp-manifest-state"))) "a release refused for a missing MCP image must not create state"
+    $releaseManifestObject.images["mcp"] = [ordered]@{ exactDigestReference = "ghcr.io/jasperfordesq-ai/accounts-mcp@sha256:$('4' * 64)" }
     [IO.File]::WriteAllText($syntheticManifestPath, ($releaseManifestObject | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 
     $unicodeTenantName = "Carthanas $([char]0x00D3) C$([char]0x00F3)na$([char]0x00ED)"
@@ -387,13 +403,24 @@ try {
     Assert-True ($state.reviewedRelease -eq $false) "a source build or self-asserted manifest must never be recorded as reviewed"
     Assert-True ($state.releaseIntegrityStatus -eq "source-build-unreviewed") "source build integrity status must be explicit"
     $secretDirectory = Join-Path $stateDirectory "secrets"
-    foreach ($cryptoName in @("identity_hmac_key", "mfa_encryption_key", "database_tenant_context_key", "auth_session_signing_key", "audit_integrity_signing_key", "backup_authentication_key", "connector_signing_key")) {
+    foreach ($cryptoName in @("identity_hmac_key", "mfa_encryption_key", "database_tenant_context_key", "auth_session_signing_key", "audit_integrity_signing_key", "backup_authentication_key", "connector_signing_key", "accounts_mcp_api_key")) {
         $value = [IO.File]::ReadAllText((Join-Path $secretDirectory $cryptoName))
         Assert-True ([Convert]::FromBase64String($value).Length -ge 32) "$cryptoName must contain backend-compatible standard Base64"
     }
     $sentinel = [IO.File]::ReadAllText((Join-Path $secretDirectory "private_initial_owner_password"))
     Assert-True ($sentinel -eq "INITIALIZATION-COMPLETE-NO-PASSWORD") "ephemeral Owner password must be erased after setup"
     $envText = [IO.File]::ReadAllText((Join-Path $stateDirectory "private.env"), $testUtf8)
+    $mcpKeyText = [IO.File]::ReadAllText((Join-Path $secretDirectory "accounts_mcp_api_key"), $testUtf8)
+    $mcpHashText = [IO.File]::ReadAllText((Join-Path $secretDirectory "accounts_mcp_api_key_hash"), $testUtf8)
+    Assert-True ($mcpHashText -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $mcpKeyText)) "setup must give the API exactly the SHA-256 hash of the MCP connector service key"
+    Assert-True ($mcpKeyText -cne [IO.File]::ReadAllText((Join-Path $secretDirectory "accounts_api_key"), $testUtf8)) "the MCP connector service key must differ from the frontend proxy key"
+    Assert-True (-not [string]::IsNullOrWhiteSpace([string]$state.images.mcp)) "a source build must build and record the MCP connector image"
+    Assert-True ($state.connectorEnabled -eq $false) "setup must leave the MCP connector disabled"
+    Assert-True ($envText -match "(?m)^ACCOUNTS_MCP_IMAGE='filingbridge-private-mcp:") "environment must pin the MCP connector image"
+    Assert-True ($envText -match "(?m)^PRIVATE_CONNECTOR_ENABLED='false'\r?$") "environment must keep the MCP connector off by default"
+    Assert-True ($envText -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "connector origin must default to the exact loopback origin"
+    Assert-True ($envText -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_HOST='localhost:35490'\r?$") "connector host must match the default loopback origin"
+    Assert-True ($envText -match "(?m)^ACCOUNTS_MCP_API_KEY_FILE='.+accounts_mcp_api_key'\r?$" -and $envText -match "(?m)^ACCOUNTS_MCP_API_KEY_HASH_FILE='.+accounts_mcp_api_key_hash'\r?$") "environment must reference the MCP connector key files"
     foreach ($secretFile in @(Get-ChildItem -LiteralPath $secretDirectory -File | Where-Object { $_.Name -ne "private_initial_owner_password" })) {
         $secretValue = [IO.File]::ReadAllText($secretFile.FullName)
         Assert-True (-not $envText.Contains($secretValue)) "environment file must not contain raw secret '$($secretFile.Name)'"
@@ -413,6 +440,8 @@ try {
     Assert-True (@($setupCallLines | Where-Object { $_ -match '\bup\b.*\b(role-provision|migrate)\b' }).Count -eq 0) "setup must not put completed one-shot services under Compose --wait"
     Assert-True (@($setupCallLines | Where-Object { $_ -match '\brun\s+--rm\s+--no-deps\s+role-provision\b' }).Count -eq 1) "setup must exit-check role provisioning as an explicit one-shot"
     Assert-True (@($setupCallLines | Where-Object { $_ -match '\brun\s+--rm\s+--no-deps\s+migrate\b' }).Count -eq 1) "setup must exit-check migration as an explicit one-shot"
+    Assert-True (@($setupCallLines | Where-Object { $_ -match '\bup\b.*\bapi frontend mcp$' }).Count -eq 1) "setup must start the MCP connector service with the application runtime"
+    Assert-True (@($setupCallLines | Where-Object { $_ -match 'Dockerfile\.mcp' }).Count -eq 1) "a source-build setup must build the MCP connector image locally"
     if ($null -ne (Get-Command docker -ErrorAction SilentlyContinue)) {
         & docker compose --project-name $state.composeProject --env-file (Join-Path $stateDirectory "private.env") -f (Join-Path $repositoryRoot "compose.private.yml") config --quiet
         Assert-True ($LASTEXITCODE -eq 0) "generated environment and secret paths must render the real Private Server Compose file"
@@ -439,7 +468,7 @@ try {
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command start -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     $directStartCalls = @($global:FbOperatorCalls | Where-Object { $_.file -eq "docker" -and $_.arguments.Count -eq 2 -and $_.arguments[0] -eq "start" })
-    Assert-True ($directStartCalls.Count -eq 3) "daily start must invoke docker start once for each exact existing runtime container"
+    Assert-True ($directStartCalls.Count -eq 4) "daily start must invoke docker start once for each exact existing runtime container, including the MCP connector"
     Assert-True (@($directStartCalls | Where-Object { $_.arguments[1] -notin $global:FbFakeContainerIds.Values }).Count -eq 0) "daily start must use only the verified existing runtime container IDs"
     $composeStartCalls = @($global:FbOperatorCalls | Where-Object { $_.file -eq "docker" -and $_.arguments -contains "compose" -and $_.arguments -contains "start" })
     Assert-True ($composeStartCalls.Count -eq 0) "daily start must not traverse missing one-shot Compose dependencies"
@@ -455,6 +484,8 @@ try {
     Invoke-FilingBridgePrivateServer -Command stop -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     $stopCalls = ($global:FbOperatorCalls | ForEach-Object { $_.arguments -join " " }) -join "`n"
     Assert-True ($stopCalls -notmatch '(--volumes|-v\b)') "ordinary stop must preserve volumes"
+    Assert-True ($stopCalls -match '\bstop --timeout 60 mcp frontend api db\b') "ordinary stop must stop the MCP connector with the other application services"
+    Assert-True ($global:FbFakeServices.Count -eq 0) "ordinary stop must leave no runtime service running"
 
     $backupDirectory = Join-Path $testRoot "backups"
     Invoke-FilingBridgePrivateServer -Command backup -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OutputDirectory $backupDirectory -PlaintextDatabaseOnly 6>$null
@@ -539,6 +570,10 @@ try {
     Assert-True ($recoveredState.tenantSlug -eq $state.tenantSlug) "replacement host must preserve tenant-qualified login identity"
     Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "mfa_encryption_key"), $testUtf8) -eq [IO.File]::ReadAllText((Join-Path $state.secretDirectory "mfa_encryption_key"), $testUtf8)) "replacement host must preserve MFA decryption continuity"
     Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "auth_session_signing_key"), $testUtf8) -ne [IO.File]::ReadAllText((Join-Path $state.secretDirectory "auth_session_signing_key"), $testUtf8)) "replacement host must invalidate all captured browser sessions"
+    $recoveredMcpKey = [IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "accounts_mcp_api_key"), $testUtf8)
+    Assert-True ($recoveredMcpKey -ne [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8)) "replacement host must regenerate the MCP connector service key"
+    Assert-True ([IO.File]::ReadAllText((Join-Path $recoveredState.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8) -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $recoveredMcpKey)) "replacement host must bind the regenerated MCP key to its API hash"
+    Assert-True ($recoveredState.connectorEnabled -eq $false) "replacement host must start with the MCP connector disabled"
     $hostRecoveryCalls = ($global:FbOperatorCalls | ForEach-Object { $_.description }) -join "`n"
     Assert-True ($hostRecoveryCalls -match 'disposable verification database') "replacement-host recovery must independently restore-test the database before selection"
     Assert-True ($hostRecoveryCalls -match 'Read important-table fingerprints from the recovered database') "replacement-host recovery must compare live post-start business-data fingerprints"
@@ -548,6 +583,10 @@ try {
     Assert-Throws {
         Invoke-FilingBridgePrivateServer -Command local-check -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     } 'api has a host-published port' "local acceptance must reject a real HostConfig API port binding"
+    $global:FbFakePublishedService = "mcp"
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command local-check -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
+    } 'mcp has a host-published port' "local acceptance must reject a host-published MCP connector port"
     $global:FbFakePublishedService = ""
     Invoke-FilingBridgePrivateServer -Command local-check -RepositoryRoot $repositoryRoot -StateDirectory $recoveredStateDirectory 6>$null
     $localReports = @(Get-ChildItem -LiteralPath (Join-Path $recoveredStateDirectory "acceptance") -Filter "local-check-*.json" -File)
@@ -555,6 +594,8 @@ try {
     $localReport = ([IO.File]::ReadAllText($localReports[0].FullName, $testUtf8)) | ConvertFrom-Json
     Assert-True ($localReport.status -eq "passed" -and $localReport.frontendBinding -eq "127.0.0.1:35496") "local acceptance must prove exact IPv4 loopback frontend publication"
     Assert-True ($localReport.apiHostPortPublished -eq $false -and $localReport.databaseHostPortPublished -eq $false) "local acceptance must prove API and database host ports remain absent"
+    Assert-True ($localReport.mcpConnectorServicePresent -eq $true -and $localReport.mcpHostPortPublished -eq $false) "local acceptance must prove the MCP connector service publishes no host port"
+    Assert-True ((@($localReport.runningServices) -join ",") -eq "db,api,frontend,mcp") "local acceptance must require the MCP connector service to run"
     Assert-True ($localReport.businessDataFingerprintCount -eq 5) "local acceptance must retain all five business-data fingerprints"
 
     $env:FILINGBRIDGE_TEST_BOOT_ID = "2026-07-12T01:00:00.0000000Z"
@@ -594,7 +635,7 @@ try {
     Assert-True ($rebootReports.Count -eq 1) "successful reboot verification must retain one machine-readable report"
     $rebootReport = ([IO.File]::ReadAllText($rebootReports[0].FullName, $testUtf8)) | ConvertFrom-Json
     Assert-True ($rebootReport.status -eq "passed" -and $rebootReport.importantTablesMatched -eq $true) "reboot evidence must prove service health and unchanged business-data fingerprints"
-    Assert-True ($rebootReport.acceptanceContract -eq "release-bound-auto-restart/v1" -and @($rebootReport.runtimeAfter).Count -eq 3) "reboot evidence must bind the release and retain automatic container-restart timing"
+    Assert-True ($rebootReport.acceptanceContract -eq "release-bound-auto-restart/v1" -and @($rebootReport.runtimeAfter).Count -eq 4) "reboot evidence must bind the release and retain automatic container-restart timing, including the MCP connector"
     Remove-Item Env:\FILINGBRIDGE_TEST_BOOT_ID -ErrorAction SilentlyContinue
 
     $failedRecoveryStateDirectory = Join-Path $testRoot "failed-recovered-host-state"
@@ -605,8 +646,8 @@ try {
     $global:FbFailDescriptionPattern = ""
     $failedRecoveryState = ([IO.File]::ReadAllText((Join-Path $failedRecoveryStateDirectory "server.json"), $testUtf8)) | ConvertFrom-Json
     Assert-True ($failedRecoveryState.status -eq "hostRecoveryFailed") "failed replacement-host recovery with proven writer shutdown must retain an explicit blocked state"
-    Assert-True ($global:FbFakeServices -notcontains "api" -and $global:FbFakeServices -notcontains "frontend") "failed replacement-host recovery must leave application writers stopped"
-    $global:FbFakeServices = @("db", "api", "frontend")
+    Assert-True ($global:FbFakeServices -notcontains "api" -and $global:FbFakeServices -notcontains "frontend" -and $global:FbFakeServices -notcontains "mcp") "failed replacement-host recovery must leave application writers stopped"
+    $global:FbFakeServices = @("db", "api", "frontend", "mcp")
 
     Assert-Throws { Invoke-FilingBridgePrivateServer -Command restore -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -BackupPath $dump[0].FullName -Confirmation "wrong" -NonInteractive -AllowPlaintextDatabaseOnlyRestore 6>$null } 'did not match' "restore must require exact typed confirmation"
     Invoke-FilingBridgePrivateServer -Command restore -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -BackupPath $dump[0].FullName -Confirmation ("RESTORE " + $state.instanceId) -NonInteractive -AllowPlaintextDatabaseOnlyRestore -DryRun 6>$null
@@ -633,6 +674,50 @@ try {
     } 'different immutable identity' "update must reject reuse of one semantic version for a different commit or image set"
     [IO.File]::WriteAllText($statePath, $forwardStateText, [Text.UTF8Encoding]::new($false))
 
+    # Reshape the installation into the 0.1.0-preview.9 contract: no MCP connector image in state,
+    # no connector/MCP secrets, an environment and installed Compose snapshot without the mcp
+    # service, and only db/api/frontend running. The update must accept the new manifest, generate
+    # the new secrets on its environment write, and start the new service without manual work.
+    $legacyState = $forwardStateText | ConvertFrom-Json
+    $legacyState.releaseVersion = "0.1.0-preview.9"
+    $legacyState.releaseCommitSha = "9" * 40
+    $legacyState.images = [pscustomobject]@{
+        api = "ghcr.io/jasperfordesq-ai/accounts-api@sha256:$('7' * 64)"
+        frontend = "ghcr.io/jasperfordesq-ai/accounts-frontend@sha256:$('8' * 64)"
+        postgres = "postgres@sha256:$('3' * 64)"
+    }
+    foreach ($legacyField in @("connectorEnabled", "connectorPublicOrigin")) { $legacyState.PSObject.Properties.Remove($legacyField) }
+    $legacyCompose = [IO.File]::ReadAllText((Join-Path $repositoryRoot "compose.private.yml"), $testUtf8).Replace("`r`n", "`n")
+    $legacyCompose = [regex]::Replace($legacyCompose, '(?ms)^  mcp:\n.*?(?=^volumes:)', '')
+    $legacyCompose = [regex]::Replace($legacyCompose, '(?m)^      MCP_URL: .*\n', '')
+    $legacyCompose = [regex]::Replace($legacyCompose, '(?m)^      ApiAccess__Keys__1__.*\n', '')
+    $legacyCompose = [regex]::Replace($legacyCompose, '(?m)^      - accounts_mcp_api_key(?:_hash)?\n', '')
+    $legacyCompose = [regex]::Replace($legacyCompose, '(?ms)^  accounts_mcp_api_key(?:_hash)?:\n    file: [^\n]*\n', '')
+    $legacyCompose = $legacyCompose.Replace('${PRIVATE_CONNECTOR_PUBLIC_ORIGIN:?set PRIVATE_CONNECTOR_PUBLIC_ORIGIN to the exact connector origin}', '${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}')
+    Assert-True ($legacyCompose -cnotmatch 'ACCOUNTS_MCP|accounts_mcp|mcp:3100|PRIVATE_CONNECTOR_PUBLIC') "the synthetic preview.9 Compose snapshot must not reference the MCP connector"
+    $legacySnapshot = Join-Path $stateDirectory "compose.private.installed.yml"
+    [IO.File]::WriteAllText($legacySnapshot, $legacyCompose, [Text.UTF8Encoding]::new($false))
+    $legacyState.composeFileSha256 = (Get-FileHash -LiteralPath $legacySnapshot -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText($statePath, (($legacyState | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $legacyEnvironment = @([IO.File]::ReadAllLines((Join-Path $stateDirectory "private.env"), $testUtf8) | Where-Object { $_ -notmatch '^(ACCOUNTS_MCP_|PRIVATE_CONNECTOR_PUBLIC_|CONNECTOR_SIGNING_KEY_FILE|PRIVATE_CONNECTOR_ENABLED)' })
+    [IO.File]::WriteAllText((Join-Path $stateDirectory "private.env"), (($legacyEnvironment -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
+    foreach ($legacyAbsentSecret in @("accounts_mcp_api_key", "accounts_mcp_api_key_hash", "connector_signing_key")) {
+        Remove-Item -LiteralPath (Join-Path $state.secretDirectory $legacyAbsentSecret) -Force
+    }
+    $global:FbFakeServices = @("db", "api", "frontend")
+
+    $noMcpManifest = [IO.File]::ReadAllText($syntheticManifestPath, $testUtf8) | ConvertFrom-Json
+    $noMcpManifest.images.PSObject.Properties.Remove("mcp")
+    $completeManifestText = [IO.File]::ReadAllText($syntheticManifestPath, $testUtf8)
+    [IO.File]::WriteAllText($syntheticManifestPath, (($noMcpManifest | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    $refusedUpdateCallStart = $global:FbOperatorCalls.Count
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command update -RepositoryRoot $releaseRoot -StateDirectory $stateDirectory -ReleaseManifest $syntheticManifestPath -OutputDirectory $backupDirectory -PlaintextDatabaseOnly -NonInteractive 3>$null 6>$null
+    } 'has no images\.mcp' "update must refuse a release that runs the MCP connector without pinning images.mcp"
+    Assert-True (@($global:FbOperatorCalls | Select-Object -Skip $refusedUpdateCallStart | Where-Object { $_.mutating }).Count -eq 0) "a refused incomplete release must not back up, pull, stop, or migrate anything"
+    Assert-True (([IO.File]::ReadAllText($statePath, $testUtf8) | ConvertFrom-Json).releaseVersion -eq "0.1.0-preview.9") "a refused update must leave the installed release recorded"
+    [IO.File]::WriteAllText($syntheticManifestPath, $completeManifestText, [Text.UTF8Encoding]::new($false))
+
     $updateCallStart = $global:FbOperatorCalls.Count
     $global:FbMutateReleaseComposeOnValidate = Join-Path $releaseRoot "compose.private.yml"
     Invoke-FilingBridgePrivateServer -Command update -RepositoryRoot $releaseRoot -StateDirectory $stateDirectory -ReleaseManifest $syntheticManifestPath -OutputDirectory $backupDirectory -PlaintextDatabaseOnly -NonInteractive 3>$null 6>$null
@@ -645,6 +730,22 @@ try {
         Assert-True ($fileIndex -ge 0 -and $callArguments[$fileIndex + 1] -eq $updateSnapshot) "update must use only the immutable installed Compose snapshot after target verification"
     }
     Assert-True ((Get-FileHash $updateSnapshot -Algorithm SHA256).Hash -ne (Get-FileHash (Join-Path $releaseRoot "compose.private.yml") -Algorithm SHA256).Hash) "update test seam must mutate only the source Compose after snapshot creation"
+    $upgradedState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
+    Assert-True ($upgradedState.status -eq "ready" -and $upgradedState.releaseVersion -eq "1.2.3") "a preview.9 installation must update to a release that adds the MCP connector"
+    Assert-True ([string]$upgradedState.images.mcp -ceq "ghcr.io/jasperfordesq-ai/accounts-mcp@sha256:$('4' * 64)") "update must record the release's digest-pinned MCP connector image"
+    $upgradedEnvironment = [IO.File]::ReadAllText((Join-Path $stateDirectory "private.env"), $testUtf8)
+    Assert-True ($upgradedEnvironment -match "(?m)^ACCOUNTS_MCP_IMAGE='ghcr\.io/jasperfordesq-ai/accounts-mcp@sha256:4{64}'\r?$") "the update environment write must pin the MCP connector image"
+    Assert-True ($upgradedEnvironment -match "(?m)^PRIVATE_CONNECTOR_ENABLED='false'\r?$" -and $upgradedEnvironment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "an updated installation must keep the connector off at the loopback origin"
+    foreach ($generatedSecret in @("accounts_mcp_api_key", "accounts_mcp_api_key_hash", "connector_signing_key")) {
+        Assert-True (Test-Path -LiteralPath (Join-Path $state.secretDirectory $generatedSecret) -PathType Leaf) "update must generate '$generatedSecret' for an installation that predates it"
+    }
+    $upgradedMcpKey = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8)
+    Assert-True ([IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8) -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $upgradedMcpKey)) "the generated MCP key must be bound to its API hash"
+    $updateCallLines = @($global:FbOperatorCalls | Select-Object -Skip $updateCallStart | ForEach-Object { $_.arguments -join " " })
+    Assert-True (@($updateCallLines | Where-Object { $_ -match '\bpull --policy always$' }).Count -eq 1) "update must pull the exact target digests, including the MCP connector, before downtime"
+    Assert-True (@($updateCallLines | Where-Object { $_ -match '\bup -d --no-deps --wait --wait-timeout 300 api frontend mcp$' }).Count -eq 1) "update must start and health-check the MCP connector service"
+    Assert-True ($global:FbFakeServices -contains "mcp") "the MCP connector service must run after an update from preview.9"
+    Assert-True (@($updateCallLines | Where-Object { $_ -match '\bstop\b.*\bmcp\b' }).Count -eq 0) "a previously running frontend means the new MCP connector service stays running"
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "compose.private.yml") -Destination (Join-Path $releaseRoot "compose.private.yml") -Force
 
     $nextManifest = [IO.File]::ReadAllText($syntheticManifestPath, $testUtf8) | ConvertFrom-Json
@@ -664,10 +765,13 @@ try {
     $failedUpdateState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
     Assert-True ($failedUpdateState.status -eq "updateFailed") "forced update failure must leave an explicit recoverable state"
     Assert-True (Test-Path -LiteralPath ([string]$failedUpdateState.lastPreUpdateBackup) -PathType Leaf) "forced update failure must retain its exact pre-update backup"
-    Assert-True ($global:FbFakeServices -notcontains "api" -and $global:FbFakeServices -notcontains "frontend") "forced update failure must leave all application writers stopped"
+    Assert-True ($global:FbFakeServices -notcontains "api" -and $global:FbFakeServices -notcontains "frontend" -and $global:FbFakeServices -notcontains "mcp") "forced update failure must leave all application writers, including the MCP connector, stopped"
     Invoke-FilingBridgePrivateServer -Command restore -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -BackupPath ([string]$failedUpdateState.lastPreUpdateBackup) -Confirmation ("RESTORE " + $state.instanceId) -NonInteractive -AllowPlaintextDatabaseOnlyRestore 3>$null 6>$null
     $recoveredUpdateState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
     Assert-True ($recoveredUpdateState.status -eq "ready") "explicit restore after forced update failure must return the installation to ready state"
+    $restoredMcpKey = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8)
+    Assert-True ($restoredMcpKey -cne $upgradedMcpKey) "restore must regenerate the MCP connector service key"
+    Assert-True ([IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8) -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $restoredMcpKey)) "restore must bind the regenerated MCP key to its API hash"
 
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command owner-recovery -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OwnerEmail "owner@example.ie" -Confirmation "RECOVER PRIVATE SERVER OWNER" -NonInteractive 6>$null
@@ -677,13 +781,99 @@ try {
     Assert-True ($recoveryArguments -match "PrivateOwnerRecovery__TenantSlug=$([regex]::Escape([string]$state.tenantSlug))") "Owner recovery must pass the exact .NET configuration key for the protected saved tenant slug"
     Assert-True ($recoveryArguments -match "PrivateOwnerRecovery__ConfirmInstallationId=$([regex]::Escape([string]$state.instanceId))") "Owner recovery must pass the exact .NET installation confirmation key"
 
+    function Read-ConnectorFixture {
+        return [pscustomobject]@{
+            State = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
+            Environment = [IO.File]::ReadAllText((Join-Path $stateDirectory "private.env"), $testUtf8)
+        }
+    }
+    $connectorStatus = @(Invoke-FilingBridgePrivateServer -Command connector -Action status -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { [string]$_ })
+    Assert-True (($connectorStatus -join "`n") -match 'MCP connector: disabled' -and ($connectorStatus -join "`n") -match 'MCP URL: http://localhost:35490/mcp') "connector status must report the disabled connector and its loopback MCP URL"
+    Assert-Throws { Invoke-FilingBridgePrivateServer -Command connector -Action enable -PublicOrigin tailscale -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } 'Tailscale Serve is not configured' "connector enable --origin tailscale must refuse an installation without Tailscale Serve"
+    Assert-Throws { Invoke-FilingBridgePrivateServer -Command connector -Action enable -PublicOrigin "https://public.example.com" -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } "must be 'local' or 'tailscale'" "connector enable must accept only the local or tailscale origin"
+    Assert-Throws { Invoke-FilingBridgePrivateServer -Command connector -Action disable -PublicOrigin local -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } 'applies only to' "--origin must be refused outside connector enable"
+    Assert-Throws { Invoke-FilingBridgePrivateServer -Command connector -Action open -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } 'connector requires one action' "connector must reject unknown actions"
+    Assert-True ((Read-ConnectorFixture).State.connectorEnabled -eq $false) "refused connector commands must not change state"
+
+    $global:FbOperatorCalls.Clear()
+    Invoke-FilingBridgePrivateServer -Command connector -Action enable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -DryRun 6>$null
+    Assert-True (@($global:FbOperatorCalls | Where-Object { $_.mutating }).Count -eq 0 -and (Read-ConnectorFixture).State.connectorEnabled -eq $false) "connector enable dry-run must not change state or containers"
+
+    $global:FbOperatorCalls.Clear()
+    $enableOutput = @(Invoke-FilingBridgePrivateServer -Command connector -Action enable -PublicOrigin local -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { [string]$_ })
+    $connectorFixture = Read-ConnectorFixture
+    Assert-True ($connectorFixture.State.connectorEnabled -eq $true -and $connectorFixture.State.connectorPublicOrigin -eq "http://localhost:35490") "connector enable must record the enabled loopback connector"
+    Assert-True ($connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_ENABLED='true'\r?$" -and $connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "connector enable must rewrite the environment"
+    $enableCalls = @($global:FbOperatorCalls | Where-Object { $_.file -eq "docker" } | ForEach-Object { $_.arguments -join " " })
+    Assert-True (@($enableCalls | Where-Object { $_ -match '\bup -d --no-deps --force-recreate --wait --wait-timeout 300 api mcp$' }).Count -eq 1) "connector enable must recreate exactly the API and MCP connector services and wait for health"
+    Assert-True (@($enableCalls | Where-Object { $_ -match '\bfrontend\b|\bdb\b' }).Count -eq 0) "connector enable must not recreate the frontend or database"
+    Assert-True (($enableOutput -join "`n") -match [regex]::Escape('claude mcp add --transport http filingbridge http://localhost:35490/mcp')) "connector enable must print the Claude Code command"
+    Assert-True (($enableOutput -join "`n") -match 'codex mcp login filingbridge') "connector enable must print the Codex sign-in command"
+    Assert-True (($enableOutput -join "`n") -match 'Claude\.ai custom connectors are not supported on a Private Server') "connector enable must state that Claude.ai is not supported on a Private Server"
+
+    $global:FbFailDescriptionPattern = '^Enable the MCP connector'
+    Assert-Throws {
+        Invoke-FilingBridgePrivateServer -Command connector -Action enable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
+    } 'previous connector configuration was restored' "a failed connector enable must restore the previous connector configuration"
+    $global:FbFailDescriptionPattern = ""
+    Assert-True ((Read-ConnectorFixture).State.connectorEnabled -eq $true) "a failed re-enable must keep the previously recorded connector state"
+
     $global:FbOperatorCalls.Clear()
     Invoke-FilingBridgePrivateServer -Command tailscale -Action enable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
     $tailscaleCalls = ($global:FbOperatorCalls | ForEach-Object { $_.description + " " + ($_.arguments -join " ") }) -join "`n"
     Assert-True ($tailscaleCalls -match 'Enable private Tailscale Serve HTTPS') "Tailscale enable must configure Serve"
     Assert-True ($tailscaleCalls -notmatch '\bfunnel\b') "operator must never configure Tailscale Funnel"
+    Assert-True ($tailscaleCalls -match 'Apply the exact private HTTPS origin .*--force-recreate api frontend mcp') "Tailscale enable must recreate the MCP connector with the other application services"
+    Assert-True ((Read-ConnectorFixture).Environment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "Tailscale enable must not move the connector origin by itself"
+
+    $global:FbOperatorCalls.Clear()
+    Invoke-FilingBridgePrivateServer -Command connector -Action enable -PublicOrigin tailscale -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
+    $connectorFixture = Read-ConnectorFixture
+    Assert-True ($connectorFixture.State.connectorPublicOrigin -eq "https://machine.example-tailnet.ts.net") "connector enable --origin tailscale must record the exact Tailscale Serve origin"
+    Assert-True ($connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='https://machine\.example-tailnet\.ts\.net'\r?$" -and $connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_HOST='machine\.example-tailnet\.ts\.net'\r?$") "the connector issuer and allowed host must follow the Tailscale origin"
+    $tailscaleStatus = @(Invoke-FilingBridgePrivateServer -Command connector -Action status -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { [string]$_ })
+    Assert-True (($tailscaleStatus -join "`n") -match 'MCP connector: enabled' -and ($tailscaleStatus -join "`n") -match 'MCP URL: https://machine\.example-tailnet\.ts\.net/mcp') "connector status must report the enabled Tailscale MCP URL"
+
     Assert-Throws { Invoke-FilingBridgePrivateServer -Command purge-data -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -Confirmation ("PURGE " + $state.instanceId) -NonInteractive -DryRun 6>$null } 'Disable the recorded Tailscale Serve route before purge' "purge must not orphan a recorded Tailscale Serve route"
     Invoke-FilingBridgePrivateServer -Command tailscale -Action disable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
+    $connectorFixture = Read-ConnectorFixture
+    Assert-True ($connectorFixture.State.connectorPublicOrigin -eq "http://localhost:35490" -and $connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_PUBLIC_ORIGIN='http://localhost:35490'\r?$") "disabling Tailscale must return the connector issuer to loopback"
+
+    $global:FbOperatorCalls.Clear()
+    Invoke-FilingBridgePrivateServer -Command connector -Action disable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null
+    $connectorFixture = Read-ConnectorFixture
+    Assert-True ($connectorFixture.State.connectorEnabled -eq $false -and $connectorFixture.Environment -match "(?m)^PRIVATE_CONNECTOR_ENABLED='false'\r?$") "connector disable must turn the connector off"
+    $disableCalls = @($global:FbOperatorCalls | Where-Object { $_.file -eq "docker" } | ForEach-Object { $_.arguments -join " " })
+    Assert-True (@($disableCalls | Where-Object { $_ -match '\bup -d --no-deps --force-recreate --wait --wait-timeout 300 api$' }).Count -eq 1) "connector disable must recreate only the API"
+
+    # The fake Docker seam reports no image identities, so diagnose ends with a failure; only the
+    # connector-specific checks it prints first are asserted here.
+    $diagnoseOutput = New-Object System.Collections.Generic.List[string]
+    try { Invoke-FilingBridgePrivateServer -Command diagnose -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { $diagnoseOutput.Add([string]$_) } } catch { }
+    foreach ($diagnosticName in @("secret:accounts_mcp_api_key", "secret:accounts_mcp_api_key_hash", "mcp-service-key-binding", "mcp-connector")) {
+        Assert-True (@($diagnoseOutput | Where-Object { $_ -match "^PASS $([regex]::Escape($diagnosticName)):" }).Count -eq 1) "diagnose must check $diagnosticName"
+    }
+    $validMcpHash = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8)
+    [IO.File]::WriteAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), ("0" * 64), [Text.UTF8Encoding]::new($false))
+    $brokenDiagnose = New-Object System.Collections.Generic.List[string]
+    try { Invoke-FilingBridgePrivateServer -Command diagnose -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { $brokenDiagnose.Add([string]$_) } } catch { }
+    Assert-True (@($brokenDiagnose | Where-Object { $_ -match '^FAIL mcp-service-key-binding:' }).Count -eq 1) "diagnose must fail an MCP key that does not match the API hash"
+    # The repair the advice names (any environment write) must actually replace the mismatched pair.
+    & $privateServerModule { param($directory) Initialize-FbMcpServiceKey -SecretDirectory $directory } $state.secretDirectory
+    $repairedMcpKey = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8).Trim()
+    $repairedMcpHash = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8).Trim()
+    Assert-True ($repairedMcpHash -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $repairedMcpKey)) "an environment write must repair an MCP key pair whose hash does not match"
+    Assert-True ($repairedMcpHash -cne $validMcpHash.Trim()) "the repaired pair must be freshly generated"
+    $consistentMcpKeyBefore = $repairedMcpKey
+    & $privateServerModule { param($directory) Initialize-FbMcpServiceKey -SecretDirectory $directory } $state.secretDirectory
+    Assert-True ([IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8).Trim() -ceq $consistentMcpKeyBefore) "a consistent MCP key pair must be left unchanged"
+
+    $legacyConnectorState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
+    $legacyConnectorStateText = [IO.File]::ReadAllText($statePath, $testUtf8)
+    $legacyConnectorState.images.PSObject.Properties.Remove("mcp")
+    [IO.File]::WriteAllText($statePath, (($legacyConnectorState | ConvertTo-Json -Depth 12) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+    Assert-Throws { Invoke-FilingBridgePrivateServer -Command connector -Action enable -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>$null } 'does not run the MCP connector service' "connector enable must refuse a release without the MCP connector service"
+    [IO.File]::WriteAllText($statePath, $legacyConnectorStateText, [Text.UTF8Encoding]::new($false))
 
     $supportDirectory = Join-Path $testRoot "support"
     Invoke-FilingBridgePrivateServer -Command support-bundle -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory -OutputDirectory $supportDirectory -TailLines 25 6>$null

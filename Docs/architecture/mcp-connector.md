@@ -138,6 +138,15 @@ Private Server generates it at setup and on the first environment write after an
 rotates it on restore and host recovery; `PRIVATE_CONNECTOR_ENABLED` (from the state file's
 `connectorEnabled`) turns the feature on. Public Production uses `CONNECTOR_ENABLED`.
 
+Private Server also runs the in-stack `mcp` service (image `images.mcp` in `release.json`) with its
+own service key `accounts_mcp_api_key` (the API mounts only `accounts_mcp_api_key_hash`), generated
+at setup and on the first environment write after an update, and regenerated on restore and host
+recovery. `filingbridge connector enable [--origin local|tailscale] | disable | status` is the only
+supported switch: it sets `connectorEnabled` and `connectorPublicOrigin`, which becomes
+`PRIVATE_CONNECTOR_PUBLIC_ORIGIN` (`Connector:PublicBaseUrl` and the service's
+`FILINGBRIDGE_PUBLIC_URL`). Claude.ai is not supported there because a Private Server has no public
+ingress; see `Docs/deployment/private-server.md#connect-an-ai-agent`.
+
 ## Boundaries that do not move
 
 - No tool, route or client submits anything to CRO or ROS. Agents record externally completed steps

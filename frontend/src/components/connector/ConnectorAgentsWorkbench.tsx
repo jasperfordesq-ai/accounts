@@ -48,6 +48,7 @@ function errorMessage(error: unknown, fallback: string) {
 export function ConnectorAgentsWorkbench() {
   const { user, isOwner } = useAuth();
   const [origin, setOrigin] = useState("");
+  const [remoteResource, setRemoteResource] = useState<string | null>(null);
   const [users, setUsers] = useState<UserAdministrationSummary[]>([]);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -70,7 +71,28 @@ export function ConnectorAgentsWorkbench() {
     : users.find((candidate) => candidate.userId === targetUserId)?.displayName ?? "this user";
 
   useEffect(() => {
-    queueMicrotask(() => setOrigin(window.location.origin));
+    // The connection URL must be the MCP resource the server issues tokens for (for example the
+    // Tailscale origin after `connector enable --origin tailscale`), not whatever address this page
+    // was opened on. The browser's own origin is only a fallback when discovery is unavailable.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setOrigin(window.location.origin);
+    });
+    fetch("/.well-known/oauth-protected-resource/mcp", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((metadata: unknown) => {
+        if (cancelled) return;
+        const resource = typeof metadata === "object" && metadata !== null
+          ? (metadata as { resource?: unknown }).resource
+          : undefined;
+        if (typeof resource === "string" && /^https?:\/\/[^/]+\/mcp$/.test(resource)) {
+          setRemoteResource(resource);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -170,7 +192,9 @@ export function ConnectorAgentsWorkbench() {
     }
   }
 
-  const remoteUrl = origin ? `${origin}/mcp` : "/mcp";
+  const remoteUrl = remoteResource ?? (origin ? `${origin}/mcp` : "/mcp");
+  // The CLI connects to the same FilingBridge address the server advertises for remote clients.
+  const serverAddress = remoteResource ? remoteResource.slice(0, -"/mcp".length) : origin;
 
   return (
     <PageShell
@@ -359,7 +383,7 @@ export function ConnectorAgentsWorkbench() {
               <p className="font-medium">Command-line connector</p>
               <p className="text-[var(--muted-foreground)]">
                 For agents that run tools locally, sign in once in a terminal with the <code className="font-mono">filingbridge-mcp</code> connector
-                (<code className="font-mono">filingbridge-mcp connect --base-url {origin || "<this address>"}</code>), then add <code className="font-mono">filingbridge-mcp serve</code> to
+                (<code className="font-mono">filingbridge-mcp connect --base-url {serverAddress || "<this address>"}</code>), then add <code className="font-mono">filingbridge-mcp serve</code> to
                 your AI client. See the connector README for options.
               </p>
             </div>

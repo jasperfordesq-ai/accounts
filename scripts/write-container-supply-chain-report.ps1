@@ -19,6 +19,12 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$FrontendDigest,
     [Parameter(Mandatory = $true)]
+    [string]$McpImageName,
+    [Parameter(Mandatory = $true)]
+    [string]$McpImageReference,
+    [Parameter(Mandatory = $true)]
+    [string]$McpDigest,
+    [Parameter(Mandatory = $true)]
     [string]$BackendScanPath,
     [Parameter(Mandatory = $true)]
     [string]$FrontendScanPath,
@@ -26,10 +32,16 @@ param(
     [string]$BackendSbomPath,
     [Parameter(Mandatory = $true)]
     [string]$FrontendSbomPath,
+    [Parameter(Mandatory = $true)]
+    [string]$McpScanPath,
+    [Parameter(Mandatory = $true)]
+    [string]$McpSbomPath,
     [string]$BackendProvenancePath = "",
     [string]$FrontendProvenancePath = "",
+    [string]$McpProvenancePath = "",
     [string]$BackendAttestationUrl = "",
     [string]$FrontendAttestationUrl = "",
+    [string]$McpAttestationUrl = "",
     [switch]$SmokeVerified,
     [Parameter(Mandatory = $true)]
     [string]$EvidencePath
@@ -229,16 +241,18 @@ function Get-ProvenanceEvidence(
 
 Assert-Digest $BackendDigest "Backend digest"
 Assert-Digest $FrontendDigest "Frontend digest"
+Assert-Digest $McpDigest "MCP connector digest"
 Assert-ImageName $BackendImageName "Backend image name"
 Assert-ImageName $FrontendImageName "Frontend image name"
+Assert-ImageName $McpImageName "MCP connector image name"
 if ($CommitSha -cnotmatch '^[0-9a-f]{40}$') {
     throw "CommitSha must be the full lowercase 40-character release commit SHA."
 }
 if ($GitHubActionsRunUrl -cnotmatch '^https://github\.com/[^/]+/[^/]+/actions/runs/[0-9]+$') {
     throw "GitHubActionsRunUrl must identify the exact GitHub Actions run."
 }
-if ($BackendDigest -eq $FrontendDigest) {
-    throw "Backend and frontend digests must identify distinct images."
+if (@(@($BackendDigest, $FrontendDigest, $McpDigest) | Select-Object -Unique).Count -ne 3) {
+    throw "Backend, frontend, and MCP connector digests must identify distinct images."
 }
 if (-not $SmokeVerified) {
     throw "Container supply-chain evidence can be written only after the production smoke completes."
@@ -247,6 +261,7 @@ if (-not $SmokeVerified) {
 $promoted = $PromotionMode -eq "promoted"
 $backendExactReference = "$BackendImageName@$BackendDigest"
 $frontendExactReference = "$FrontendImageName@$FrontendDigest"
+$mcpExactReference = "$McpImageName@$McpDigest"
 if ($promoted) {
     if ($BackendImageReference -cne $backendExactReference) {
         throw "Backend production smoke reference must equal the pushed backend digest reference."
@@ -254,21 +269,31 @@ if ($promoted) {
     if ($FrontendImageReference -cne $frontendExactReference) {
         throw "Frontend production smoke reference must equal the pushed frontend digest reference."
     }
+    if ($McpImageReference -cne $mcpExactReference) {
+        throw "MCP connector production smoke reference must equal the pushed MCP connector digest reference."
+    }
 }
 
 $backendScan = Get-ScanEvidence $BackendScanPath $BackendImageReference "Backend"
 $frontendScan = Get-ScanEvidence $FrontendScanPath $FrontendImageReference "Frontend"
+$mcpScan = Get-ScanEvidence $McpScanPath $McpImageReference "MCP connector"
 $backendSbom = Get-SbomEvidence $BackendSbomPath "Backend"
 $frontendSbom = Get-SbomEvidence $FrontendSbomPath "Frontend"
+$mcpSbom = Get-SbomEvidence $McpSbomPath "MCP connector"
 $backendProvenance = Get-ProvenanceEvidence $BackendProvenancePath $BackendAttestationUrl $promoted "Backend"
 $frontendProvenance = Get-ProvenanceEvidence $FrontendProvenancePath $FrontendAttestationUrl $promoted "Frontend"
-$retainedArtifactPaths = @($BackendScanPath, $FrontendScanPath, $BackendSbomPath, $FrontendSbomPath)
+$mcpProvenance = Get-ProvenanceEvidence $McpProvenancePath $McpAttestationUrl $promoted "MCP connector"
+$retainedArtifactPaths = @($BackendScanPath, $FrontendScanPath, $McpScanPath, $BackendSbomPath, $FrontendSbomPath, $McpSbomPath)
 if ($promoted) {
-    $retainedArtifactPaths += @($BackendProvenancePath, $FrontendProvenancePath)
+    $retainedArtifactPaths += @($BackendProvenancePath, $FrontendProvenancePath, $McpProvenancePath)
 }
 $distinctArtifactPaths = @($retainedArtifactPaths | ForEach-Object { [IO.Path]::GetFullPath($_) } | Select-Object -Unique)
 if ($distinctArtifactPaths.Count -ne $retainedArtifactPaths.Count) {
-    throw "Backend and frontend scan, SBOM, and provenance evidence must be retained as distinct files."
+    throw "Backend, frontend, and MCP connector scan, SBOM, and provenance evidence must be retained as distinct files."
+}
+$distinctArtifactNames = @($retainedArtifactPaths | ForEach-Object { [IO.Path]::GetFileName($_) } | Select-Object -Unique)
+if ($distinctArtifactNames.Count -ne $retainedArtifactPaths.Count) {
+    throw "Backend, frontend, and MCP connector evidence files must have distinct file names; the verifier reads them from one directory."
 }
 
 $blockingFailures = [System.Collections.Generic.List[string]]::new()
@@ -335,6 +360,19 @@ $report = [ordered]@{
             scan = $frontendScan
             sbom = $frontendSbom
             provenance = $frontendProvenance
+        },
+        [ordered]@{
+            component = "mcp"
+            imageName = $McpImageName
+            digest = $McpDigest
+            exactDigestReference = $mcpExactReference
+            productionSmokeReference = $McpImageReference
+            builtInvocationCount = 1
+            pushedToRegistry = $promoted
+            pulledForSmoke = $promoted
+            scan = $mcpScan
+            sbom = $mcpSbom
+            provenance = $mcpProvenance
         }
     )
     blockingFailures = @($blockingFailures)

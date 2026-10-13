@@ -57,6 +57,8 @@ requireText("./scripts/verify-private-compose.ps1", "The Private Server topology
 requireText("docker logout ghcr.io", "The workflow must prove anonymous public GHCR pulls.");
 requireText("docker pull --platform linux/amd64 \"$backend\"", "The exact backend digest must be pulled for x64.");
 requireText("docker pull --platform linux/amd64 \"$frontend\"", "The exact frontend digest must be pulled for x64.");
+requireText("docker pull --platform linux/amd64 \"$mcp\"", "The exact MCP connector digest must be pulled for x64.");
+requireText("Candidate evidence lacks the exact MCP connector image digest.", "Preparation must refuse candidate evidence without the MCP connector image.");
 requireText("docker pull --platform linux/amd64 \"$POSTGRES_IMAGE\"", "The exact PostgreSQL digest must be pulled for x64.");
 requireText("test -f /etc/alpine-release", "The selected PostgreSQL runtime must be independently identified as Alpine.");
 requireText("postgres (PostgreSQL) 16.", "The selected PostgreSQL runtime must remain on the reviewed PostgreSQL 16 line.");
@@ -79,6 +81,9 @@ requireText("container-supply-chain-verification-report.json", "The protected jo
 requireText("Packaged retained evidence metadata differs from trusted verification", "The protected job must compare every retained evidence file hash and size with trusted verification metadata.");
 requireText("manifest.images.backend.exactDigestReference -cne [string]$backendEvidence[0].exactDigestReference", "The protected job must bind the bundle backend image to trusted CI evidence.");
 requireText("manifest.images.frontend.exactDigestReference -cne [string]$frontendEvidence[0].exactDigestReference", "The protected job must bind the bundle frontend image to trusted CI evidence.");
+requireText("manifest.images.mcp.exactDigestReference -cne [string]$mcpEvidence[0].exactDigestReference", "The protected job must bind the bundle MCP connector image to trusted CI evidence.");
+requireText("@($verification.verifiedImageDigests).Count -ne 3", "The protected job must require exactly the three verified image digests (API, frontend, MCP connector).");
+requireText("$retainedEvidence.Count -lt 9", "The protected job must require scan, SBOM and provenance evidence for all three images.");
 requireText("manifest.images.postgres.exactDigestReference -cne $env:POSTGRES_IMAGE", "The protected job must bind PostgreSQL to the reviewed workflow input.");
 requireText("subject-path: ${{ steps.bundle.outputs.archive }}", "Provenance must cover the exact ZIP.");
 requireText("if gh release view \"$tag\"", "Release creation must refuse an existing version/tag.");

@@ -8,10 +8,13 @@ $commitSha = "a" * 40
 $runUrl = "https://github.com/example/accounts/actions/runs/123"
 $backendImageName = "ghcr.io/example/accounts-api"
 $frontendImageName = "ghcr.io/example/accounts-frontend"
+$mcpImageName = "ghcr.io/example/accounts-mcp"
 $backendDigest = "sha256:" + ("1" * 64)
 $frontendDigest = "sha256:" + ("2" * 64)
+$mcpDigest = "sha256:" + ("4" * 64)
 $backendReference = "accounts-api-ci:$commitSha"
 $frontendReference = "accounts-frontend-ci:$commitSha"
+$mcpReference = "accounts-mcp-ci:$commitSha"
 $temporaryBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $temporaryRoot = [IO.Path]::GetFullPath(
     (Join-Path $temporaryBase "accounts-container-supply-chain-parser-$([Guid]::NewGuid().ToString('N'))"))
@@ -92,13 +95,17 @@ function Invoke-WriterCase(
     $frontendScanPath = Join-Path $temporaryRoot "frontend-trivy.json"
     $backendSbomPath = Join-Path $temporaryRoot "backend-sbom.spdx.json"
     $frontendSbomPath = Join-Path $temporaryRoot "frontend-sbom.spdx.json"
+    $mcpScanPath = Join-Path $temporaryRoot "mcp-trivy.json"
+    $mcpSbomPath = Join-Path $temporaryRoot "mcp-sbom.spdx.json"
     $reportPath = Join-Path $temporaryRoot "container-supply-chain-report.json"
     $verificationPath = Join-Path $temporaryRoot "container-supply-chain-verification-report.json"
 
     Write-JsonFile $backendScanPath $BackendScan
     Write-JsonFile $frontendScanPath (New-CleanScan $frontendReference)
+    Write-JsonFile $mcpScanPath (New-CleanScan $mcpReference)
     Write-JsonFile $backendSbomPath ([ordered]@{ spdxVersion = "SPDX-2.3" })
     Write-JsonFile $frontendSbomPath ([ordered]@{ spdxVersion = "SPDX-2.3" })
+    Write-JsonFile $mcpSbomPath ([ordered]@{ spdxVersion = "SPDX-2.3" })
     Remove-Item -LiteralPath $reportPath -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $verificationPath -Force -ErrorAction SilentlyContinue
 
@@ -113,10 +120,15 @@ function Invoke-WriterCase(
             -FrontendImageName $frontendImageName `
             -FrontendImageReference $frontendReference `
             -FrontendDigest $frontendDigest `
+            -McpImageName $mcpImageName `
+            -McpImageReference $mcpReference `
+            -McpDigest $mcpDigest `
             -BackendScanPath $backendScanPath `
             -FrontendScanPath $frontendScanPath `
+            -McpScanPath $mcpScanPath `
             -BackendSbomPath $backendSbomPath `
             -FrontendSbomPath $frontendSbomPath `
+            -McpSbomPath $mcpSbomPath `
             -SmokeVerified `
             -EvidencePath $reportPath
     }
@@ -138,8 +150,11 @@ function Invoke-WriterCase(
     if ($report.status -ne "blocked" -or $report.promotionMode -ne "verification-only") {
         throw "Synthetic verification-only report did not retain its explicit blocked boundary."
     }
-    if (@($report.images).Count -ne 2 -or @($report.images | Where-Object { $_.scan.passed }).Count -ne 2) {
-        throw "Synthetic clean scans were not retained as two passed image scan records."
+    if (@($report.images).Count -ne 3 -or @($report.images | Where-Object { $_.scan.passed }).Count -ne 3) {
+        throw "Synthetic clean scans were not retained as three passed image scan records."
+    }
+    if ((@($report.images | ForEach-Object { [string]$_.component }) -join ",") -ne "backend,frontend,mcp") {
+        throw "Synthetic report must cover the backend, frontend, and MCP connector images."
     }
 
     & $verifier `
@@ -191,38 +206,75 @@ function Invoke-PromotedMachineCase {
     $frontendSbomPath = Join-Path $temporaryRoot "frontend-sbom.spdx.json"
     $backendProvenancePath = Join-Path $temporaryRoot "backend-provenance.json"
     $frontendProvenancePath = Join-Path $temporaryRoot "frontend-provenance.json"
+    $mcpScanPath = Join-Path $temporaryRoot "mcp-trivy.json"
+    $mcpSbomPath = Join-Path $temporaryRoot "mcp-sbom.spdx.json"
+    $mcpProvenancePath = Join-Path $temporaryRoot "mcp-provenance.json"
     $reportPath = Join-Path $temporaryRoot "container-supply-chain-report.json"
     $verificationPath = Join-Path $temporaryRoot "container-supply-chain-verification-report.json"
     $backendExactReference = "$backendImageName@$backendDigest"
     $frontendExactReference = "$frontendImageName@$frontendDigest"
+    $mcpExactReference = "$mcpImageName@$mcpDigest"
 
     Write-JsonFile $backendScanPath (New-CleanScan $backendExactReference)
     Write-JsonFile $frontendScanPath (New-CleanScan $frontendExactReference)
+    Write-JsonFile $mcpScanPath (New-CleanScan $mcpExactReference)
     Write-JsonFile $backendSbomPath ([ordered]@{ spdxVersion = "SPDX-2.3" })
     Write-JsonFile $frontendSbomPath ([ordered]@{ spdxVersion = "SPDX-2.3" })
+    Write-JsonFile $mcpSbomPath ([ordered]@{ spdxVersion = "SPDX-2.3" })
     Write-JsonFile $backendProvenancePath ([ordered]@{ subject = "backend" })
     Write-JsonFile $frontendProvenancePath ([ordered]@{ subject = "frontend" })
+    Write-JsonFile $mcpProvenancePath ([ordered]@{ subject = "mcp" })
 
-    & $writer `
-        -PromotionMode promoted `
-        -CommitSha $commitSha `
-        -GitHubActionsRunUrl $runUrl `
-        -BackendImageName $backendImageName `
-        -BackendImageReference $backendExactReference `
-        -BackendDigest $backendDigest `
-        -FrontendImageName $frontendImageName `
-        -FrontendImageReference $frontendExactReference `
-        -FrontendDigest $frontendDigest `
-        -BackendScanPath $backendScanPath `
-        -FrontendScanPath $frontendScanPath `
-        -BackendSbomPath $backendSbomPath `
-        -FrontendSbomPath $frontendSbomPath `
-        -BackendProvenancePath $backendProvenancePath `
-        -FrontendProvenancePath $frontendProvenancePath `
-        -BackendAttestationUrl "https://github.com/example/accounts/attestations/111" `
-        -FrontendAttestationUrl "https://github.com/example/accounts/attestations/222" `
-        -SmokeVerified `
-        -EvidencePath $reportPath
+    $promotedArguments = @{
+        PromotionMode = "promoted"
+        CommitSha = $commitSha
+        GitHubActionsRunUrl = $runUrl
+        BackendImageName = $backendImageName
+        BackendImageReference = $backendExactReference
+        BackendDigest = $backendDigest
+        FrontendImageName = $frontendImageName
+        FrontendImageReference = $frontendExactReference
+        FrontendDigest = $frontendDigest
+        McpImageName = $mcpImageName
+        McpImageReference = $mcpExactReference
+        McpDigest = $mcpDigest
+        BackendScanPath = $backendScanPath
+        FrontendScanPath = $frontendScanPath
+        McpScanPath = $mcpScanPath
+        BackendSbomPath = $backendSbomPath
+        FrontendSbomPath = $frontendSbomPath
+        McpSbomPath = $mcpSbomPath
+        BackendProvenancePath = $backendProvenancePath
+        FrontendProvenancePath = $frontendProvenancePath
+        McpProvenancePath = $mcpProvenancePath
+        BackendAttestationUrl = "https://github.com/example/accounts/attestations/111"
+        FrontendAttestationUrl = "https://github.com/example/accounts/attestations/222"
+        McpAttestationUrl = "https://github.com/example/accounts/attestations/333"
+        SmokeVerified = $true
+        EvidencePath = $reportPath
+    }
+
+    # The MCP connector is a release image like the others: an unpromoted smoke reference, a
+    # missing attestation, or a digest shared with another component is refused.
+    foreach ($mcpMutation in @(
+        @{ Key = "McpImageReference"; Value = "accounts-mcp-ci:$commitSha"; Expected = "MCP connector production smoke reference must equal the pushed MCP connector digest reference" },
+        @{ Key = "McpAttestationUrl"; Value = ""; Expected = "MCP connector GitHub provenance attestation URL is missing" },
+        @{ Key = "McpDigest"; Value = $frontendDigest; Expected = "digests must identify distinct images" }
+    )) {
+        $mutatedArguments = $promotedArguments.Clone()
+        $mutatedArguments[$mcpMutation.Key] = $mcpMutation.Value
+        try {
+            & $writer @mutatedArguments
+        } catch {
+            if ($_.Exception.Message -notlike "*$($mcpMutation.Expected)*") {
+                throw "Expected MCP connector writer failure containing '$($mcpMutation.Expected)', received: $($_.Exception.Message)"
+            }
+            continue
+        }
+        throw "Writer accepted promoted MCP connector evidence mutation '$($mcpMutation.Key)'."
+    }
+
+    & $writer @promotedArguments
 
     & $verifier `
         -EvidencePath $reportPath `
@@ -230,7 +282,30 @@ function Invoke-PromotedMachineCase {
         -CommitSha $commitSha `
         -GitHubActionsRunUrl $runUrl
 
+    $promotedVerification = Get-Content -LiteralPath $verificationPath -Raw | ConvertFrom-Json
+    if (@($promotedVerification.verifiedImageDigests) -cnotcontains $mcpExactReference -or @($promotedVerification.retainedEvidenceFiles).Count -ne 9) {
+        throw "Promoted verification must bind the MCP connector digest and retain nine evidence files."
+    }
+
     Assert-MachineSupplyChainContract $reportPath $verificationPath $false
+
+    # A promoted report that drops the MCP connector image is no longer release evidence.
+    $twoImageReport = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+    $twoImageReport.images = @($twoImageReport.images | Where-Object { $_.component -ne "mcp" })
+    Write-JsonFile $reportPath $twoImageReport
+    try {
+        & $verifier `
+            -EvidencePath $reportPath `
+            -ReportPath $verificationPath `
+            -CommitSha $commitSha `
+            -GitHubActionsRunUrl $runUrl
+    } catch {
+        if ($_.Exception.Message -notlike "*images must contain exactly backend, frontend, and mcp entries*") {
+            throw "Verifier did not reject a promoted report without the MCP connector image: $($_.Exception.Message)"
+        }
+        return
+    }
+    throw "Verifier accepted a promoted report without the MCP connector image."
 }
 
 function Assert-MachineContractRejectsMutation(
@@ -445,11 +520,12 @@ try {
     Assert-MachineContractRejectsMutation "scan severity inventory" { param($s) $s.images[0].scan.severities = @("HIGH") } $noSupplyMutation "scan.severities must contain exactly HIGH and CRITICAL"
     Assert-MachineContractRejectsMutation "SBOM format" { param($s) $s.images[0].sbom.format = "cyclonedx-json" } $noSupplyMutation "sbom must be SPDX JSON"
     Assert-MachineContractRejectsMutation "provenance claim" { param($s) $s.images[0].provenance.attested = $true } $noSupplyMutation "provenance.attested must be false"
-    Assert-MachineContractRejectsMutation "two image inventory" { param($s) $s.images = @($s.images[0]) } $noSupplyMutation "images must contain exactly backend and frontend"
-    Assert-MachineContractRejectsMutation "four distinct retained files" {
+    Assert-MachineContractRejectsMutation "three image inventory" { param($s) $s.images = @($s.images[0], $s.images[1]) } $noSupplyMutation "images must contain exactly backend, frontend and mcp"
+    Assert-MachineContractRejectsMutation "MCP connector smoke tag" { param($s) $s.images[2].productionSmokeReference = "accounts-mcp-ci:latest" } $noSupplyMutation "images.mcp.productionSmokeReference must equal"
+    Assert-MachineContractRejectsMutation "six distinct retained files" {
         param($s)
         $s.images[0].sbom.file = $s.images[0].scan.file
-    } $noSupplyMutation "must retain 4 distinct"
+    } $noSupplyMutation "must retain 6 distinct"
 
     Assert-MachineContractRejectsMutation "verification status" $noSupplyMutation { param($v) $v.status = "failed" } "status must be passed"
     Assert-MachineContractRejectsMutation "verification mode" $noSupplyMutation { param($v) $v.promotionMode = "promoted" } "explicitly allowed verification-only verification"
@@ -458,8 +534,8 @@ try {
     Assert-MachineContractRejectsMutation "verification release eligibility" $noSupplyMutation { param($v) $v.releaseEligible = $true } "releaseEligible must be false"
     Assert-MachineContractRejectsMutation "candidate identity" { param($s) $s.candidate.commitSha = "b" * 40 } $noSupplyMutation "candidate.commitSha must match the exact release commit"
     Assert-MachineContractRejectsMutation "source report hash" $noSupplyMutation { param($v) $v.evidenceReport.sha256 = "0" * 64 } "evidenceReport must hash the retained supply-chain report"
-    Assert-MachineContractRejectsMutation "digest inventory" $noSupplyMutation { param($v) $v.verifiedImageDigests = @($v.verifiedImageDigests[0]) } "verifiedImageDigests must match both exact image digests"
-    Assert-MachineContractRejectsMutation "retained file inventory" $noSupplyMutation { param($v) $v.retainedEvidenceFiles = @($v.retainedEvidenceFiles[0..2]) } "retainedEvidenceFiles must match all 4"
+    Assert-MachineContractRejectsMutation "digest inventory" $noSupplyMutation { param($v) $v.verifiedImageDigests = @($v.verifiedImageDigests[0..1]) } "verifiedImageDigests must match all three exact image digests"
+    Assert-MachineContractRejectsMutation "retained file inventory" $noSupplyMutation { param($v) $v.retainedEvidenceFiles = @($v.retainedEvidenceFiles[0..4]) } "retainedEvidenceFiles must match all 6"
     Assert-MachineContractRejectsMutation "retained file metadata" $noSupplyMutation {
         param($v)
         $v.retainedEvidenceFiles[0].byteSize = [long]$v.retainedEvidenceFiles[0].byteSize + 1

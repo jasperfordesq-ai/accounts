@@ -30,8 +30,14 @@ $script:ContainerMountedSecrets = @(
     "accounts_api_key_hash",
     "accounts_api_key",
     "connector_signing_key",
+    "accounts_mcp_api_key",
+    "accounts_mcp_api_key_hash",
     "private_initial_owner_password"
 )
+# Long-running services a Private Server may run. `mcp` (the connector HTTP service) exists only
+# in releases whose release.json carries images.mcp; installations from 0.1.0-preview.9 and
+# earlier run db/api/frontend until they update.
+$script:KnownRuntimeServices = @("db", "api", "frontend", "mcp")
 $script:MaximumCompleteBackupArchiveBytes = 1900MB
 
 function Test-FbWindowsHost {
@@ -579,10 +585,87 @@ function Initialize-FbConnectorSigningKey {
     Set-FbSecretAcl -Path $path
 }
 
+function Initialize-FbMcpServiceKey {
+    param([Parameter(Mandatory = $true)][string]$SecretDirectory, [switch]$Rotate)
+    # The in-stack MCP connector service (Compose service `mcp`) authenticates to the API with
+    # its own service key; the API receives only the SHA-256 hash (ApiAccess key 1). Added after
+    # preview.9: installations created earlier receive the pair on their next environment write
+    # (update/setup). It is not recovery-critical; restore and replacement-host recovery rotate it.
+    $keyPath = Join-Path $SecretDirectory "accounts_mcp_api_key"
+    $hashPath = Join-Path $SecretDirectory "accounts_mcp_api_key_hash"
+    if (-not $Rotate -and (Test-Path -LiteralPath $keyPath -PathType Leaf) -and (Test-Path -LiteralPath $hashPath -PathType Leaf)) {
+        # Keep a consistent pair; repair one whose hash no longer matches its key (the pair is not
+        # recovery-critical, so a fresh pair is always safe: api and mcp pick it up when recreated).
+        try {
+            $existing = (Read-FbUtf8Text $keyPath).Trim()
+            $bound = $existing.Length -ge 16 -and $existing -notmatch '\s' -and
+                (Test-FbFixedTimeHexEqual (Get-FbSha256Text $existing) (Read-FbUtf8Text $hashPath).Trim())
+            $existing = $null
+            if ($bound) { return }
+        } catch { }
+    }
+    $key = New-PrivateServerRandomSecret
+    [IO.File]::WriteAllText($keyPath, $key, $script:Utf8NoBom)
+    Set-FbSecretAcl -Path $keyPath
+    [IO.File]::WriteAllText($hashPath, (Get-FbSha256Text $key), $script:Utf8NoBom)
+    Set-FbSecretAcl -Path $hashPath
+    $key = $null
+}
+
+function Test-FbStateRunsMcp {
+    param($State)
+    $images = Get-FbProperty $State "images"
+    return -not [string]::IsNullOrWhiteSpace([string](Get-FbProperty $images "mcp" ""))
+}
+
+function Get-FbApplicationServices {
+    param($State)
+    if (Test-FbStateRunsMcp $State) { return @("api", "frontend", "mcp") }
+    return @("api", "frontend")
+}
+
+function Get-FbRuntimeServices {
+    param($State)
+    return @(@("db") + @(Get-FbApplicationServices $State))
+}
+
+function Get-FbWriterStopServices {
+    param($State)
+    if (Test-FbStateRunsMcp $State) { return @("mcp", "frontend", "api") }
+    return @("frontend", "api")
+}
+
+function Set-FbStateValue {
+    param($State, [Parameter(Mandatory = $true)][string]$Name, $Value)
+    if ($null -eq $State.PSObject.Properties[$Name]) { $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
+    else { $State.$Name = $Value }
+}
+
+function Get-FbLauncherName {
+    if (Test-FbLinuxHost) { return "./filingbridge" }
+    return "FilingBridge.cmd"
+}
+
+function Get-FbConnectorPublicOrigin {
+    param($State)
+    $localOrigin = "http://localhost:$($State.port)"
+    $serverOrigin = [string](Get-FbProperty $State "publicOrigin" $localOrigin)
+    $requested = [string](Get-FbProperty $State "connectorPublicOrigin" "")
+    # The OAuth issuer is either the exact loopback origin or the exact recorded Tailscale Serve
+    # origin. Anything else, such as a Tailscale origin that was later disabled, falls back to
+    # loopback instead of advertising an issuer nobody can reach.
+    if (-not [string]::IsNullOrWhiteSpace($requested) -and $requested -ceq $serverOrigin -and
+        $serverOrigin -cne $localOrigin -and [bool](Get-FbProperty $State "tailscaleEnabled" $false)) {
+        return $serverOrigin
+    }
+    return $localOrigin
+}
+
 function Write-FbEnvironmentFile {
     param($State)
     $secretDirectory = [string]$State.secretDirectory
     Initialize-FbConnectorSigningKey $secretDirectory
+    Initialize-FbMcpServiceKey $secretDirectory
     $localOrigin = "http://localhost:$($State.port)"
     $serverOrigin = [string](Get-FbProperty $State "publicOrigin" $localOrigin)
     if ([string]::IsNullOrWhiteSpace($serverOrigin)) { $serverOrigin = $localOrigin }
@@ -590,6 +673,8 @@ function Write-FbEnvironmentFile {
     $allowedHosts = @("localhost", "127.0.0.1")
     if (-not [string]::IsNullOrWhiteSpace($serverUri.Host)) { $allowedHosts += $serverUri.Host }
     $allowedHosts = @($allowedHosts | Select-Object -Unique) -join ";"
+    $connectorOrigin = Get-FbConnectorPublicOrigin $State
+    $connectorHost = ([Uri]$connectorOrigin).Authority.ToLowerInvariant()
 
     $values = [ordered]@{
         ACCOUNTS_API_IMAGE                            = [string]$State.images.api
@@ -621,7 +706,16 @@ function Write-FbEnvironmentFile {
         ACCOUNTS_API_KEY_FILE                         = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_api_key")
         CONNECTOR_SIGNING_KEY_FILE                    = ConvertTo-FbDockerPath (Join-Path $secretDirectory "connector_signing_key")
         PRIVATE_CONNECTOR_ENABLED                     = if ([bool](Get-FbProperty $State "connectorEnabled" $false)) { "true" } else { "false" }
+        PRIVATE_CONNECTOR_PUBLIC_ORIGIN               = $connectorOrigin
+        PRIVATE_CONNECTOR_PUBLIC_HOST                 = $connectorHost
+        ACCOUNTS_MCP_API_KEY_FILE                     = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_mcp_api_key")
+        ACCOUNTS_MCP_API_KEY_HASH_FILE                = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_mcp_api_key_hash")
         PRIVATE_INITIAL_OWNER_PASSWORD_FILE           = ConvertTo-FbDockerPath (Join-Path $secretDirectory "private_initial_owner_password")
+    }
+    if (Test-FbStateRunsMcp $State) {
+        # Only releases that run the connector service carry this image; an older Compose
+        # snapshot (restored after a failed update) does not reference it.
+        $values.Insert(2, "ACCOUNTS_MCP_IMAGE", [string]$State.images.mcp)
     }
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add("# Generated by FilingBridge Private Server. Values are non-secret or secret-file paths.")
@@ -745,9 +839,11 @@ function Read-FbReleaseManifest {
     $api = [string](Get-FbProperty (Get-FbProperty $images "backend") "exactDigestReference" "")
     $frontend = [string](Get-FbProperty (Get-FbProperty $images "frontend") "exactDigestReference" "")
     $postgres = [string](Get-FbProperty (Get-FbProperty $images "postgres") "exactDigestReference" "")
+    $mcp = [string](Get-FbProperty (Get-FbProperty $images "mcp") "exactDigestReference" "")
     if ($api -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-api@sha256:[a-f0-9]{64}$') { throw "release.json backend image must be the exact FilingBridge GHCR API digest reference." }
     if ($frontend -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-frontend@sha256:[a-f0-9]{64}$') { throw "release.json frontend image must be the exact FilingBridge GHCR frontend digest reference." }
     if ($postgres -cnotmatch '^postgres@sha256:[a-f0-9]{64}$') { throw "release.json PostgreSQL image must be the exact official postgres digest reference." }
+    if (-not [string]::IsNullOrEmpty($mcp) -and $mcp -cnotmatch '^ghcr\.io/jasperfordesq-ai/accounts-mcp@sha256:[a-f0-9]{64}$') { throw "release.json mcp image must be the exact FilingBridge GHCR MCP connector digest reference." }
     $candidate = Get-FbProperty $manifest "candidate"
     $commitSha = [string](Get-FbProperty $candidate "commitSha" "")
     if ($commitSha -cnotmatch '^[0-9a-f]{40}$') { throw "release.json candidate.commitSha must be a full lowercase Git commit SHA." }
@@ -793,12 +889,20 @@ function Read-FbReleaseManifest {
         if ($actualRelative -eq "release.json") { continue }
         if (-not $manifestFiles.ContainsKey($actualRelative.ToLowerInvariant())) { throw "Release directory contains an unmanifested file: $actualRelative" }
     }
+    # compose.private.yml was hash-checked above. A release whose topology runs the MCP connector
+    # service must pin that image too; otherwise setup/update would run an unpinned service.
+    $releaseComposeText = Read-FbUtf8Text (Join-Path $RepositoryRoot "compose.private.yml")
+    if ($releaseComposeText.Contains('ACCOUNTS_MCP_IMAGE') -and [string]::IsNullOrEmpty($mcp)) {
+        throw "release.json has no images.mcp, but this release's compose.private.yml runs the MCP connector service (ACCOUNTS_MCP_IMAGE). The release is incomplete and was refused; use a release built with the digest-pinned, scanned and attested MCP connector image."
+    }
+    $releaseImages = [ordered]@{ api = $api; frontend = $frontend; postgres = $postgres }
+    if (-not [string]::IsNullOrEmpty($mcp)) { $releaseImages["mcp"] = $mcp }
     return [pscustomobject]@{
         path = [IO.Path]::GetFullPath($Path)
         sha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
         version = $version
         commitSha = $commitSha
-        images = [pscustomobject]@{ api = $api; frontend = $frontend; postgres = $postgres }
+        images = [pscustomobject]$releaseImages
         composeSha256 = [string]$manifestFiles["compose.private.yml"].sha256
         reviewed = $false
         integrityStatus = "manifest-integrity-checked"
@@ -810,16 +914,18 @@ function New-FbLocalBuildRelease {
     $tagSuffix = $InstanceId.Replace("-", "").Substring(0, 12) + "-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
     $apiImage = "filingbridge-private-api:$tagSuffix"
     $frontendImage = "filingbridge-private-frontend:$tagSuffix"
+    $mcpImage = "filingbridge-private-mcp:$tagSuffix"
     $postgresImage = "postgres:16.4-alpine"
     $null = Invoke-FbNative -FilePath "docker" -Arguments @("build", "--pull", "-f", (Join-Path $RepositoryRoot "Dockerfile.backend"), "-t", $apiImage, $RepositoryRoot) -Description "Build the compiled backend image" -Mutating -DryRun:$DryRun
     $null = Invoke-FbNative -FilePath "docker" -Arguments @("build", "--pull", "-f", (Join-Path $RepositoryRoot "Dockerfile.frontend"), "-t", $frontendImage, $RepositoryRoot) -Description "Build the compiled frontend image" -Mutating -DryRun:$DryRun
+    $null = Invoke-FbNative -FilePath "docker" -Arguments @("build", "--pull", "-f", (Join-Path $RepositoryRoot "Dockerfile.mcp"), "-t", $mcpImage, $RepositoryRoot) -Description "Build the compiled MCP connector image" -Mutating -DryRun:$DryRun
     $null = Invoke-FbNative -FilePath "docker" -Arguments @("pull", $postgresImage) -Description "Pull the PostgreSQL runtime image" -Mutating -DryRun:$DryRun
     return [pscustomobject]@{
         path = ""
         sha256 = ""
         version = "source-build"
         commitSha = ""
-        images = [pscustomobject]@{ api = $apiImage; frontend = $frontendImage; postgres = $postgresImage }
+        images = [pscustomobject]@{ api = $apiImage; frontend = $frontendImage; postgres = $postgresImage; mcp = $mcpImage }
         reviewed = $false
         integrityStatus = "source-build-unreviewed"
     }
@@ -989,6 +1095,7 @@ function New-FbInitialSecrets {
     $postgresPassword = New-PrivateServerRandomSecret
     $applicationPassword = New-PrivateServerRandomSecret
     $apiKey = New-PrivateServerRandomSecret
+    $mcpApiKey = New-PrivateServerRandomSecret
     $secrets = [ordered]@{
         postgres_password                      = $postgresPassword
         postgres_application_password          = $applicationPassword
@@ -1003,6 +1110,8 @@ function New-FbInitialSecrets {
         accounts_api_key_hash                    = Get-FbSha256Text $apiKey
         accounts_api_key                         = $apiKey
         connector_signing_key                    = New-PrivateServerRandomSecret
+        accounts_mcp_api_key_hash                = Get-FbSha256Text $mcpApiKey
+        accounts_mcp_api_key                     = $mcpApiKey
         private_initial_owner_password            = $OwnerPassword
     }
     foreach ($entry in $secrets.GetEnumerator()) {
@@ -1112,7 +1221,7 @@ function Invoke-FbSetup {
         if ($DryRun) {
             $release = [pscustomobject]@{
                 path = ""; sha256 = ""; version = "source-build"; commitSha = ""; reviewed = $false; integrityStatus = "source-build-unreviewed"
-                images = [pscustomobject]@{ api = "filingbridge-private-api:<generated>"; frontend = "filingbridge-private-frontend:<generated>"; postgres = "postgres:16.4-alpine" }
+                images = [pscustomobject]@{ api = "filingbridge-private-api:<generated>"; frontend = "filingbridge-private-frontend:<generated>"; postgres = "postgres:16.4-alpine"; mcp = "filingbridge-private-mcp:<generated>" }
             }
         } else {
             $release = New-FbLocalBuildRelease -RepositoryRoot $RepositoryRoot -InstanceId $instanceId
@@ -1174,6 +1283,8 @@ function Invoke-FbSetup {
             images               = $release.images
             tailscaleEnabled     = $false
             tailscaleDnsName     = ""
+            connectorEnabled     = $false
+            connectorPublicOrigin = $localOrigin
             backupRecipient      = ""
             createdAtUtc         = $now
             updatedAtUtc         = $now
@@ -1190,7 +1301,7 @@ function Invoke-FbSetup {
         $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "migrate") "Run controlled database migrations" -Mutating
         $null = Invoke-FbCompose $state $installedComposeFile @("--profile", "initialize", "run", "--rm", "--no-deps", "private-initialize") "Initialize the empty Private Server database" -Mutating
         Remove-FbEphemeralOwnerPassword $state
-        $null = Invoke-FbCompose $state $installedComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "api", "frontend") "Start the compiled Private Server runtime" -Mutating
+        $null = Invoke-FbCompose $state $installedComposeFile (@("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300") + @(Get-FbApplicationServices $state)) "Start the compiled Private Server runtime" -Mutating
         Wait-FbHttpHealth -Port $Port
         if ($requestedPublicOrigin -cne $localOrigin) {
             if ($null -eq (Get-Command tailscale -ErrorAction SilentlyContinue) -and $null -eq $script:PrivateServerCommandInvoker) {
@@ -1239,7 +1350,7 @@ function Invoke-FbSetup {
 
 function Get-FbOwnedRuntimeContainerId {
     param($State, [string]$ComposeFile, [string]$Service)
-    if ($Service -notin @("db", "api", "frontend")) { throw "Unsupported Private Server runtime service '$Service'." }
+    if ($Service -notin $script:KnownRuntimeServices) { throw "Unsupported Private Server runtime service '$Service'." }
 
     $idResult = Invoke-FbCompose $State $ComposeFile @("ps", "--all", "--quiet", $Service) "Resolve existing $Service runtime container"
     $containerIds = @($idResult.Output | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -cmatch '^[a-f0-9]{12,64}$' } | Select-Object -Unique)
@@ -1296,9 +1407,9 @@ function Get-FbHostPortBindings {
 function Start-FbExistingRuntimeContainers {
     param($State, [string]$ComposeFile, [string[]]$Services, [string]$Description, [switch]$DryRun)
     $requested = @($Services)
-    $unexpected = @($requested | Where-Object { $_ -notin @("db", "api", "frontend") })
+    $unexpected = @($requested | Where-Object { $_ -notin $script:KnownRuntimeServices })
     if ($unexpected.Count -gt 0) { throw "Unsupported Private Server runtime service selection." }
-    $runtime = @(@("db", "api", "frontend") | Where-Object { $requested -contains $_ })
+    $runtime = @($script:KnownRuntimeServices | Where-Object { $requested -contains $_ })
     if ($runtime.Count -eq 0) { return }
     if ($DryRun) {
         Write-Host "DRY RUN: $Description (existing exact containers only): $($runtime -join ', ')"
@@ -1320,14 +1431,14 @@ function Start-FbExistingRuntimeContainers {
 
 function Invoke-FbStart {
     param($State, [string]$ComposeFile, [switch]$DryRun)
-    Start-FbExistingRuntimeContainers $State $ComposeFile @("db", "api", "frontend") "Start Private Server without build, migration, seed, creation, or recreation" -DryRun:$DryRun
+    Start-FbExistingRuntimeContainers $State $ComposeFile @(Get-FbRuntimeServices $State) "Start Private Server without build, migration, seed, creation, or recreation" -DryRun:$DryRun
     Wait-FbHttpHealth -Port ([int]$State.port) -DryRun:$DryRun
     Write-Host "FilingBridge is ready at $($State.localOrigin)"
 }
 
 function Invoke-FbStop {
     param($State, [string]$ComposeFile, [switch]$DryRun)
-    $null = Invoke-FbCompose $State $ComposeFile @("stop", "--timeout", "60", "frontend", "api", "db") "Stop Private Server while preserving data" -Mutating -DryRun:$DryRun
+    $null = Invoke-FbCompose $State $ComposeFile (@("stop", "--timeout", "60") + @(Get-FbWriterStopServices $State) + @("db")) "Stop Private Server while preserving data" -Mutating -DryRun:$DryRun
     Write-Host "FilingBridge is stopped. The PostgreSQL volume and private state were preserved."
 }
 
@@ -1340,10 +1451,15 @@ function Invoke-FbStatus {
     Write-Host "Release integrity: $([string](Get-FbProperty $State 'releaseIntegrityStatus' 'unknown'))"
     Write-Host "API image: $($State.images.api)"
     Write-Host "Frontend image: $($State.images.frontend)"
+    if (Test-FbStateRunsMcp $State) { Write-Host "MCP connector image: $($State.images.mcp)" }
     Write-Host "PostgreSQL image: $($State.images.postgres)"
     Write-Host "Workspace slug: $($State.tenantSlug)"
     Write-Host "Local URL: $($State.localOrigin)"
     Write-Host "Private URL: $($State.publicOrigin)"
+    if (Test-FbStateRunsMcp $State) {
+        $connectorState = if ([bool](Get-FbProperty $State "connectorEnabled" $false)) { "enabled" } else { "disabled" }
+        Write-Host "MCP connector: $connectorState at $(Get-FbConnectorPublicOrigin $State)/mcp"
+    }
     if ([string]$State.status -eq "updateFailed") {
         $recoveryBackup = [string](Get-FbProperty $State "lastPreUpdateBackup" "")
         if (-not [string]::IsNullOrWhiteSpace($recoveryBackup)) {
@@ -1369,7 +1485,7 @@ function Invoke-FbStatus {
 
 function Invoke-FbLogs {
     param($State, [string]$ComposeFile, [int]$TailLines)
-    $result = Invoke-FbCompose $State $ComposeFile @("logs", "--no-color", "--tail", [string]$TailLines, "api", "frontend") "Read bounded Private Server logs" -IgnoreExitCode
+    $result = Invoke-FbCompose $State $ComposeFile (@("logs", "--no-color", "--tail", [string]$TailLines) + @(Get-FbApplicationServices $State)) "Read bounded Private Server logs" -IgnoreExitCode
     foreach ($line in @($result.Output | Select-Object -Last $TailLines)) {
         Write-Host (Protect-PrivateServerText $line)
     }
@@ -1540,7 +1656,7 @@ function Invoke-FbTailscale {
         $State.tailscaleEnabled = $true
         if (-not $DryRun) { Write-FbEnvironmentFile $State; Save-FbState $State }
         try {
-            $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "api", "frontend") "Apply the exact private HTTPS origin" -Mutating -DryRun:$DryRun
+            $null = Invoke-FbCompose $State $ComposeFile (@("up", "-d", "--no-deps", "--force-recreate") + @(Get-FbApplicationServices $State)) "Apply the exact private HTTPS origin" -Mutating -DryRun:$DryRun
             Wait-FbHttpHealth -Port ([int]$State.port) -DryRun:$DryRun
             $null = Invoke-FbNative -FilePath "tailscale" -Arguments @("serve", "--bg", "--yes", "--https=443", "http://127.0.0.1:$($State.port)") -Description "Enable private Tailscale Serve HTTPS" -Mutating -DryRun:$DryRun
             Wait-FbUriHealth -Uri "$origin/health/ready" -TimeoutSeconds 120 -DryRun:$DryRun
@@ -1569,7 +1685,7 @@ function Invoke-FbTailscale {
             if (-not $DryRun) {
                 Write-FbEnvironmentFile $State
                 Save-FbState $State
-                $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "api", "frontend") "Restore the previous origin after failed Tailscale verification" -Mutating
+                $null = Invoke-FbCompose $State $ComposeFile (@("up", "-d", "--no-deps", "--force-recreate") + @(Get-FbApplicationServices $State)) "Restore the previous origin after failed Tailscale verification" -Mutating
                 Wait-FbHttpHealth -Port ([int]$State.port) -TimeoutSeconds 120
             }
             throw "Tailscale Serve did not pass the real external HTTPS readiness probe; its route and origin configuration were rolled back. $($failure.Exception.Message)"
@@ -1590,13 +1706,19 @@ function Invoke-FbTailscale {
             throw "Tailscale Serve did not confirm an empty semantic configuration after removal of the owned route. Saved ownership state was retained."
         }
     }
+    $connectorWasOnTailscale = [string](Get-FbProperty $State "connectorPublicOrigin" "") -ceq [string]$State.publicOrigin -and
+        [string]$State.publicOrigin -cne [string]$State.localOrigin
     $State.publicOrigin = [string]$State.localOrigin
     $State.tailscaleDnsName = ""
     $State.tailscaleEnabled = $false
+    if ($connectorWasOnTailscale) { Set-FbStateValue $State "connectorPublicOrigin" ([string]$State.localOrigin) }
     if (-not $DryRun) { Write-FbEnvironmentFile $State; Save-FbState $State }
-    $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "api", "frontend") "Return FilingBridge to local-only origin" -Mutating -DryRun:$DryRun
+    $null = Invoke-FbCompose $State $ComposeFile (@("up", "-d", "--no-deps", "--force-recreate") + @(Get-FbApplicationServices $State)) "Return FilingBridge to local-only origin" -Mutating -DryRun:$DryRun
     Wait-FbHttpHealth -Port ([int]$State.port) -DryRun:$DryRun
     Write-Host "Tailscale Serve is disabled. FilingBridge remains available locally."
+    if ($connectorWasOnTailscale) {
+        Write-Host "The MCP connector origin returned to $($State.localOrigin). Agents connected through the Tailscale URL must be reconnected to $($State.localOrigin)/mcp."
+    }
 }
 
 function Remove-FbTemporaryDirectory {
@@ -1614,7 +1736,7 @@ function Get-FbRunningServices {
     param($State, [string]$ComposeFile)
     $result = Invoke-FbCompose $State $ComposeFile @("ps", "--status", "running", "--services") "Record current Private Server service state"
     $services = @($result.Output | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    $unexpected = @($services | Where-Object { $_ -notin @("db", "api", "frontend") })
+    $unexpected = @($services | Where-Object { $_ -notin $script:KnownRuntimeServices })
     if ($unexpected.Count -gt 0 -or @($services | Select-Object -Unique).Count -ne $services.Count) {
         throw "Private Server service state could not be interpreted safely; no backup, restore, or update was attempted."
     }
@@ -1623,7 +1745,7 @@ function Get-FbRunningServices {
 
 function Wait-FbServiceHealth {
     param($State, [string]$ComposeFile, [string[]]$Services, [int]$TimeoutSeconds = 300, [switch]$DryRun)
-    $runtime = @($Services | Where-Object { $_ -in @("db", "api", "frontend") } | Select-Object -Unique)
+    $runtime = @($Services | Where-Object { $_ -in $script:KnownRuntimeServices } | Select-Object -Unique)
     if ($runtime.Count -eq 0) { return }
     if ($DryRun) { Write-Host "DRY RUN: wait for healthy services: $($runtime -join ', ')"; return }
     foreach ($service in $runtime) {
@@ -1635,7 +1757,7 @@ function Wait-FbServiceHealth {
 function Wait-FbContainerHealth {
     param($State, [string]$ComposeFile, [string]$Service, [string]$ContainerId, [int]$TimeoutSeconds = 300)
     if ($null -ne $script:PrivateServerCommandInvoker) { return }
-    if ($Service -notin @("db", "api", "frontend") -or $ContainerId -cnotmatch '^[a-f0-9]{12,64}$') {
+    if ($Service -notin $script:KnownRuntimeServices -or $ContainerId -cnotmatch '^[a-f0-9]{12,64}$') {
         throw "Private Server service health target is invalid."
     }
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -1662,7 +1784,7 @@ function Start-FbDatabaseForOperation {
 
 function Restore-FbRunningServices {
     param($State, [string]$ComposeFile, [string[]]$PreviouslyRunning, [switch]$DryRun)
-    $runtime = @($PreviouslyRunning | Where-Object { $_ -in @("db", "api", "frontend") } | Select-Object -Unique)
+    $runtime = @($PreviouslyRunning | Where-Object { $_ -in $script:KnownRuntimeServices } | Select-Object -Unique)
     if ($runtime.Count -gt 0) {
         Start-FbExistingRuntimeContainers $State $ComposeFile $runtime "Restore the previous service state" -DryRun:$DryRun
     }
@@ -1671,8 +1793,8 @@ function Restore-FbRunningServices {
 function Assert-FbWritersQuiesced {
     param($State, [string]$ComposeFile, [string]$Operation)
     $running = @(Get-FbRunningServices $State $ComposeFile)
-    if ($running -contains "api" -or $running -contains "frontend") {
-        throw "$Operation requires API/frontend writers to be stopped, but a writer still reports running."
+    if ($running -contains "api" -or $running -contains "frontend" -or $running -contains "mcp") {
+        throw "$Operation requires API/frontend/MCP connector writers to be stopped, but a writer still reports running."
     }
     if ($running -notcontains "db") { throw "$Operation requires healthy PostgreSQL to remain running." }
 }
@@ -2147,7 +2269,7 @@ function Invoke-FbBackup {
         } else {
             Wait-FbServiceHealth $State $ComposeFile @("db")
         }
-        $writers = @($previouslyRunning | Where-Object { $_ -in @("frontend", "api") })
+        $writers = @($previouslyRunning | Where-Object { $_ -in @("mcp", "frontend", "api") })
         if ($writers.Count -gt 0) {
             $null = Invoke-FbCompose $State $ComposeFile (@("stop", "--timeout", "60") + $writers) "Quiesce application writers for a consistent backup" -Mutating
         }
@@ -2448,7 +2570,8 @@ function Assert-FbForwardUpdate {
         $sameCommit = [string]$NewRelease.commitSha -ceq [string]$State.releaseCommitSha
         $sameImages = [string]$NewRelease.images.api -ceq [string]$State.images.api -and
             [string]$NewRelease.images.frontend -ceq [string]$State.images.frontend -and
-            [string]$NewRelease.images.postgres -ceq [string]$State.images.postgres
+            [string]$NewRelease.images.postgres -ceq [string]$State.images.postgres -and
+            [string](Get-FbProperty $NewRelease.images "mcp" "") -ceq [string](Get-FbProperty $State.images "mcp" "")
         if (-not $sameCommit -or -not $sameImages) {
             throw "Release version '$targetVersion' is already installed with different immutable identity. Reusing a version for another commit or image is refused."
         }
@@ -2614,6 +2737,8 @@ function New-FbMergedSecretDirectory {
     # Restored connector rows may include agent sessions revoked after the backup point; a new
     # connector key invalidates every outstanding agent access token so they must reconnect.
     [IO.File]::WriteAllText((Join-Path $temporary "connector_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
+    # The MCP connector service key is not recovery-critical: issue a fresh key/hash pair.
+    Initialize-FbMcpServiceKey $temporary -Rotate
     foreach ($file in @(Get-ChildItem -LiteralPath $temporary -File -Force)) { Set-FbSecretAcl $file.FullName }
     return $temporary
 }
@@ -2680,7 +2805,7 @@ function Invoke-FbRestore {
             Wait-FbServiceHealth $State $ComposeFile @("db")
         }
         $verified = Invoke-FbVerifyBackup $State $ComposeFile $BackupPath $AgeIdentityFile -AllowPlaintextDatabaseOnlyRestore:$AllowPlaintextDatabaseOnlyRestore
-        $writers = @($previouslyRunning | Where-Object { $_ -in @("frontend", "api") })
+        $writers = @($previouslyRunning | Where-Object { $_ -in @("mcp", "frontend", "api") })
         if ($writers.Count -gt 0) {
             $null = Invoke-FbCompose $State $ComposeFile (@("stop", "--timeout", "60") + $writers) "Stop application writers before restore" -Mutating
         }
@@ -2694,8 +2819,9 @@ function Invoke-FbRestore {
         $secretsSwitched = $true
         $null = Invoke-FbCompose $State $ComposeFile @("run", "--rm", "--no-deps", "role-provision") "Reapply the least-privileged database login after restore" -Mutating
         $null = Invoke-FbCompose $State $ComposeFile @("run", "--rm", "--no-deps", "migrate") "Apply forward-only migrations to the restored database" -Mutating
-        $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "api", "frontend") "Start restored Private Server for health verification" -Mutating
+        $null = Invoke-FbCompose $State $ComposeFile (@("up", "-d", "--no-deps", "--force-recreate") + @(Get-FbApplicationServices $State)) "Start restored Private Server for health verification" -Mutating
         Wait-FbHttpHealth ([int]$State.port)
+        if ((Test-FbStateRunsMcp $State) -and $previouslyRunning -notcontains "mcp") { $null = Invoke-FbCompose $State $ComposeFile @("stop", "mcp") "Return the MCP connector service to its previous stopped state" -Mutating }
         if ($previouslyRunning -notcontains "frontend") { $null = Invoke-FbCompose $State $ComposeFile @("stop", "frontend") "Return frontend to its previous stopped state" -Mutating }
         if ($previouslyRunning -notcontains "api") { $null = Invoke-FbCompose $State $ComposeFile @("stop", "api") "Return API to its previous stopped state" -Mutating }
         if ($startedDatabase) { $null = Invoke-FbCompose $State $ComposeFile @("stop", "db") "Return PostgreSQL to its previous stopped state" -Mutating }
@@ -2706,6 +2832,7 @@ function Invoke-FbRestore {
         Save-FbState $State
         Write-Host "Restore completed and passed health checks."
         Write-Host "All pre-restore browser sessions were invalidated by rotating the session-signing key."
+        Write-Host "Connected AI agents were signed out (connector signing key rotated) and the MCP connector service key was regenerated."
         Write-Host "The pre-restore database remains preserved as '$preservedDatabase' for deliberate recovery/cleanup."
         if ($secretsSwitched) { Write-Host "The pre-restore secret set remains preserved at '$preservedSecrets'." }
     } catch {
@@ -2718,7 +2845,7 @@ function Invoke-FbRestore {
         }
         if ($databaseSwitched) {
             try {
-                $null = Invoke-FbCompose $State $ComposeFile @("stop", "--timeout", "60", "frontend", "api") "Stop restored writers before selecting the preserved database" -Mutating
+                $null = Invoke-FbCompose $State $ComposeFile (@("stop", "--timeout", "60") + @(Get-FbWriterStopServices $State)) "Stop restored writers before selecting the preserved database" -Mutating
             } catch {
                 $writerStateProven = $false
                 $recoveryFailures.Add("writer quiescence could not be proven: $($_.Exception.Message)")
@@ -2864,18 +2991,25 @@ function Invoke-FbUpdate {
             throw "compose.private.yml changed after release verification; update refused the mutable source and did not run the target topology."
         }
         $State.composeFileSha256 = (Get-FileHash -LiteralPath $installedComposeFile -Algorithm SHA256).Hash.ToLowerInvariant()
+        # Installations from 0.1.0-preview.9 and earlier predate the connector state; record its
+        # off-by-default values explicitly. Its keys are generated by the environment write below.
+        if ($null -eq $State.PSObject.Properties["connectorEnabled"]) { Set-FbStateValue $State "connectorEnabled" $false }
+        if ($null -eq $State.PSObject.Properties["connectorPublicOrigin"]) { Set-FbStateValue $State "connectorPublicOrigin" ([string]$State.localOrigin) }
         $State.status = "updating"
         Write-FbEnvironmentFile $State
         Save-FbState $State
         if (-not $BuildLocal) { $null = Invoke-FbCompose $State $installedComposeFile @("pull", "--policy", "always") "Pull exact update image digests" -Mutating }
-        $writers = @($previouslyRunning | Where-Object { $_ -in @("frontend", "api") })
+        $writers = @($previouslyRunning | Where-Object { $_ -in @("mcp", "frontend", "api") })
         if ($writers.Count -gt 0) { $null = Invoke-FbCompose $State $installedComposeFile (@("stop", "--timeout", "60") + $writers) "Stop writers for the controlled update" -Mutating }
         $null = Invoke-FbCompose $State $installedComposeFile @("up", "-d", "--wait", "--wait-timeout", "300", "db") "Start and verify PostgreSQL for the update" -Mutating
         Assert-FbWritersQuiesced $State $installedComposeFile "Update"
         $null = Invoke-FbCompose $State $installedComposeFile @("run", "--rm", "--no-deps", "role-provision") "Reapply the least-privileged database login for the update" -Mutating
         $null = Invoke-FbCompose $State $installedComposeFile @("run", "--rm", "--no-deps", "migrate") "Run controlled forward migrations for the update" -Mutating
-        $null = Invoke-FbCompose $State $installedComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "api", "frontend") "Start and verify the updated runtime" -Mutating
+        $null = Invoke-FbCompose $State $installedComposeFile (@("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300") + @(Get-FbApplicationServices $State)) "Start and verify the updated runtime" -Mutating
         Wait-FbHttpHealth ([int]$State.port)
+        # The MCP connector service follows the frontend: a release that first introduces it has
+        # no previous state for it, so it is left stopped exactly when the frontend was.
+        if (-not $wasUninstalled -and (Test-FbStateRunsMcp $State) -and $previouslyRunning -notcontains "frontend") { $null = Invoke-FbCompose $State $installedComposeFile @("stop", "mcp") "Restore previous MCP connector service state" -Mutating }
         if (-not $wasUninstalled -and $previouslyRunning -notcontains "frontend") { $null = Invoke-FbCompose $State $installedComposeFile @("stop", "frontend") "Restore previous frontend state" -Mutating }
         if (-not $wasUninstalled -and $previouslyRunning -notcontains "api") { $null = Invoke-FbCompose $State $installedComposeFile @("stop", "api") "Restore previous API state" -Mutating }
         if (-not $wasUninstalled -and $previouslyRunning -notcontains "db") { $null = Invoke-FbCompose $State $installedComposeFile @("stop", "db") "Restore previous PostgreSQL state" -Mutating }
@@ -2884,6 +3018,12 @@ function Invoke-FbUpdate {
         Write-Host "Update completed and passed health checks. Pre-update backup: $backup"
     } catch {
         $updateFailure = $_
+        if ((Test-FbStateRunsMcp $State) -and -not (Test-FbStateRunsMcp ([pscustomobject]@{ images = $old.images }))) {
+            # The previous topology has no MCP connector service, so stop it through the target
+            # snapshot before that snapshot is replaced. It only calls the API, which is stopped
+            # below; failure here is reported by the writer-stop proof that follows.
+            try { $null = Invoke-FbCompose $State $installedComposeFile @("stop", "--timeout", "60", "mcp") "Stop the target MCP connector service after failed update" -Mutating } catch { }
+        }
         $State.images = $old.images
         $State.releaseVersion = $old.releaseVersion
         $State.releaseCommitSha = $old.releaseCommitSha
@@ -2899,7 +3039,7 @@ function Invoke-FbUpdate {
         Write-FbEnvironmentFile $State
         Save-FbState $State
         try {
-            $null = Invoke-FbCompose $State $old.installedComposeFile @("stop", "--timeout", "60", "frontend", "api") "Keep writers stopped after failed update" -Mutating
+            $null = Invoke-FbCompose $State $old.installedComposeFile (@("stop", "--timeout", "60") + @(Get-FbWriterStopServices $State)) "Keep writers stopped after failed update" -Mutating
         } catch {
             throw "Update failed and FilingBridge could not prove that API/frontend writers stopped. Do not use the service. Run 'FilingBridge.cmd stop' from the previous installed release directory, verify containers are stopped, then run the explicit restore against '$backup'. Old image references were restored, but an old image cannot reverse a database migration. Update failure: $($updateFailure.Exception.Message) Writer-stop failure: $($_.Exception.Message)"
         }
@@ -2919,7 +3059,7 @@ function Invoke-FbOwnerRecovery {
         Write-Host "DRY RUN: verify the existing database/runtime without migration, then run the dedicated recovery one-shot."
     } elseif ([string]$State.status -eq "setupFailed") {
         $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "db") "Verify PostgreSQL before recovering a setup whose initializer already committed" -Mutating
-        $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "api", "frontend") "Verify the compiled runtime before issuing a setup-recovery token" -Mutating
+        $null = Invoke-FbCompose $State $ComposeFile (@("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300") + @(Get-FbApplicationServices $State)) "Verify the compiled runtime before issuing a setup-recovery token" -Mutating
         Wait-FbHttpHealth ([int]$State.port)
     } else {
         Invoke-FbStart $State $ComposeFile
@@ -3038,7 +3178,7 @@ function Get-FbBootEvidence {
 function Get-FbRebootRuntimeEvidence {
     param($State, [string]$ComposeFile)
     $evidence = New-Object System.Collections.Generic.List[object]
-    foreach ($service in @("db", "api", "frontend")) {
+    foreach ($service in @(Get-FbRuntimeServices $State)) {
         $containerId = Get-FbOwnedRuntimeContainerId $State $ComposeFile $service
         $inspection = Invoke-FbNative -FilePath "docker" -Arguments @(
             "inspect", "--format", "{{.Id}}|{{.State.StartedAt}}", $containerId
@@ -3084,7 +3224,7 @@ function Invoke-FbRebootCheck {
     if ($normalizedAction -eq "prepare") {
         if (Test-Path -LiteralPath $pendingPath -PathType Leaf) { throw "A reboot acceptance check is already pending. Verify it after reboot before preparing another." }
         $running = @(Get-FbRunningServices $State $ComposeFile)
-        foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Cannot prepare reboot evidence because '$required' is not running." } }
+        foreach ($required in @(Get-FbRuntimeServices $State)) { if ($running -notcontains $required) { throw "Cannot prepare reboot evidence because '$required' is not running." } }
         Wait-FbHttpHealth -Port ([int]$State.port)
         $tables = @(Get-FbImportantTableEvidence $State $ComposeFile "accounts" "Read important-table fingerprints from the database before host reboot")
         $bootBefore = Get-FbBootEvidence
@@ -3096,7 +3236,7 @@ function Invoke-FbRebootCheck {
             acceptanceContract = "release-bound-auto-restart/v1"
             bootIdentityFormat = "opaque-boot-identity/v1"; bootIdentityBefore = [string]$bootBefore.identity
             bootStartedAtBeforeUtc = [string]$bootBefore.startedAtUtc
-            expectedServices = @("db", "api", "frontend")
+            expectedServices = @(Get-FbRuntimeServices $State)
             runtimeBefore = @(Get-FbRebootRuntimeEvidence $State $ComposeFile)
             importantTablesBefore = $tables
         }
@@ -3129,7 +3269,7 @@ function Invoke-FbRebootCheck {
     $bootAfter = Get-FbBootEvidence
     if ([string]$bootAfter.identity -ceq [string]$pending.bootIdentityBefore) { throw "The host has not rebooted since this check was prepared." }
     $running = @(Get-FbRunningServices $State $ComposeFile)
-    foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Reboot persistence failed because '$required' did not return automatically." } }
+    foreach ($required in @(Get-FbRuntimeServices $State)) { if ($running -notcontains $required) { throw "Reboot persistence failed because '$required' did not return automatically." } }
     $runtimeAfter = @(Get-FbRebootRuntimeEvidence $State $ComposeFile)
     $bootStartedAfter = [DateTimeOffset]::Parse([string]$bootAfter.startedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
     foreach ($current in $runtimeAfter) {
@@ -3153,7 +3293,7 @@ function Invoke-FbRebootCheck {
         verifiedAtUtc = (Get-Date).ToUniversalTime().ToString("o"); bootIdentityFormat = "opaque-boot-identity/v1"
         bootIdentityBefore = [string]$pending.bootIdentityBefore
         bootIdentityAfter = [string]$bootAfter.identity; bootStartedAtAfterUtc = [string]$bootAfter.startedAtUtc
-        servicesRunning = @("db", "api", "frontend"); runtimeBefore = @($pending.runtimeBefore); runtimeAfter = $runtimeAfter
+        servicesRunning = @(Get-FbRuntimeServices $State); runtimeBefore = @($pending.runtimeBefore); runtimeAfter = $runtimeAfter
         readinessUri = "http://127.0.0.1:$($State.port)/health/ready"; importantTablesMatched = $true
         importantTablesBefore = @($pending.importantTablesBefore); importantTablesAfter = $tablesAfter
     }
@@ -3176,14 +3316,16 @@ function Invoke-FbLocalCheck {
         return
     }
     $running = @(Get-FbRunningServices $State $ComposeFile)
-    foreach ($required in @("db", "api", "frontend")) { if ($running -notcontains $required) { throw "Local acceptance failed because '$required' is not running." } }
+    foreach ($required in @(Get-FbRuntimeServices $State)) { if ($running -notcontains $required) { throw "Local acceptance failed because '$required' is not running." } }
     Wait-FbHttpHealth -Port ([int]$State.port)
     $frontendPort = Invoke-FbCompose $State $ComposeFile @("port", "frontend", "3000") "Inspect frontend published port" -IgnoreExitCode
     if ($frontendPort.ExitCode -ne 0 -or @($frontendPort.Output).Count -ne 1 -or [string]$frontendPort.Output[0] -cne "127.0.0.1:$($State.port)") {
         throw "Local acceptance requires the frontend to publish exactly 127.0.0.1:$($State.port)."
     }
     $unpublished = [ordered]@{}
-    foreach ($service in @("api", "db")) {
+    $unpublishedServices = @("api", "db")
+    if (Test-FbStateRunsMcp $State) { $unpublishedServices += "mcp" }
+    foreach ($service in $unpublishedServices) {
         $bindings = @(Get-FbHostPortBindings $State $ComposeFile $service)
         if ($bindings.Count -gt 0) {
             throw "Local acceptance failed because $service has a host-published port."
@@ -3195,8 +3337,9 @@ function Invoke-FbLocalCheck {
         schemaVersion = "filingbridge.private-server.local-check/v1"; status = "passed"
         hostProfile = Get-FbHostProfile; instanceId = [string]$State.instanceId; releaseVersion = [string]$State.releaseVersion
         releaseCommitSha = [string]$State.releaseCommitSha; checkedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
-        deploymentMode = "PrivateServer"; runningServices = @("db", "api", "frontend")
+        deploymentMode = "PrivateServer"; runningServices = @(Get-FbRuntimeServices $State)
         frontendBinding = "127.0.0.1:$($State.port)"; apiHostPortPublished = $false; databaseHostPortPublished = $false
+        mcpConnectorServicePresent = (Test-FbStateRunsMcp $State); mcpHostPortPublished = $false
         readinessUri = "http://127.0.0.1:$($State.port)/health/ready"; readinessPassed = $true
         tenantQualifiedLoginConfigured = $true; workspaceSlug = [string]$State.tenantSlug
         businessDataFingerprintCount = $tables.Count; importantTables = $tables
@@ -3266,7 +3409,7 @@ function Invoke-FbRecoverHost {
     $release = if ($BuildLocal) {
         if (-not [string]::IsNullOrWhiteSpace($ReleaseManifest)) { throw "-BuildLocal and -ReleaseManifest cannot be combined." }
         if ($DryRun) {
-            [pscustomobject]@{ path = ""; sha256 = ""; version = "source-build"; commitSha = ""; reviewed = $false; integrityStatus = "source-build-unreviewed"; images = [pscustomobject]@{ api = "filingbridge-private-api:<generated>"; frontend = "filingbridge-private-frontend:<generated>"; postgres = "postgres:16.4-alpine" } }
+            [pscustomobject]@{ path = ""; sha256 = ""; version = "source-build"; commitSha = ""; reviewed = $false; integrityStatus = "source-build-unreviewed"; images = [pscustomobject]@{ api = "filingbridge-private-api:<generated>"; frontend = "filingbridge-private-frontend:<generated>"; postgres = "postgres:16.4-alpine"; mcp = "filingbridge-private-mcp:<generated>" } }
         } else { New-FbLocalBuildRelease -RepositoryRoot $RepositoryRoot -InstanceId $newInstanceId }
     } else {
         Read-FbReleaseManifest -Path (Get-FbReleaseManifestPath $ReleaseManifest $RepositoryRoot) -RepositoryRoot $RepositoryRoot
@@ -3344,6 +3487,7 @@ function Invoke-FbRecoverHost {
         Set-FbSecretAcl (Join-Path $secretDirectory "auth_session_signing_key")
         [IO.File]::WriteAllText((Join-Path $secretDirectory "connector_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
         Set-FbSecretAcl (Join-Path $secretDirectory "connector_signing_key")
+        Initialize-FbMcpServiceKey $secretDirectory -Rotate
         $installedComposeFile = Join-Path $resolvedStateDirectory "compose.private.installed.yml"
         Write-FbTextAtomic -Path $installedComposeFile -Value (Read-FbUtf8Text $composeFile)
         Set-FbRestrictedAcl $installedComposeFile
@@ -3365,7 +3509,8 @@ function Invoke-FbRecoverHost {
             releaseVersion = [string]$release.version; releaseCommitSha = [string]$release.commitSha
             releaseManifest = [string]$release.path; releaseManifestSha256 = [string]$release.sha256
             reviewedRelease = [bool]$release.reviewed; releaseIntegrityStatus = [string]$release.integrityStatus; images = $release.images
-            tailscaleEnabled = $false; tailscaleDnsName = ""; backupRecipient = [string](Get-FbProperty $external "recipient" "")
+            tailscaleEnabled = $false; tailscaleDnsName = ""; connectorEnabled = $false; connectorPublicOrigin = $localOrigin
+            backupRecipient = [string](Get-FbProperty $external "recipient" "")
             recoveredFromInstanceId = $sourceInstanceId; recoveredAtUtc = $now; createdAtUtc = $now; updatedAtUtc = $now
         }
         Write-FbEnvironmentFile $state
@@ -3385,7 +3530,7 @@ function Invoke-FbRecoverHost {
         Assert-FbImportantTableEvidenceMatches -Expected $expectedTables -Actual $restoredTables -Description "Replacement-host restore before forward migrations"
         $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "role-provision") "Reapply the least-privileged database login after host recovery" -Mutating
         $null = Invoke-FbCompose $state $installedComposeFile @("run", "--rm", "--no-deps", "migrate") "Apply forward-only migrations after host recovery" -Mutating
-        $null = Invoke-FbCompose $state $installedComposeFile @("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300", "api", "frontend") "Start the recovered Private Server runtime" -Mutating
+        $null = Invoke-FbCompose $state $installedComposeFile (@("up", "-d", "--no-deps", "--wait", "--wait-timeout", "300") + @(Get-FbApplicationServices $state)) "Start the recovered Private Server runtime" -Mutating
         Wait-FbHttpHealth -Port $Port
         $actualTables = @(Get-FbImportantTableEvidence $state $installedComposeFile "accounts" "Read important-table fingerprints from the recovered database")
         Assert-FbImportantTableRowCountsMatch -Expected $expectedTables -Actual $actualTables -Description "Replacement-host recovery after forward migrations"
@@ -3393,12 +3538,13 @@ function Invoke-FbRecoverHost {
         Save-FbState $state
         Write-Host "Replacement-host recovery completed and passed database fingerprint and health checks at $localOrigin"
         Write-Host "All pre-recovery browser sessions were invalidated. Source installation $sourceInstanceId must remain offline."
+        Write-Host "The MCP connector starts disabled with fresh connector keys; re-enable it with '$(Get-FbLauncherName) connector enable' if agents are needed."
     } catch {
         $recoveryFailure = $_
         $writerStopFailure = ""
         if ($null -ne $state -and $composeStarted) {
             try {
-                $null = Invoke-FbCompose $state ([string]$state.installedComposeFile) @("stop", "--timeout", "60", "frontend", "api") "Keep writers stopped after failed host recovery" -Mutating
+                $null = Invoke-FbCompose $state ([string]$state.installedComposeFile) (@("stop", "--timeout", "60") + @(Get-FbWriterStopServices $state)) "Keep writers stopped after failed host recovery" -Mutating
                 Assert-FbWritersQuiesced $state ([string]$state.installedComposeFile) "Replacement-host recovery"
             } catch { $writerStopFailure = $_.Exception.Message }
         }
@@ -3465,10 +3611,20 @@ function Invoke-FbDiagnose {
     foreach ($secretName in @(
         "postgres_password", "postgres_application_password", "accounts_migration_connection_string",
         "accounts_application_connection_string", "auth_session_signing_key", "audit_integrity_signing_key",
-        "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "backup_authentication_key", "accounts_api_key_hash", "accounts_api_key", "connector_signing_key")) {
+        "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "backup_authentication_key", "accounts_api_key_hash", "accounts_api_key", "connector_signing_key",
+        "accounts_mcp_api_key", "accounts_mcp_api_key_hash")) {
         $path = Join-Path ([string]$State.secretDirectory) $secretName
         $checks.Add([pscustomobject]@{ name = "secret:$secretName"; passed = (Test-Path -LiteralPath $path -PathType Leaf); detail = if (Test-Path -LiteralPath $path) { "present" } else { "missing" } })
     }
+    try {
+        $mcpKeyPath = Join-Path ([string]$State.secretDirectory) "accounts_mcp_api_key"
+        $mcpHashPath = Join-Path ([string]$State.secretDirectory) "accounts_mcp_api_key_hash"
+        $mcpKeyValue = (Read-FbUtf8Text $mcpKeyPath).Trim()
+        $mcpBound = $mcpKeyValue.Length -ge 16 -and $mcpKeyValue -notmatch '\s' -and
+            (Test-FbFixedTimeHexEqual (Get-FbSha256Text $mcpKeyValue) (Read-FbUtf8Text $mcpHashPath).Trim())
+        $mcpKeyValue = $null
+        $checks.Add([pscustomobject]@{ name = "mcp-service-key-binding"; passed = $mcpBound; detail = if ($mcpBound) { "service key matches the API key hash" } else { "service key does not match accounts_mcp_api_key_hash; run 'connector disable' or 'connector enable', which rewrite the environment and replace a mismatched pair" } })
+    } catch { $checks.Add([pscustomobject]@{ name = "mcp-service-key-binding"; passed = $false; detail = "MCP connector service key or hash unreadable" }) }
     foreach ($nativeCheck in @(
         [pscustomobject]@{ name = "docker-engine"; file = "docker"; args = @("version", "--format", "{{.Server.Os}}") },
         [pscustomobject]@{ name = "docker-compose"; file = "docker"; args = @("compose", "version", "--short") })) {
@@ -3481,10 +3637,12 @@ function Invoke-FbDiagnose {
         $render = Invoke-FbCompose $State $ComposeFile @("config", "--quiet") "Validate resolved Private Server configuration" -IgnoreExitCode
         $checks.Add([pscustomobject]@{ name = "compose-config"; passed = ($render.ExitCode -eq 0); detail = if ($render.ExitCode -eq 0) { "valid" } else { Protect-PrivateServerText (($render.Output | Select-Object -Last 3) -join " ") } })
     } catch { $checks.Add([pscustomobject]@{ name = "compose-config"; passed = $false; detail = Protect-PrivateServerText $_.Exception.Message }) }
-    foreach ($imageEntry in @(
+    $imageEntries = @(
         [pscustomobject]@{ service = "api"; expected = [string]$State.images.api },
         [pscustomobject]@{ service = "frontend"; expected = [string]$State.images.frontend },
-        [pscustomobject]@{ service = "db"; expected = [string]$State.images.postgres })) {
+        [pscustomobject]@{ service = "db"; expected = [string]$State.images.postgres })
+    if (Test-FbStateRunsMcp $State) { $imageEntries += [pscustomobject]@{ service = "mcp"; expected = [string]$State.images.mcp } }
+    foreach ($imageEntry in $imageEntries) {
         try {
             $container = Invoke-FbCompose $State $ComposeFile @("ps", "--all", "--quiet", $imageEntry.service) "Resolve $($imageEntry.service) container identity"
             $containerId = (($container.Output | Select-Object -Last 1) -join "").Trim()
@@ -3522,6 +3680,13 @@ function Invoke-FbDiagnose {
             $checks.Add([pscustomobject]@{ name = "tailscale-route"; passed = $true; detail = "exact saved loopback route owned" })
         } catch { $checks.Add([pscustomobject]@{ name = "tailscale-route"; passed = $false; detail = Protect-PrivateServerText $_.Exception.Message }) }
     }
+    if (Test-FbStateRunsMcp $State) {
+        $connectorEnabled = [bool](Get-FbProperty $State "connectorEnabled" $false)
+        $connectorOrigin = Get-FbConnectorPublicOrigin $State
+        $recordedOrigin = [string](Get-FbProperty $State "connectorPublicOrigin" $connectorOrigin)
+        $originHonoured = -not $connectorEnabled -or [string]::IsNullOrWhiteSpace($recordedOrigin) -or $recordedOrigin -ceq $connectorOrigin
+        $checks.Add([pscustomobject]@{ name = "mcp-connector"; passed = $originHonoured; detail = if ($originHonoured) { "$(if ($connectorEnabled) { 'enabled' } else { 'disabled' }) at $connectorOrigin/mcp" } else { "recorded origin $recordedOrigin is not served; using $connectorOrigin (re-run connector enable)" } })
+    }
     $portAvailable = Test-FbTcpPortAvailable ([int]$State.port)
     $checks.Add([pscustomobject]@{ name = "loopback-port"; passed = $true; detail = if ($portAvailable) { "not listening" } else { "in use (expected while running)" } })
     foreach ($check in $checks) {
@@ -3550,6 +3715,9 @@ function ConvertTo-FbRedactedState {
         reviewedRelease = [bool]$State.reviewedRelease
         releaseIntegrityStatus = [string](Get-FbProperty $State "releaseIntegrityStatus" "unknown")
         tailscaleEnabled = [bool]$State.tailscaleEnabled
+        mcpConnectorServicePresent = (Test-FbStateRunsMcp $State)
+        connectorEnabled = [bool](Get-FbProperty $State "connectorEnabled" $false)
+        connectorOrigin = if ((Get-FbConnectorPublicOrigin $State) -eq [string]$State.localOrigin) { [string]$State.localOrigin } else { "https://[TAILNET-HOST-REDACTED]" }
         createdAtUtc = [string]$State.createdAtUtc
         updatedAtUtc = [string]$State.updatedAtUtc
     }
@@ -3570,7 +3738,7 @@ function Invoke-FbSupportBundle {
         Write-FbTextAtomic (Join-Path $staging "compose-version.txt") (Protect-FbSupportText (($composeVersion.Output -join [Environment]::NewLine) + [Environment]::NewLine))
         $status = Invoke-FbCompose $State $ComposeFile @("ps", "--all") "Read service state for support bundle" -IgnoreExitCode
         Write-FbTextAtomic (Join-Path $staging "services.txt") (Protect-FbSupportText (($status.Output -join [Environment]::NewLine) + [Environment]::NewLine))
-        $logs = Invoke-FbCompose $State $ComposeFile @("logs", "--no-color", "--tail", [string]$TailLines, "api", "frontend") "Read bounded logs for support bundle" -IgnoreExitCode
+        $logs = Invoke-FbCompose $State $ComposeFile (@("logs", "--no-color", "--tail", [string]$TailLines) + @(Get-FbApplicationServices $State)) "Read bounded logs for support bundle" -IgnoreExitCode
         Write-FbTextAtomic (Join-Path $staging "application.redacted.log") (Protect-FbSupportText ((@($logs.Output | Select-Object -Last $TailLines) -join [Environment]::NewLine) + [Environment]::NewLine))
         $readme = @"
 FilingBridge Private Server redacted support bundle
@@ -3623,6 +3791,103 @@ function Invoke-FbPurgeData {
     Write-Host "Private Server data and state were permanently purged."
 }
 
+function Get-FbContainerHealthText {
+    param($State, [string]$ComposeFile, [string]$Service)
+    try {
+        $containerId = Get-FbOwnedRuntimeContainerId $State $ComposeFile $Service
+        $health = Invoke-FbNative -FilePath "docker" -Arguments @(
+            "inspect", "--format", "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", $containerId
+        ) -Description "Read $Service container health" -IgnoreExitCode
+        $value = (($health.Output | Select-Object -Last 1) -join "").Trim().ToLowerInvariant()
+        if ($health.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($value)) { return "unknown" }
+        return $value
+    } catch { return "absent" }
+}
+
+function Write-FbConnectorClientHelp {
+    param([string]$Origin)
+    $mcpUrl = "$Origin/mcp"
+    Write-Host "MCP URL: $mcpUrl"
+    Write-Host "Claude Code: claude mcp add --transport http filingbridge $mcpUrl"
+    Write-Host "  then run /mcp in Claude Code, choose Authenticate, and sign in with your workspace, email, password and authenticator code."
+    Write-Host "Codex: add [mcp_servers.filingbridge] with url = `"$mcpUrl`" to ~/.codex/config.toml, then run: codex mcp login filingbridge"
+    Write-Host "Approve agent actions at $Origin/settings/approvals and disconnect agents at $Origin/settings/agents."
+    Write-Host "Claude.ai custom connectors are not supported on a Private Server: Claude.ai must reach the server over the public internet, and a Private Server never has public ingress."
+}
+
+function Invoke-FbConnector {
+    param($State, [string]$ComposeFile, [string]$Action, [string]$Origin, [switch]$DryRun)
+    $normalized = if ([string]::IsNullOrWhiteSpace($Action)) { "status" } else { $Action.Trim().ToLowerInvariant() }
+    if ($normalized -notin @("enable", "disable", "status")) { throw "connector requires one action: enable [--origin local|tailscale], disable, or status." }
+    if (-not [string]::IsNullOrWhiteSpace($Origin) -and $normalized -ne "enable") { throw "--origin applies only to 'connector enable'." }
+    $launcher = Get-FbLauncherName
+    if (-not (Test-FbStateRunsMcp $State)) {
+        throw "This installation's release does not run the MCP connector service. Update to a release whose release.json includes images.mcp, then retry."
+    }
+    $wasEnabled = [bool](Get-FbProperty $State "connectorEnabled" $false)
+    $previousOrigin = [string](Get-FbProperty $State "connectorPublicOrigin" "")
+    if ($normalized -eq "status") {
+        $origin = Get-FbConnectorPublicOrigin $State
+        $mode = if ($origin -ceq [string]$State.localOrigin -or $origin -ceq "http://localhost:$($State.port)") { "local" } else { "tailscale" }
+        Write-Host "MCP connector: $(if ($wasEnabled) { 'enabled' } else { 'disabled' })"
+        Write-Host "Connector origin: $origin ($mode)"
+        Write-Host "MCP URL: $origin/mcp"
+        Write-Host "MCP service: $(Get-FbContainerHealthText $State $ComposeFile 'mcp')"
+        Write-Host "API service: $(Get-FbContainerHealthText $State $ComposeFile 'api')"
+        if (-not $wasEnabled) { Write-Host "Agents are refused. Turn the connector on with: $launcher connector enable [--origin local|tailscale]" }
+        return
+    }
+    $localOrigin = "http://localhost:$($State.port)"
+    if ($normalized -eq "enable") {
+        $mode = if ([string]::IsNullOrWhiteSpace($Origin)) { "local" } else { $Origin.Trim().ToLowerInvariant() }
+        if ($mode -notin @("local", "tailscale")) { throw "connector enable --origin must be 'local' or 'tailscale'." }
+        $targetOrigin = $localOrigin
+        if ($mode -eq "tailscale") {
+            $serverOrigin = [string](Get-FbProperty $State "publicOrigin" "")
+            if (-not [bool](Get-FbProperty $State "tailscaleEnabled" $false) -or $serverOrigin -cnotmatch '^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.ts\.net$') {
+                throw "Tailscale Serve is not configured for this installation. Run '$launcher tailscale enable' first, or use '$launcher connector enable --origin local'."
+            }
+            $targetOrigin = $serverOrigin
+        }
+        $services = @("api", "mcp")
+        $description = "Enable the MCP connector at $targetOrigin"
+    } else {
+        $targetOrigin = $previousOrigin
+        $services = @("api")
+        $description = "Disable the MCP connector"
+    }
+    if ($DryRun) {
+        Write-Host "DRY RUN: $description; rewrite the environment, recreate $($services -join ' and '), and wait for health"
+        return
+    }
+    Set-FbStateValue $State "connectorEnabled" ($normalized -eq "enable")
+    Set-FbStateValue $State "connectorPublicOrigin" $targetOrigin
+    Write-FbEnvironmentFile $State
+    Save-FbState $State
+    try {
+        $null = Invoke-FbCompose $State $ComposeFile (@("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300") + $services) $description -Mutating
+        Wait-FbHttpHealth -Port ([int]$State.port)
+    } catch {
+        $failure = $_
+        Set-FbStateValue $State "connectorEnabled" $wasEnabled
+        Set-FbStateValue $State "connectorPublicOrigin" $previousOrigin
+        Write-FbEnvironmentFile $State
+        Save-FbState $State
+        try {
+            $null = Invoke-FbCompose $State $ComposeFile @("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "300", "api", "mcp") "Restore the previous MCP connector configuration" -Mutating
+        } catch {
+            throw "Connector $normalized failed and the previous connector configuration could not be re-applied. Run '$launcher diagnose'. Original failure: $($failure.Exception.Message) Restore failure: $($_.Exception.Message)"
+        }
+        throw "Connector $normalized failed; the previous connector configuration was restored. $($failure.Exception.Message)"
+    }
+    if ($normalized -eq "enable") {
+        Write-Host "The MCP connector is enabled. Agents sign in as a FilingBridge user and every irreversible step still needs that person's approval."
+        Write-FbConnectorClientHelp $targetOrigin
+        return
+    }
+    Write-Host "The MCP connector is disabled. Agents are refused immediately; their sessions remain listed and revocable at $(Get-FbConnectorPublicOrigin $State)/settings/agents."
+}
+
 function Get-PrivateServerHelp {
     [CmdletBinding()]
     param()
@@ -3643,6 +3908,7 @@ Usage:
   <launcher> update -ReleaseManifest <release.json> [-BackupRecipient <recipient>] [-AgeIdentityFile <identity>]
   <launcher> owner-recovery [-OwnerEmail <email>]
   <launcher> tailscale enable | disable | status
+  <launcher> connector enable [--origin local|tailscale] | disable | status
   <launcher> diagnose | support-bundle | uninstall | purge-data
   <launcher> <command> -DryRun
 
@@ -3657,6 +3923,10 @@ Safety:
   plaintext backups contain only PostgreSQL and are not sufficient for host loss.
   Replacement-host recovery requires a complete encrypted backup, its separate age
   identity, and an exported recovery authentication key. Keep all three separately.
+  The MCP connector (AI agents) is off by default; 'connector enable' is the only
+  supported way to turn it on. It is reached only through the loopback frontend or
+  Tailscale Serve at <origin>/mcp. Claude.ai custom connectors need public ingress
+  and are not supported on a Private Server.
 
 Private Server does not submit to CRO/ROS and does not replace qualified-accountant,
 source-law, external-validation, or public-production acceptance gates.
@@ -3699,7 +3969,7 @@ function Invoke-FilingBridgePrivateServer {
         $DryRun = $true
     }
     if ($normalized -in @("help", "-h", "--help", "/?")) { Write-Host (Get-PrivateServerHelp); return }
-    $supported = @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "diagnose", "support-bundle", "uninstall", "purge-data")
+    $supported = @("setup", "start", "status", "stop", "logs", "backup", "verify-backup", "restore", "export-recovery-key", "recover-host", "reboot-check", "local-check", "update", "owner-recovery", "tailscale", "connector", "diagnose", "support-bundle", "uninstall", "purge-data")
     if ($normalized -notin $supported) { throw "Unknown command '$Command'. Run 'FilingBridge.cmd help' for supported commands." }
     $installationLock = Enter-FbInstallationLock $StateDirectory
     try {
@@ -3746,6 +4016,7 @@ function Invoke-FilingBridgePrivateServer {
             "update" { Invoke-FbUpdate $state $composeFile $RepositoryRoot $ReleaseManifest $OutputDirectory $BackupRecipient $AgeIdentityFile -PlaintextDatabaseOnly:$PlaintextDatabaseOnly -BuildLocal:$BuildLocal -DryRun:$DryRun }
             "owner-recovery" { Invoke-FbOwnerRecovery $state $composeFile $OwnerEmail $Confirmation -NonInteractive:$NonInteractive -DryRun:$DryRun }
             "tailscale" { Invoke-FbTailscale $state $composeFile $Action -DryRun:$DryRun }
+            "connector" { Invoke-FbConnector $state $composeFile $Action $PublicOrigin -DryRun:$DryRun }
             "diagnose" { Invoke-FbDiagnose $state $composeFile $RepositoryRoot }
             "support-bundle" { Invoke-FbSupportBundle $state $composeFile $OutputDirectory $TailLines }
             "uninstall" { Invoke-FbUninstall $state $composeFile -DryRun:$DryRun }

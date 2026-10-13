@@ -122,6 +122,28 @@ function nonEmpty(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/**
+ * A directory setting that may have arrived from a Claude Desktop bundle.
+ *
+ * The bundle's manifest passes `--download-dir ${user_config.download_dir}`
+ * on every start. When the person leaves an optional folder blank, the host
+ * either substitutes an empty string or leaves the placeholder exactly as
+ * written. Both mean "not set": the feature is not offered, rather than files
+ * landing in a directory literally named after the placeholder.
+ */
+export function configuredDirectory(value: string | undefined): string | undefined {
+  const trimmed = nonEmpty(value);
+  if (trimmed === undefined) return undefined;
+  if (/^\$\{[^}]*\}$/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function directoryAt(argv: string[], index: number, flag: string): string | undefined {
+  const v = argv[index];
+  if (v === undefined) throw new Error(`${flag} requires a value`);
+  return configuredDirectory(v);
+}
+
 function parseUrl(baseUrl: string): URL {
   try {
     return new URL(baseUrl);
@@ -268,10 +290,10 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
       deviceLabel = valueAt(argv, i, arg).slice(0, 100);
     } else if (arg === '--upload-root') {
       i += 1;
-      uploadRoot = valueAt(argv, i, arg);
+      uploadRoot = directoryAt(argv, i, arg);
     } else if (arg === '--download-dir') {
       i += 1;
-      downloadDir = valueAt(argv, i, arg);
+      downloadDir = directoryAt(argv, i, arg);
     } else if (arg === '--toolsets') {
       i += 1;
       const v = valueAt(argv, i, arg);
@@ -327,8 +349,8 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env):
     throw new Error('Give either --totp-code or --recovery-code, not both.');
   }
 
-  uploadRoot = uploadRoot ?? nonEmpty(env['FILINGBRIDGE_UPLOAD_ROOT']);
-  downloadDir = downloadDir ?? nonEmpty(env['FILINGBRIDGE_DOWNLOAD_DIR']);
+  uploadRoot = uploadRoot ?? configuredDirectory(env['FILINGBRIDGE_UPLOAD_ROOT']);
+  downloadDir = downloadDir ?? configuredDirectory(env['FILINGBRIDGE_DOWNLOAD_DIR']);
 
   const informational = command === 'help' || command === 'version';
   if (baseUrl === undefined) {

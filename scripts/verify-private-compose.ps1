@@ -33,11 +33,14 @@ function PrivateComposeEnv {
         @("ACCOUNTS_POSTGRES_IMAGE", "docker.io/library/postgres@sha256:3333333333333333333333333333333333333333333333333333333333333333"),
         @("ACCOUNTS_API_IMAGE", "ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"),
         @("ACCOUNTS_FRONTEND_IMAGE", "ghcr.io/example/accounts-frontend@sha256:2222222222222222222222222222222222222222222222222222222222222222"),
+        @("ACCOUNTS_MCP_IMAGE", "ghcr.io/example/accounts-mcp@sha256:4444444444444444444444444444444444444444444444444444444444444444"),
         @("PRIVATE_INSTALLATION_ID", "2f46b0f5-5b33-4f02-9341-b8dcf95fb35e"),
         @("PRIVATE_FRONTEND_PORT", "3500"),
         @("PRIVATE_SERVER_ORIGIN", "https://accounts-device.example-tailnet.ts.net"),
         @("PRIVATE_LOCAL_ORIGIN", "http://localhost:3500"),
         @("PRIVATE_ALLOWED_HOSTS", "accounts-device.example-tailnet.ts.net;localhost;127.0.0.1"),
+        @("PRIVATE_CONNECTOR_PUBLIC_ORIGIN", "https://accounts-device.example-tailnet.ts.net"),
+        @("PRIVATE_CONNECTOR_PUBLIC_HOST", "accounts-device.example-tailnet.ts.net"),
         @("PRIVATE_TENANT_NAME", "Private verifier organisation"),
         @("PRIVATE_TENANT_SLUG", "private-verifier"),
         @("PRIVATE_OWNER_EMAIL", "owner@example.ie"),
@@ -56,6 +59,8 @@ function PrivateComposeEnv {
         @("ACCOUNTS_API_KEY_HASH_FILE", (New-SecretFile "accounts_api_key_hash" ("0" * 64))),
         @("ACCOUNTS_API_KEY_FILE", (New-SecretFile "accounts_api_key" $apiKey)),
         @("CONNECTOR_SIGNING_KEY_FILE", (New-SecretFile "connector_signing_key" ("F" * 96))),
+        @("ACCOUNTS_MCP_API_KEY_FILE", (New-SecretFile "accounts_mcp_api_key" "private-verifier-mcp-service-key")),
+        @("ACCOUNTS_MCP_API_KEY_HASH_FILE", (New-SecretFile "accounts_mcp_api_key_hash" ("9" * 64))),
         @("PRIVATE_INITIAL_OWNER_PASSWORD_FILE", (New-SecretFile "private_initial_owner_password" "PrivateVerifierOwner1!ChangeMe"))
     )
 }
@@ -257,7 +262,7 @@ function Assert-ConnectionSecret($Config, [string]$SecretName, [string]$Expected
 try {
     $config = Invoke-PrivateComposeConfigJson
     $services = $config.services
-    $expectedServices = @("api", "db", "frontend", "migrate", "private-initialize", "private-owner-recovery", "role-provision")
+    $expectedServices = @("api", "db", "frontend", "mcp", "migrate", "private-initialize", "private-owner-recovery", "role-provision")
     $actualServices = @($services.PSObject.Properties.Name | Sort-Object)
 
     Assert-Equal "compose project name" $config.name "accounts-private"
@@ -278,6 +283,7 @@ try {
         'private-owner-recovery' = "private-owner-recovery"
         api = "api"
         frontend = "frontend"
+        mcp = "mcp"
     }
     foreach ($serviceName in $expectedServices) {
         Assert-PrivateLabels $services.$serviceName $serviceName $expectedComponents[$serviceName]
@@ -288,11 +294,11 @@ try {
     }
     Assert-Equal "role-provision PostgreSQL image" $services.'role-provision'.image $services.db.image
     Assert-Equal "role-provision non-root user" $services.'role-provision'.user "postgres"
-    if ($services.api.image -eq $services.frontend.image -or $services.api.image -eq $services.db.image) {
-        throw "API, frontend, and PostgreSQL must use distinct image references."
+    if (@(@($services.api.image, $services.frontend.image, $services.mcp.image, $services.db.image) | Select-Object -Unique).Count -ne 4) {
+        throw "API, frontend, MCP connector, and PostgreSQL must use distinct image references."
     }
 
-    foreach ($serviceName in @("db", "role-provision", "migrate", "private-initialize", "private-owner-recovery", "api")) {
+    foreach ($serviceName in @("db", "role-provision", "migrate", "private-initialize", "private-owner-recovery", "api", "mcp")) {
         Assert-NoPublishedPorts $services.$serviceName $serviceName
     }
     $frontendPorts = @($services.frontend.ports)
@@ -310,6 +316,11 @@ try {
     Assert-ExactNetworks $services.'private-owner-recovery' "private-owner-recovery" @("api_db")
     Assert-ExactNetworks $services.api "api" @("api_db", "frontend_api")
     Assert-ExactNetworks $services.frontend "frontend" @("frontend_api", "frontend_ingress")
+    Assert-ExactNetworks $services.mcp "mcp" @("frontend_api")
+    $mcpExposeProperty = $services.mcp.PSObject.Properties["expose"]
+    if ($null -ne $mcpExposeProperty -and @($mcpExposeProperty.Value).Count -gt 0) {
+        throw "mcp must not expose or publish a port; it is reached only through the frontend /mcp route."
+    }
     Assert-Equal "frontend/API network isolation" $config.networks.frontend_api.internal $true
     Assert-Equal "API/database network isolation" $config.networks.api_db.internal $true
     if ($config.networks.frontend_ingress.internal -eq $true) {
@@ -334,7 +345,7 @@ try {
     Assert-Equal "database volume deployment label" $config.volumes.accounts_private_data.labels.'ie.filingbridge.deployment-mode' "PrivateServer"
     Assert-Equal "database volume installation label" $config.volumes.accounts_private_data.labels.'ie.filingbridge.installation-id' "2f46b0f5-5b33-4f02-9341-b8dcf95fb35e"
     Assert-Equal "database volume component label" $config.volumes.accounts_private_data.labels.'ie.filingbridge.component' "database-volume"
-    foreach ($serviceName in @("role-provision", "migrate", "private-initialize", "private-owner-recovery", "api", "frontend")) {
+    foreach ($serviceName in @("role-provision", "migrate", "private-initialize", "private-owner-recovery", "api", "frontend", "mcp")) {
         $volumesProperty = $services.$serviceName.PSObject.Properties["volumes"]
         if ($null -ne $volumesProperty -and @($volumesProperty.Value).Count -gt 0) {
             throw "$serviceName must not mount a persistent or source volume."
@@ -347,7 +358,7 @@ try {
     Assert-Equal "private initializer profile" (@($services.'private-initialize'.profiles) -join "|") "initialize"
     Assert-Equal "owner recovery profile" (@($services.'private-owner-recovery'.profiles) -join "|") "owner-recovery"
 
-    foreach ($serviceName in @("db", "api", "frontend")) {
+    foreach ($serviceName in @("db", "api", "frontend", "mcp")) {
         Assert-Equal "$serviceName restart policy" $services.$serviceName.restart "unless-stopped"
     }
     foreach ($serviceName in @("role-provision", "migrate", "private-initialize", "private-owner-recovery")) {
@@ -359,6 +370,10 @@ try {
     Assert-Equal "owner recovery migration dependency" $services.'private-owner-recovery'.depends_on.migrate.condition "service_completed_successfully"
     Assert-Equal "API migration dependency" $services.api.depends_on.migrate.condition "service_completed_successfully"
     Assert-Equal "frontend API dependency" $services.frontend.depends_on.api.condition "service_healthy"
+    Assert-Equal "MCP connector API dependency" $services.mcp.depends_on.api.condition "service_healthy"
+    if ((@($services.mcp.healthcheck.test) -join " ") -notmatch [regex]::Escape("http://127.0.0.1:3100/healthz")) {
+        throw "mcp healthcheck must probe the connector's /healthz endpoint."
+    }
 
     $commonApiServices = @("migrate", "private-initialize", "private-owner-recovery", "api")
     foreach ($serviceName in $commonApiServices) {
@@ -398,6 +413,10 @@ try {
         Assert-ServiceEnvironmentValue $service $serviceName "IdentitySecurity__IdentityHmacKey_FILE" "/run/secrets/identity_hmac_key"
         Assert-ServiceEnvironmentValue $service $serviceName "IdentitySecurity__MfaEncryptionKeys__0__EncryptionKey_FILE" "/run/secrets/mfa_encryption_key"
         Assert-ServiceEnvironmentValue $service $serviceName "ApiAccess__Keys__0__KeyHash_FILE" "/run/secrets/accounts_api_key_hash"
+        Assert-ServiceEnvironmentValue $service $serviceName "ApiAccess__Keys__1__Name" "MCP service"
+        Assert-ServiceEnvironmentValue $service $serviceName "ApiAccess__Keys__1__Role" "Admin"
+        Assert-ServiceEnvironmentValue $service $serviceName "ApiAccess__Keys__1__KeyHash_FILE" "/run/secrets/accounts_mcp_api_key_hash"
+        Assert-Missing (Get-ServiceEnvironmentValue $service "ApiAccess__Keys__1__KeyHash") "$serviceName plaintext MCP service key hash"
         Assert-Missing (Get-ServiceEnvironmentValue $service "POSTGRES_PASSWORD") "$serviceName plaintext database password"
         Assert-Missing (Get-ServiceEnvironmentValue $service "AuthSession__SigningKey") "$serviceName plaintext session key"
         Assert-Missing (Get-ServiceEnvironmentValue $service "BootstrapOwner__OwnerInitialPassword") "$serviceName bootstrap password"
@@ -411,6 +430,14 @@ try {
     Assert-ServiceEnvironmentValue $services.frontend "frontend" "PRIVATE_LOCAL_ORIGIN" "http://localhost:3500"
     Assert-ServiceEnvironmentValue $services.frontend "frontend" "TRUST_PROXY_HEADERS" "false"
     Assert-ServiceEnvironmentValue $services.frontend "frontend" "ACCOUNTS_API_KEY_FILE" "/run/secrets/accounts_api_key"
+    Assert-ServiceEnvironmentValue $services.frontend "frontend" "MCP_URL" "http://mcp:3100/mcp"
+
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "NODE_ENV" "production"
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_API_URL" "http://api:8080"
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_API_KEY_FILE" "/run/secrets/accounts_mcp_api_key"
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_PUBLIC_URL" "https://accounts-device.example-tailnet.ts.net"
+    Assert-ServiceEnvironmentValue $services.mcp "mcp" "FILINGBRIDGE_ALLOWED_HOSTS" "mcp:3100,accounts-device.example-tailnet.ts.net"
+    Assert-ServiceEnvironmentValue $services.api "api" "Connector__PublicBaseUrl" "https://accounts-device.example-tailnet.ts.net"
 
     Assert-ServiceEnvironmentValue $services.'private-initialize' "private-initialize" "PrivateInitialization__TenantName" "Private verifier organisation"
     Assert-ServiceEnvironmentValue $services.'private-initialize' "private-initialize" "PrivateInitialization__TenantSlug" "private-verifier"
@@ -426,16 +453,28 @@ try {
     Assert-ServiceSecretsInclude $services.migrate "migrate" @("accounts_migration_connection_string")
     Assert-ServiceSecretsInclude $services.'private-initialize' "private-initialize" @("accounts_migration_connection_string", "private_initial_owner_password")
     Assert-ServiceSecretsInclude $services.'private-owner-recovery' "private-owner-recovery" @("accounts_migration_connection_string")
-    Assert-ServiceSecretsInclude $services.api "api" @("accounts_application_connection_string", "connector_signing_key")
+    Assert-ServiceSecretsInclude $services.api "api" @("accounts_application_connection_string", "connector_signing_key", "accounts_mcp_api_key_hash")
+    foreach ($serviceName in $commonApiServices) {
+        Assert-ServiceSecretsInclude $services.$serviceName $serviceName @("accounts_mcp_api_key_hash")
+    }
+    $mcpSecrets = @(Service-SecretNames $services.mcp)
+    if (($mcpSecrets -join "|") -ne "accounts_mcp_api_key") {
+        throw "mcp must mount only its own service key secret 'accounts_mcp_api_key' (was '$($mcpSecrets -join ", ")')."
+    }
+    foreach ($serviceName in @("db", "role-provision", "migrate", "private-initialize", "private-owner-recovery", "api", "frontend")) {
+        if (@(Service-SecretNames $services.$serviceName) -contains "accounts_mcp_api_key") {
+            throw "$serviceName must not receive the raw MCP connector service key; the API holds only its hash."
+        }
+    }
     Assert-ServiceEnvironmentValue $services.api "api" "Connector__SigningKey_FILE" "/run/secrets/connector_signing_key"
     Assert-ServiceEnvironmentValue $services.api "api" "Connector__Enabled" "false"
-    foreach ($serviceName in @("migrate", "private-initialize", "private-owner-recovery", "frontend")) {
+    foreach ($serviceName in @("migrate", "private-initialize", "private-owner-recovery", "frontend", "mcp")) {
         if (@(Service-SecretNames $services.$serviceName) -contains "connector_signing_key") {
             throw "$serviceName must not receive the connector signing key; only the api signs agent credentials."
         }
     }
     Assert-ServiceSecretsInclude $services.frontend "frontend" @("accounts_api_key")
-    foreach ($serviceName in @("migrate", "private-owner-recovery", "api", "frontend")) {
+    foreach ($serviceName in @("migrate", "private-owner-recovery", "api", "frontend", "mcp")) {
         if (@(Service-SecretNames $services.$serviceName) -contains "private_initial_owner_password") {
             throw "$serviceName must not receive the one-time initial Owner password."
         }
@@ -468,6 +507,10 @@ try {
     if ($frontendDockerfile -notmatch '(?m)^USER nextjs\s*$') {
         throw "Frontend runtime image must retain its non-root nextjs user."
     }
+    $mcpDockerfile = Get-Content -LiteralPath (Join-Path $RepositoryRoot "Dockerfile.mcp") -Raw
+    if ($mcpDockerfile -notmatch '(?m)^USER 1002:1002\s*$') {
+        throw "MCP connector runtime image must retain its non-root 1002 user."
+    }
 
     $composeSource = Get-Content -LiteralPath $ResolvedComposeFile -Raw
     foreach ($forbidden in @('accounts_dev', 'SeedDemoData: "true"', 'AutoMigrateOnStartup: "true"', 'api_egress', 'Caddy', 'Funnel')) {
@@ -487,7 +530,7 @@ try {
             composeFile = [System.IO.Path]::GetFileName($ResolvedComposeFile)
             projectName = $config.name
             services = $actualServices
-            runtimeServices = @("db", "api", "frontend")
+            runtimeServices = @("db", "api", "frontend", "mcp")
             oneShotServices = @("role-provision", "migrate", "private-initialize", "private-owner-recovery")
             profiles = @("initialize", "owner-recovery")
             deploymentMode = Get-ServiceEnvironmentValue $services.api "Deployment__Mode"
@@ -509,6 +552,15 @@ try {
             demoSeedEnabled = $false
             runtimeHasInitialOwnerPassword = $false
             digestPinnedImages = $true
+            mcpConnector = [ordered]@{
+                service = "mcp"
+                networks = @("frontend_api")
+                publishedPorts = @()
+                reachedThrough = "frontend /mcp"
+                serviceKeySecret = "accounts_mcp_api_key"
+                apiKeyHashSecret = "accounts_mcp_api_key_hash"
+                connectorEnabledByDefault = $false
+            }
         } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8
         Write-Host "Private Server compose evidence written: $EvidencePath"
     }

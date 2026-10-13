@@ -120,6 +120,7 @@ services:
       - identity_hmac_key
       - mfa_encryption_key
       - accounts_api_key_hash
+      - accounts_mcp_api_key_hash
     environment: &private-api-environment
       ASPNETCORE_ENVIRONMENT: Production
       Deployment__Mode: PrivateServer
@@ -160,6 +161,10 @@ services:
       ApiAccess__Keys__0__Name: Frontend proxy
       ApiAccess__Keys__0__Role: Admin
       ApiAccess__Keys__0__KeyHash_FILE: /run/secrets/accounts_api_key_hash
+      # The connector HTTP service (mcp) calls the API directly with its own key.
+      ApiAccess__Keys__1__Name: MCP service
+      ApiAccess__Keys__1__Role: Admin
+      ApiAccess__Keys__1__KeyHash_FILE: /run/secrets/accounts_mcp_api_key_hash
       Monitoring__ErrorTrackingProvider: LocalStructuredLogs
       Monitoring__ErrorTrackingDsn: ""
       Monitoring__StructuredJsonConsole: "true"
@@ -210,6 +215,7 @@ services:
       - identity_hmac_key
       - mfa_encryption_key
       - accounts_api_key_hash
+      - accounts_mcp_api_key_hash
       - private_initial_owner_password
     environment:
       <<: *private-api-environment
@@ -252,6 +258,7 @@ services:
       - identity_hmac_key
       - mfa_encryption_key
       - accounts_api_key_hash
+      - accounts_mcp_api_key_hash
     environment:
       <<: *private-api-environment
       PrivateOwnerRecovery__ConfirmInstallationId: "${PRIVATE_OWNER_RECOVERY_INSTALLATION_ID:-}"
@@ -293,6 +300,7 @@ services:
       - identity_hmac_key
       - mfa_encryption_key
       - accounts_api_key_hash
+      - accounts_mcp_api_key_hash
       - connector_signing_key
     environment:
       <<: *private-api-environment
@@ -301,7 +309,9 @@ services:
       # MCP connector (agent sessions with per-action approval). Off unless the operator enables it.
       Connector__Enabled: "${PRIVATE_CONNECTOR_ENABLED:-false}"
       Connector__SigningKey_FILE: /run/secrets/connector_signing_key
-      Connector__PublicBaseUrl: "${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}"
+      # OAuth issuer, MCP resource and web-approvals origin: the loopback origin or, after
+      # `connector enable --origin tailscale`, the exact Tailscale Serve HTTPS origin.
+      Connector__PublicBaseUrl: "${PRIVATE_CONNECTOR_PUBLIC_ORIGIN:?set PRIVATE_CONNECTOR_PUBLIC_ORIGIN to the exact connector origin}"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -348,6 +358,8 @@ services:
       API_PROXY_TIMEOUT_MS: "${API_PROXY_TIMEOUT_MS:-15000}"
       API_PROXY_DOCUMENT_TIMEOUT_MS: "${API_PROXY_DOCUMENT_TIMEOUT_MS:-120000}"
       API_PROXY_MAX_BODY_BYTES: "${API_PROXY_MAX_BODY_BYTES:-6291456}"
+      # Remote MCP clients reach the in-stack connector service only through /mcp here.
+      MCP_URL: http://mcp:3100/mcp
       DEPLOYMENT_MODE: PrivateServer
       PRIVATE_LOCAL_ORIGIN: "${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}"
       ENABLE_HSTS: "true"
@@ -361,6 +373,47 @@ services:
       timeout: 15s
       retries: 12
       start_period: 60s
+    logging: *private-logging
+
+  mcp:
+    image: "${ACCOUNTS_MCP_IMAGE:?set ACCOUNTS_MCP_IMAGE to an immutable digest reference}"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${PRIVATE_MCP_PIDS_LIMIT:-128}"
+    mem_limit: "${PRIVATE_MCP_MEMORY_LIMIT:-384m}"
+    cpus: "${PRIVATE_MCP_CPU_LIMIT:-0.50}"
+    labels:
+      ie.filingbridge.deployment-mode: PrivateServer
+      ie.filingbridge.installation-id: "${PRIVATE_INSTALLATION_ID:?set PRIVATE_INSTALLATION_ID to the generated installation GUID}"
+      ie.filingbridge.component: mcp
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    # The connector HTTP service is reached only by the frontend's /mcp route and
+    # reaches only the API. It has no published port and never joins the ingress bridge.
+    networks:
+      - frontend_api
+    secrets:
+      - accounts_mcp_api_key
+    environment:
+      NODE_ENV: production
+      FILINGBRIDGE_API_URL: http://api:8080
+      FILINGBRIDGE_API_KEY_FILE: /run/secrets/accounts_mcp_api_key
+      FILINGBRIDGE_PUBLIC_URL: "${PRIVATE_CONNECTOR_PUBLIC_ORIGIN:?set PRIVATE_CONNECTOR_PUBLIC_ORIGIN to the exact connector origin}"
+      FILINGBRIDGE_ALLOWED_HOSTS: "mcp:3100,${PRIVATE_CONNECTOR_PUBLIC_HOST:?set PRIVATE_CONNECTOR_PUBLIC_HOST to the connector origin host}"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 30s
     logging: *private-logging
 
 volumes:
@@ -409,5 +462,9 @@ secrets:
     file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
   connector_signing_key:
     file: "${CONNECTOR_SIGNING_KEY_FILE:?set CONNECTOR_SIGNING_KEY_FILE}"
+  accounts_mcp_api_key:
+    file: "${ACCOUNTS_MCP_API_KEY_FILE:?set ACCOUNTS_MCP_API_KEY_FILE}"
+  accounts_mcp_api_key_hash:
+    file: "${ACCOUNTS_MCP_API_KEY_HASH_FILE:?set ACCOUNTS_MCP_API_KEY_HASH_FILE}"
   private_initial_owner_password:
     file: "${PRIVATE_INITIAL_OWNER_PASSWORD_FILE:?set PRIVATE_INITIAL_OWNER_PASSWORD_FILE}"
