@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -116,6 +117,43 @@ public sealed class ConnectorUsabilityTests
 
         Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
         Assert.Equal("{\"id\":99}", await ConnectorTestFixture.ReadResponseAsync(context));
+    }
+
+    [Fact]
+    public async Task AWorkspaceAuditFailure_IsReportedThroughTheSanitisingReporter_WithoutThePath()
+    {
+        await using var fixture = await ConnectorTestFixture.CreateAsync();
+        var login = (await fixture.ConnectOwnerAsync()).Response!;
+        var session = (await fixture.Connectors.AuthenticateAsync(login.AccessToken))!.Value;
+        var reporter = new RecordingErrorReporter();
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection()
+            .AddSingleton<IErrorReporter>(reporter)
+            .BuildServiceProvider();
+        var context = fixture.NewHttpContext("POST", "/api/companies/private-client-name", "{}");
+        context.RequestServices = services;
+        context.Items[AuthContext.ItemKey] = session.User;
+        context.Items[ConnectorSessionContext.ItemKey] = session.Session;
+
+        await new AuditTrailMiddleware(inner =>
+        {
+            inner.Response.StatusCode = StatusCodes.Status201Created;
+            return Task.CompletedTask;
+        }).InvokeAsync(context, fixture.Db, null, new FailingScopeFactory());
+
+        var report = Assert.Single(reporter.Reports);
+        Assert.Equal("POST", report.Method);
+        Assert.DoesNotContain("private-client-name", report.Path);
+    }
+
+    private sealed class RecordingErrorReporter : IErrorReporter
+    {
+        public List<ErrorReportContext> Reports { get; } = [];
+
+        public string CaptureUnexpectedException(Exception exception, ErrorReportContext context)
+        {
+            Reports.Add(context);
+            return "test";
+        }
     }
 
     private sealed class FailingScopeFactory : Microsoft.Extensions.DependencyInjection.IServiceScopeFactory

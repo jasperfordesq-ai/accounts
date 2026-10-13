@@ -213,10 +213,14 @@ public class AuditTrailMiddleware(RequestDelegate next)
             // The route has already committed its change and may have started its response; an
             // audit failure here must not replace that answer with an error. The connector activity
             // record written by ConnectorPostureMiddleware still attributes the change.
-            context.RequestServices?.GetService<ILoggerFactory>()?
-                .CreateLogger<AuditTrailMiddleware>()
-                .LogError(ex, "Could not write the workspace-level connector audit entry for {Method} {Path} ({StatusCode}).",
-                    context.Request.Method, context.Request.Path.Value, context.Response.StatusCode);
+            // Reported through the sanitising error reporter with the server's route template only:
+            // the exception text and the raw request path may carry client material.
+            context.RequestServices?.GetService<IErrorReporter>()?.CaptureUnexpectedException(
+                ex,
+                new ErrorReportContext(
+                    context.Request.Method,
+                    MonitoringEventSanitizer.SafeServerRoute(context.GetEndpoint()),
+                    context.TraceIdentifier));
         }
     }
 
