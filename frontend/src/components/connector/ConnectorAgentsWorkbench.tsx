@@ -48,6 +48,7 @@ function errorMessage(error: unknown, fallback: string) {
 export function ConnectorAgentsWorkbench() {
   const { user, isOwner } = useAuth();
   const [origin, setOrigin] = useState("");
+  const [remoteResource, setRemoteResource] = useState<string | null>(null);
   const [users, setUsers] = useState<UserAdministrationSummary[]>([]);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -70,7 +71,29 @@ export function ConnectorAgentsWorkbench() {
     : users.find((candidate) => candidate.userId === targetUserId)?.displayName ?? "this user";
 
   useEffect(() => {
-    queueMicrotask(() => setOrigin(window.location.origin));
+    // The connection URL must be the MCP resource the server issues tokens for (for example the
+    // Tailscale origin after `connector enable --origin tailscale`), not whatever address this page
+    // was opened on. The browser's own origin is only a fallback when discovery is unavailable.
+    let cancelled = false;
+    fetch("/.well-known/oauth-protected-resource/mcp", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((metadata: unknown) => {
+        if (cancelled) return;
+        const resource = typeof metadata === "object" && metadata !== null
+          ? (metadata as { resource?: unknown }).resource
+          : undefined;
+        if (typeof resource === "string" && /^https?:\/\/[^/]+\/mcp$/.test(resource)) {
+          setRemoteResource(resource);
+        } else {
+          setOrigin(window.location.origin);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOrigin(window.location.origin);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -170,7 +193,7 @@ export function ConnectorAgentsWorkbench() {
     }
   }
 
-  const remoteUrl = origin ? `${origin}/mcp` : "/mcp";
+  const remoteUrl = remoteResource ?? (origin ? `${origin}/mcp` : "/mcp");
 
   return (
     <PageShell

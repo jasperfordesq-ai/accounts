@@ -2181,7 +2181,8 @@ public partial class AccountsWorkflowTests
         Assert.Contains("Tags are not accepted for production", runbook);
         Assert.Contains("Pull requests and forks use local verification images without registry credentials", runbook);
         Assert.Contains("gh attestation verify", runbook);
-        Assert.Equal(2, Regex.Matches(imageExample, @"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}").Count);
+        Assert.Equal(3, Regex.Matches(imageExample, @"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}").Count);
+        Assert.Contains("ACCOUNTS_MCP_IMAGE=ghcr.io/", imageExample);
     }
 
     [Fact]

@@ -112,7 +112,7 @@ Do not run plain `docker compose -f compose.production.yml config` with producti
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD_FILE` | PostgreSQL database, migration/administration user, and Docker secret file path for that privileged password. The API must never receive this credential. |
 | `POSTGRES_APPLICATION_PASSWORD_FILE` | Independent password for the fixed `accounts_api` login. The one-shot `database-role-provision` service creates or rotates that login with `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`; the API receives this password only through its application connection string. |
 | `POSTGRES_SERVER_CERTIFICATE_FILE`, `POSTGRES_SERVER_KEY_FILE`, `POSTGRES_CA_CERTIFICATE_FILE` | Docker secret paths for the PostgreSQL server certificate (SAN must include `DNS:db`), its private key, and the issuing CA certificate. Keep the CA private key offline; it is never mounted. |
-| `ACCOUNTS_API_IMAGE`, `ACCOUNTS_FRONTEND_IMAGE` | Exact CI-promoted lowercase GHCR digest references for the backend/migration image and frontend image, in the form `ghcr.io/owner/image@sha256:<64 lowercase hex>`. Tags are not accepted for production. |
+| `ACCOUNTS_API_IMAGE`, `ACCOUNTS_FRONTEND_IMAGE`, `ACCOUNTS_MCP_IMAGE` | Exact CI-promoted lowercase GHCR digest references for the backend/migration image, the frontend image and the MCP connector image, in the form `ghcr.io/owner/image@sha256:<64 lowercase hex>`. Tags are not accepted for production. |
 | `ACCOUNTS_MIGRATION_CONNECTION_STRING_FILE` | Docker secret file containing the privileged migration connection string using `POSTGRES_USER`. It must point to `Host=db;Port=5432` and include `SSL Mode=VerifyFull;Root Certificate=/run/secrets/postgres_ca_certificate;Trust Server Certificate=false`. Mount it only on `migrate`. |
 | `ACCOUNTS_APPLICATION_CONNECTION_STRING_FILE` | Docker secret file containing the least-privileged API connection string using the fixed `accounts_api` login and the password from `POSTGRES_APPLICATION_PASSWORD_FILE`. It has the same verified-TLS requirements and is mounted only on `api`. |
 | `AUTH_SESSION_SIGNING_KEY_FILE` | Docker secret file path containing a Base64 or Base64Url secret of at least 32 bytes for signed browser sessions. |
@@ -300,7 +300,7 @@ After restore:
 
 ## Build Gate
 
-CI is the authoritative build gate for releases. Before promoting an image, confirm the backend tests and build, frontend audit, type-check, lint, readiness regression, production monitoring config gate, and Next production build have all passed. Production deployment must run the exact CI-promoted GHCR digest references and must not rebuild from the release checkout. Copy `ACCOUNTS_API_IMAGE` and `ACCOUNTS_FRONTEND_IMAGE` from the passing `container-supply-chain-report.json`; never substitute a tag. The migration job and API service intentionally use the same `ACCOUNTS_API_IMAGE` digest.
+CI is the authoritative build gate for releases. Before promoting an image, confirm the backend tests and build, frontend audit, type-check, lint, readiness regression, production monitoring config gate, and Next production build have all passed. Production deployment must run the exact CI-promoted GHCR digest references and must not rebuild from the release checkout. Copy `ACCOUNTS_API_IMAGE`, `ACCOUNTS_FRONTEND_IMAGE` and `ACCOUNTS_MCP_IMAGE` from the passing `container-supply-chain-report.json`; never substitute a tag. The migration job and API service intentionally use the same `ACCOUNTS_API_IMAGE` digest.
 
 Do not deploy production by rebuilding from the checkout with `docker compose up --build`. Rebuilding on the production host can run code that differs from the CI-promoted immutable image and makes rollback, migration/app parity, and incident reconstruction weaker.
 
@@ -510,18 +510,21 @@ Do not commit a custom `distDir` to work around local filesystem locks; the prod
 
 1. Take a pre-release backup and verify the sha256 file.
 2. Download the exact trusted-`main` `container-supply-chain` artifact. Confirm both reports have `status: passed`, `promotionMode: promoted`, `releaseEligible: true`, the expected full commit SHA/run URL, zero blockers, and matching report SHA-256. Reject verification-only evidence.
-3. Copy `images.backend.exactDigestReference` to `ACCOUNTS_API_IMAGE` and `images.frontend.exactDigestReference` to `ACCOUNTS_FRONTEND_IMAGE`. Both values must match `^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$`; tags are forbidden. The migration and API services must retain the same backend value.
+3. Copy `images.backend.exactDigestReference` to `ACCOUNTS_API_IMAGE`, `images.frontend.exactDigestReference` to `ACCOUNTS_FRONTEND_IMAGE` and `images.mcp.exactDigestReference` to `ACCOUNTS_MCP_IMAGE`. All three values must match `^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$`; tags are forbidden. The migration and API services must retain the same backend value.
 4. Verify GitHub provenance, then pull and inspect the exact promoted digests:
 
 ```powershell
 $env:GITHUB_REPOSITORY = "jasperfordesq-ai/accounts"
 gh attestation verify "oci://$env:ACCOUNTS_API_IMAGE" --repo $env:GITHUB_REPOSITORY
 gh attestation verify "oci://$env:ACCOUNTS_FRONTEND_IMAGE" --repo $env:GITHUB_REPOSITORY
+gh attestation verify "oci://$env:ACCOUNTS_MCP_IMAGE" --repo $env:GITHUB_REPOSITORY
 docker pull $env:ACCOUNTS_API_IMAGE
 docker pull $env:ACCOUNTS_FRONTEND_IMAGE
+docker pull $env:ACCOUNTS_MCP_IMAGE
 docker compose -f compose.production.yml pull
 docker image inspect $env:ACCOUNTS_API_IMAGE
 docker image inspect $env:ACCOUNTS_FRONTEND_IMAGE
+docker image inspect $env:ACCOUNTS_MCP_IMAGE
 ```
 
 5. Run `scripts\verify-container-supply-chain-report.ps1 -EvidencePath D:\accounts-smoke\container-supply-chain-report.json -CommitSha <release-commit-sha> -GitHubActionsRunUrl <ci-run-url>` and retain the passing verification report with the Trivy, SPDX and provenance files.
