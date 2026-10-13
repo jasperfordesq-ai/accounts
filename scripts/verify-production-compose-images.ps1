@@ -41,6 +41,7 @@ function ProductionComposeEnv {
         @("DEADLINE_PROVIDER_TOKEN_FILE", (New-SecretFile "deadline_provider_token" "dummy-provider-token")),
         @("DEADLINE_DELIVERY_PROVIDER_ENDPOINT", "https://deadline-provider.invalid/reminders"),
         @("ACCOUNTS_API_KEY_FILE", (New-SecretFile "accounts_api_key" $accountsApiKey)),
+        @("CONNECTOR_SIGNING_KEY_FILE", (New-SecretFile "connector_signing_key" "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF==")),
         @("ACCOUNTS_API_KEY_HASH", "0000000000000000000000000000000000000000000000000000000000000000"),
         @("ACCOUNTS_API_IMAGE", "ghcr.io/example/accounts-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"),
         @("ACCOUNTS_FRONTEND_IMAGE", "ghcr.io/example/accounts-frontend@sha256:2222222222222222222222222222222222222222222222222222222222222222"),
@@ -279,7 +280,12 @@ try {
     Assert-ServiceSecretsInclude $services.db "db" @("postgres_password", "postgres_server_certificate", "postgres_server_key", "postgres_ca_certificate")
     Assert-ServiceSecretsInclude $services.'database-role-provision' "database-role-provision" @("postgres_password", "postgres_application_password", "postgres_ca_certificate")
     Assert-ServiceSecretsInclude $services.migrate "migrate" @("accounts_migration_connection_string", "postgres_ca_certificate", "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "deadline_provider_token")
-    Assert-ServiceSecretsInclude $services.api "api" @("accounts_application_connection_string", "postgres_ca_certificate", "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "deadline_provider_token")
+    Assert-ServiceSecretsInclude $services.api "api" @("accounts_application_connection_string", "postgres_ca_certificate", "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "deadline_provider_token", "connector_signing_key")
+    foreach ($serviceName in @("migrate", "frontend")) {
+        if (@(Service-SecretNames $services.$serviceName) -contains "connector_signing_key") {
+            throw "$serviceName must not receive the connector signing key; only the api signs agent credentials."
+        }
+    }
     if (@(Service-SecretNames $services.migrate) -contains "accounts_application_connection_string") {
         throw "migrate must not receive the least-privileged application connection secret."
     }
@@ -382,6 +388,7 @@ try {
             "MFA_ENCRYPTION_ACTIVE_KEY_ID",
             "DEADLINE_PROVIDER_TOKEN_FILE",
             "DEADLINE_DELIVERY_PROVIDER_ENDPOINT",
+            "CONNECTOR_SIGNING_KEY_FILE",
             "Username=accounts_api",
             "subjectAltName=DNS:db",
             "SSL Mode=VerifyFull",

@@ -71,6 +71,23 @@ The frontend `/health/ready` check validates this key against the protected API 
 
 Backend auth endpoints are proxy-only in production. Do not expose `/api/auth/login` directly without the frontend service key; users should sign in through the HTTPS frontend so the Next.js API proxy reads the key from `ACCOUNTS_API_KEY_FILE`, attaches it to upstream API requests, preserves the browser session and CSRF cookies, and strips any client-supplied API-key headers before forwarding to the private API container.
 
+## MCP Connector (agent access)
+
+The MCP connector lets an Owner, Accountant, Reviewer or Client connect an AI agent (Claude Code,
+Codex, Claude Desktop) that acts as them. Architecture and guarantees:
+`Docs/architecture/mcp-connector.md`. It is off by default.
+
+- Generate a dedicated signing key (same generator as other keys, at least 32 random bytes,
+  standard Base64) and point `CONNECTOR_SIGNING_KEY_FILE` at it. Only the `api` service mounts it.
+  It must differ from the session signing key and the identity HMAC key; startup refuses otherwise.
+- Set `CONNECTOR_ENABLED=true` to turn the feature on. `Connector:PublicBaseUrl` follows
+  `ACCOUNTS_ALLOWED_ORIGIN` and builds the web approvals link in approval prompts.
+- Rotating `CONNECTOR_SIGNING_KEY_FILE` signs every agent out at once: it signs the access tokens
+  and keys the refresh-token hashes. That is the
+  emergency "disconnect all agents" lever.
+- Agents reach the API only through the HTTPS frontend, exactly like browsers. Every irreversible
+  action still needs the human to approve it with password + authenticator code.
+
 ## Required Production Environment
 
 Set every required variable before running `docker compose -f compose.production.yml config --quiet`, the migration job, or the production stack. CI sample values are not production secrets.

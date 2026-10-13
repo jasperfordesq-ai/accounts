@@ -15,6 +15,13 @@ public class UserSessionMiddleware(RequestDelegate next)
             return;
         }
 
+        var hasBearer = ConnectorClientGuard.HasBearer(context.Request, out var bearer);
+        if (hasBearer || IsAnonymousConnectorEndpoint(context))
+        {
+            await AuthenticateConnectorAsync(context, hasBearer, bearer);
+            return;
+        }
+
         if (IsLogoutEndpoint(context))
         {
             var optionalAuth = context.RequestServices.GetService<AuthService>();
@@ -60,6 +67,58 @@ public class UserSessionMiddleware(RequestDelegate next)
             auth.CreateCookieOptions(now));
         await next(context);
     }
+
+    private async Task AuthenticateConnectorAsync(HttpContext context, bool hasBearer, string? bearer)
+    {
+        var connectors = context.RequestServices.GetService<ConnectorSessionService>();
+        if (connectors is null || !connectors.IsAvailable)
+        {
+            await ConnectorClientGuard.WriteRefusalAsync(context, StatusCodes.Status401Unauthorized,
+                ConnectorErrorCodes.SessionInvalid, "Authentication required.");
+            return;
+        }
+
+        var auth = context.RequestServices.GetRequiredService<AuthService>();
+        var refusal = ConnectorClientGuard.Evaluate(context.Request, auth.CookieName, auth.CsrfCookieName);
+        if (refusal is not null)
+        {
+            await ConnectorClientGuard.WriteRefusalAsync(context, StatusCodes.Status403Forbidden, refusal,
+                "Connector requests must come from the FilingBridge MCP connector, not a browser.");
+            return;
+        }
+
+        if (!hasBearer)
+        {
+            // Connector sign-in, refresh and bearer-less logout carry their own credential in the body.
+            if (IsAnonymousConnectorEndpoint(context))
+            {
+                await next(context);
+                return;
+            }
+
+            await ConnectorClientGuard.WriteRefusalAsync(context, StatusCodes.Status401Unauthorized,
+                ConnectorErrorCodes.SessionInvalid, "Authentication required.");
+            return;
+        }
+
+        var authenticated = await connectors.AuthenticateAsync(bearer, context.RequestAborted);
+        if (authenticated is null)
+        {
+            await ConnectorClientGuard.WriteRefusalAsync(context, StatusCodes.Status401Unauthorized,
+                ConnectorErrorCodes.SessionInvalid, "Authentication required.");
+            return;
+        }
+
+        context.Items[AuthContext.ItemKey] = authenticated.Value.User;
+        context.Items[ConnectorSessionContext.ItemKey] = authenticated.Value.Session;
+        await next(context);
+    }
+
+    private static bool IsAnonymousConnectorEndpoint(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method)
+        && (context.Request.Path.Equals("/api/auth/connector/login", StringComparison.OrdinalIgnoreCase)
+            || context.Request.Path.Equals("/api/auth/connector/refresh", StringComparison.OrdinalIgnoreCase)
+            || context.Request.Path.Equals("/api/auth/connector/logout", StringComparison.OrdinalIgnoreCase));
 
     private static bool ApplyVerifiedTenantScope(
         HttpContext context,

@@ -11,6 +11,8 @@ machine-readable dependency inventory:
   and [`frontend/package-lock.json`](frontend/package-lock.json)
 - Backend NuGet dependencies: [`backend/Accounts.Api/Accounts.Api.csproj`](backend/Accounts.Api/Accounts.Api.csproj)
   and [`backend/Accounts.Tests/Accounts.Tests.csproj`](backend/Accounts.Tests/Accounts.Tests.csproj)
+- MCP connector npm dependencies: [`mcp/package.json`](mcp/package.json)
+  and [`mcp/package-lock.json`](mcp/package-lock.json)
 
 ## Major Runtime Components
 
@@ -32,12 +34,14 @@ machine-readable dependency inventory:
 | Lucide React | Icon set |
 | Zod | Runtime schema validation |
 | Sonner | Toast notifications |
+| Model Context Protocol TypeScript SDK (`@modelcontextprotocol/sdk`) | MCP connector server and transports |
+| `@napi-rs/keyring` | MCP connector credential storage in the operating-system keychain |
 
 ## Development And Test Components
 
 The repository also uses testing, linting, browser automation, and build tools
 including xUnit, Microsoft.NET.Test.Sdk, PdfPig, ESLint, TypeScript, Vitest,
-Testing Library, jsdom, and Playwright.
+Testing Library, jsdom, Playwright, and openapi-typescript.
 
 ## Notice Preservation
 

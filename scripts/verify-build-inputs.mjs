@@ -59,6 +59,23 @@ export function evaluateBuildInputs(inputs) {
     failures.push("package-lock.json npm engine does not match package.json.");
   }
 
+  for (const [name, extra] of Object.entries(inputs.additionalPackages ?? {})) {
+    if (extra.packageJson.engines?.node !== expectedNodeEngine) {
+      failures.push(`${name}/package.json Node engine must be ${expectedNodeEngine}.`);
+    }
+    if (extra.packageJson.engines?.npm !== expectedNpmEngine) {
+      failures.push(`${name}/package.json npm engine must be ${expectedNpmEngine}.`);
+    }
+    if (extra.packageLock.lockfileVersion !== 3) {
+      failures.push(`${name}/package-lock.json must use lockfileVersion 3.`);
+    }
+    const loose = Object.entries({ ...extra.packageJson.dependencies, ...extra.packageJson.devDependencies })
+      .filter(([, version]) => !/^\d+\.\d+\.\d+$/.test(version));
+    if (loose.length > 0) {
+      failures.push(`${name}/package.json dependencies must be exact versions: ${loose.map(([dep]) => dep).join(", ")}.`);
+    }
+  }
+
   if (!/<RestorePackagesWithLockFile>true<\/RestorePackagesWithLockFile>/.test(directoryBuildProps)) {
     failures.push("Directory.Build.props must enable NuGet lock files.");
   }
@@ -149,6 +166,9 @@ export function collectRepoInputs(repoRoot) {
     globalJson: readJson("global.json"),
     packageJson: readJson("frontend/package.json"),
     packageLock: readJson("frontend/package-lock.json"),
+    additionalPackages: {
+      mcp: { packageJson: readJson("mcp/package.json"), packageLock: readJson("mcp/package-lock.json") },
+    },
     directoryBuildProps: read("backend/Directory.Build.props"),
     dockerfiles: {
       backend: read("Dockerfile.backend"),

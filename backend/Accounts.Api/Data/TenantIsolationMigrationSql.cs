@@ -97,6 +97,14 @@ public static class TenantIsolationMigrationSql
         new("historic_anchor_evidence_records", TenantOwnershipPath.Period)
     ];
 
+    // Installed by migration AddMcpConnectorSessions.
+    public static IReadOnlyList<TenantIsolationPolicyDefinition> ConnectorPolicyInventory { get; } =
+    [
+        new("connector_sessions", TenantOwnershipPath.DirectTenantId),
+        new("connector_action_approvals", TenantOwnershipPath.DirectTenantId),
+        new("connector_activity_events", TenantOwnershipPath.DirectTenantId)
+    ];
+
     /// <summary>
     /// Installs forced row-level security for tables added after the Version 1 install. Unlike
     /// <see cref="BuildInstallSql"/> it does not recreate roles, the context-key table or functions.

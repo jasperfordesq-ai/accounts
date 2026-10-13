@@ -221,10 +221,15 @@ services:
       - identity_hmac_key
       - mfa_encryption_key
       - deadline_provider_token
+      - connector_signing_key
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Deployment__Mode: PublicProduction
       ASPNETCORE_URLS: http://+:8080
+      # MCP connector (agent sessions with per-action approval). Off unless the operator enables it.
+      Connector__Enabled: "${CONNECTOR_ENABLED:-false}"
+      Connector__SigningKey_FILE: /run/secrets/connector_signing_key
+      Connector__PublicBaseUrl: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
       FilingRelease__Candidate: "${ACCOUNTS_API_IMAGE:?set ACCOUNTS_API_IMAGE}"
       ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_application_connection_string
       DatabaseTenantIsolation__Required: "true"
@@ -371,6 +376,8 @@ secrets:
     file: "${MFA_ENCRYPTION_KEY_FILE:?set MFA_ENCRYPTION_KEY_FILE}"
   deadline_provider_token:
     file: "${DEADLINE_PROVIDER_TOKEN_FILE:?set DEADLINE_PROVIDER_TOKEN_FILE}"
+  connector_signing_key:
+    file: "${CONNECTOR_SIGNING_KEY_FILE:?set CONNECTOR_SIGNING_KEY_FILE}"
   accounts_api_key:
     file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
   bootstrap_owner_password:

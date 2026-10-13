@@ -55,6 +55,7 @@ function PrivateComposeEnv {
         @("MFA_ENCRYPTION_KEY_FILE", (New-SecretFile "mfa_encryption_key" "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE=")),
         @("ACCOUNTS_API_KEY_HASH_FILE", (New-SecretFile "accounts_api_key_hash" ("0" * 64))),
         @("ACCOUNTS_API_KEY_FILE", (New-SecretFile "accounts_api_key" $apiKey)),
+        @("CONNECTOR_SIGNING_KEY_FILE", (New-SecretFile "connector_signing_key" ("F" * 96))),
         @("PRIVATE_INITIAL_OWNER_PASSWORD_FILE", (New-SecretFile "private_initial_owner_password" "PrivateVerifierOwner1!ChangeMe"))
     )
 }
@@ -425,7 +426,14 @@ try {
     Assert-ServiceSecretsInclude $services.migrate "migrate" @("accounts_migration_connection_string")
     Assert-ServiceSecretsInclude $services.'private-initialize' "private-initialize" @("accounts_migration_connection_string", "private_initial_owner_password")
     Assert-ServiceSecretsInclude $services.'private-owner-recovery' "private-owner-recovery" @("accounts_migration_connection_string")
-    Assert-ServiceSecretsInclude $services.api "api" @("accounts_application_connection_string")
+    Assert-ServiceSecretsInclude $services.api "api" @("accounts_application_connection_string", "connector_signing_key")
+    Assert-ServiceEnvironmentValue $services.api "api" "Connector__SigningKey_FILE" "/run/secrets/connector_signing_key"
+    Assert-ServiceEnvironmentValue $services.api "api" "Connector__Enabled" "false"
+    foreach ($serviceName in @("migrate", "private-initialize", "private-owner-recovery", "frontend")) {
+        if (@(Service-SecretNames $services.$serviceName) -contains "connector_signing_key") {
+            throw "$serviceName must not receive the connector signing key; only the api signs agent credentials."
+        }
+    }
     Assert-ServiceSecretsInclude $services.frontend "frontend" @("accounts_api_key")
     foreach ($serviceName in @("migrate", "private-owner-recovery", "api", "frontend")) {
         if (@(Service-SecretNames $services.$serviceName) -contains "private_initial_owner_password") {

@@ -9,6 +9,11 @@ const passThroughHeaders = [
   "expires",
   "last-modified",
   "pragma",
+  // Needed by the MCP connector: write-budget back-off, idempotent replay evidence, request tracing.
+  "retry-after",
+  "idempotency-replayed",
+  "idempotency-record-id",
+  "x-correlation-id",
 ];
 
 type ProxyResponseOptions = {

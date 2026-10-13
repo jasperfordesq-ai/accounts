@@ -84,6 +84,9 @@ public class AccountsDbContext : DbContext
     public DbSet<UserMfaRecoveryCode> UserMfaRecoveryCodes => Set<UserMfaRecoveryCode>();
     public DbSet<UserMfaChallenge> UserMfaChallenges => Set<UserMfaChallenge>();
     public DbSet<UserLifecycleEvent> UserLifecycleEvents => Set<UserLifecycleEvent>();
+    public DbSet<ConnectorSession> ConnectorSessions => Set<ConnectorSession>();
+    public DbSet<ConnectorActionApproval> ConnectorActionApprovals => Set<ConnectorActionApproval>();
+    public DbSet<ConnectorActivityEvent> ConnectorActivityEvents => Set<ConnectorActivityEvent>();
 
     // Company & Officers
     public DbSet<Company> Companies => Set<Company>();
@@ -281,6 +284,64 @@ public class AccountsDbContext : DbContext
             e.HasOne(challenge => challenge.User).WithMany(user => user.MfaChallenges).HasForeignKey(challenge => challenge.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(challenge => challenge.TokenHash).IsUnique();
             e.HasIndex(challenge => new { challenge.TenantId, challenge.UserId, challenge.ExpiresAtUtc });
+        });
+
+        modelBuilder.Entity<ConnectorSession>(e =>
+        {
+            e.ToTable("connector_sessions", table =>
+            {
+                table.HasCheckConstraint("CK_connector_sessions_client_kind", "\"ClientKind\" IN ('McpConnector')");
+                table.HasCheckConstraint("CK_connector_sessions_access_level", "\"AccessLevel\" IN ('Read', 'Write', 'Admin')");
+                table.HasCheckConstraint("CK_connector_sessions_data_scope", "\"DataScope\" IN ('Withheld', 'Full')");
+            });
+            e.HasKey(session => session.Id);
+            e.HasQueryFilter(session => CurrentTenantId == null || session.TenantId == CurrentTenantId);
+            e.Property(session => session.ClientKind).HasMaxLength(40).IsRequired();
+            e.Property(session => session.AccessLevel).HasMaxLength(10).IsRequired();
+            e.Property(session => session.DataScope).HasMaxLength(10).IsRequired();
+            e.Property(session => session.RefreshTokenHash).HasMaxLength(64).IsRequired();
+            e.Property(session => session.MfaMethod).HasMaxLength(20);
+            e.Property(session => session.DeviceLabel).HasMaxLength(120);
+            e.Property(session => session.ClientVersion).HasMaxLength(40);
+            e.Property(session => session.RevocationReason).HasMaxLength(40);
+            e.HasOne(session => session.User).WithMany().HasForeignKey(session => session.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(session => session.RefreshTokenHash).IsUnique();
+            e.HasIndex(session => new { session.TenantId, session.UserId, session.RevokedAtUtc, session.ExpiresAtUtc });
+            e.HasIndex(session => new { session.TenantId, session.FamilyId });
+        });
+
+        modelBuilder.Entity<ConnectorActionApproval>(e =>
+        {
+            e.ToTable("connector_action_approvals");
+            e.HasKey(approval => approval.Id);
+            e.HasQueryFilter(approval => CurrentTenantId == null || approval.TenantId == CurrentTenantId);
+            e.Property(approval => approval.RequestDigest).HasMaxLength(64).IsRequired();
+            e.Property(approval => approval.Summary).HasMaxLength(500).IsRequired();
+            e.Property(approval => approval.Method).HasMaxLength(10).IsRequired();
+            e.Property(approval => approval.RoutePattern).HasMaxLength(300).IsRequired();
+            e.Property(approval => approval.ResourceId).HasMaxLength(200);
+            e.HasOne(approval => approval.User).WithMany().HasForeignKey(approval => approval.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(approval => new { approval.SessionFamilyId, approval.RequestDigest })
+                .IsUnique()
+                .HasFilter("\"ConsumedAtUtc\" IS NULL");
+            e.HasIndex(approval => new { approval.TenantId, approval.UserId, approval.ExpiresAtUtc });
+        });
+
+        modelBuilder.Entity<ConnectorActivityEvent>(e =>
+        {
+            e.ToTable("connector_activity_events");
+            e.HasKey(activity => activity.Id);
+            e.HasQueryFilter(activity => CurrentTenantId == null || activity.TenantId == CurrentTenantId);
+            e.Property(activity => activity.AccessLevel).HasMaxLength(10).IsRequired();
+            e.Property(activity => activity.DataScope).HasMaxLength(10).IsRequired();
+            e.Property(activity => activity.Method).HasMaxLength(10).IsRequired();
+            e.Property(activity => activity.RoutePattern).HasMaxLength(300).IsRequired();
+            e.Property(activity => activity.ResourceId).HasMaxLength(200);
+            e.Property(activity => activity.RequestId).HasMaxLength(128);
+            e.Property(activity => activity.Reason).HasMaxLength(500);
+            e.HasOne(activity => activity.User).WithMany().HasForeignKey(activity => activity.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(activity => new { activity.TenantId, activity.UserId, activity.OccurredAtUtc });
+            e.HasIndex(activity => new { activity.TenantId, activity.SessionFamilyId, activity.OccurredAtUtc });
         });
 
         modelBuilder.Entity<UserLifecycleEvent>(e =>

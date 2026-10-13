@@ -293,10 +293,15 @@ services:
       - identity_hmac_key
       - mfa_encryption_key
       - accounts_api_key_hash
+      - connector_signing_key
     environment:
       <<: *private-api-environment
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection_FILE: /run/secrets/accounts_application_connection_string
+      # MCP connector (agent sessions with per-action approval). Off unless the operator enables it.
+      Connector__Enabled: "${PRIVATE_CONNECTOR_ENABLED:-false}"
+      Connector__SigningKey_FILE: /run/secrets/connector_signing_key
+      Connector__PublicBaseUrl: "${PRIVATE_LOCAL_ORIGIN:?set PRIVATE_LOCAL_ORIGIN to the exact loopback HTTP origin}"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -402,5 +407,7 @@ secrets:
     file: "${ACCOUNTS_API_KEY_HASH_FILE:?set ACCOUNTS_API_KEY_HASH_FILE}"
   accounts_api_key:
     file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
+  connector_signing_key:
+    file: "${CONNECTOR_SIGNING_KEY_FILE:?set CONNECTOR_SIGNING_KEY_FILE}"
   private_initial_owner_password:
     file: "${PRIVATE_INITIAL_OWNER_PASSWORD_FILE:?set PRIVATE_INITIAL_OWNER_PASSWORD_FILE}"

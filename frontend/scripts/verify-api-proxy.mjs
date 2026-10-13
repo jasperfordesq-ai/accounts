@@ -179,6 +179,31 @@ const strictTransportSecurity = "max-age=31536000; includeSubDomains; preload";
 }
 
 {
+  // MCP connector headers: back-off, idempotent replay evidence and tracing reach the client;
+  // Authorization never comes back.
+  const upstream = new Response(JSON.stringify({ code: "CONNECTOR_WRITE_LIMIT" }), {
+    status: 429,
+    headers: {
+      "Content-Type": "application/json",
+      "Retry-After": "12",
+      "Idempotency-Replayed": "true",
+      "Idempotency-Record-Id": "42",
+      "X-Correlation-ID": "mcp:abc",
+      Authorization: "Bearer fbc1.secret",
+    },
+  });
+
+  const response = proxyResponseForUpstream(upstream);
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("Retry-After"), "12");
+  assert.equal(response.headers.get("Idempotency-Replayed"), "true");
+  assert.equal(response.headers.get("Idempotency-Record-Id"), "42");
+  assert.equal(response.headers.get("X-Correlation-ID"), "mcp:abc");
+  assert.equal(response.headers.get("Authorization"), null);
+}
+
+{
   const upstream = new Response("Redirecting to http://api:8080/internal", {
     status: 302,
     headers: {

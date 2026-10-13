@@ -123,6 +123,20 @@ and never paste them into a support bundle or public issue. The support bundle
 applies best-effort redaction only: review every file manually and share it only
 through an approved private channel.
 
+## AI agent connector
+
+The optional MCP connector (`mcp/`, `Docs/architecture/mcp-connector.md`) lets a signed-in person
+connect an AI agent that acts as them. It never widens their access: the agent gets that person's
+tenant, role and company assignments, narrowed further by the access level (`Read`, `Write`,
+`Admin`) and personal-data scope (`Withheld`, or `Full` for Owners only) chosen when connecting.
+Agent credentials are bearer tokens that the API accepts only from a non-browser client; requests
+carrying browser navigation headers or the browser session cookies are refused. Every irreversible
+or approval-capable action needs a fresh, single-use approval granted by the person with their
+password and authenticator code; nothing elevates an agent for a period of time. Treat the
+connector's stored refresh token like a password: it lives in the operating-system keychain, is
+bound to one FilingBridge origin and rotates on every use. Report connector weaknesses through the
+private reporting channel described above, like any other vulnerability.
+
 ## Protected state and recovery keys
 
 The launcher keeps durable private state outside the release directory. On

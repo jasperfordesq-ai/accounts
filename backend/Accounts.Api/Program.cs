@@ -102,6 +102,10 @@ builder.Services.Configure<DatabaseStartupConfig>(builder.Configuration.GetSecti
 builder.Services.Configure<ApiAccessConfig>(builder.Configuration.GetSection("ApiAccess"));
 builder.Services.Configure<AuthSessionConfig>(builder.Configuration.GetSection("AuthSession"));
 builder.Services.Configure<IdentitySecurityConfig>(builder.Configuration.GetSection("IdentitySecurity"));
+builder.Services.AddOptions<ConnectorConfig>()
+    .Bind(builder.Configuration.GetSection("Connector"))
+    .Validate(ConnectorConfig.IsValid, "Connector configuration is invalid.")
+    .ValidateOnStart();
 builder.Services.Configure<BootstrapOwnerConfig>(builder.Configuration.GetSection("BootstrapOwner"));
 builder.Services.AddSingleton(fileBackedConfigurationProvenance);
 builder.Services.Configure<DeploymentConfig>(builder.Configuration.GetSection("Deployment"));
@@ -153,6 +157,24 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
+    foreach (var (policy, permits) in new[]
+             {
+                 (ConnectorAuthEndpoints.LoginRateLimitPolicy, 5),
+                 (ConnectorAuthEndpoints.RefreshRateLimitPolicy, 20),
+                 (ConnectorAuthEndpoints.ApproveRateLimitPolicy, 5)
+             })
+    {
+        options.AddPolicy(policy, context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                RateLimitClientKey.FromHttpContext(context, trustForwardedFor),
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = permits,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                }));
+    }
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         RateLimitPartition.GetFixedWindowLimiter(
             RateLimitClientKey.FromHttpContext(context, trustForwardedFor),
@@ -223,6 +245,10 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<MfaSecurityService>();
 builder.Services.AddScoped<IdentityAccessService>();
 builder.Services.AddScoped<UserLifecycleService>();
+builder.Services.AddScoped<ConnectorSessionService>();
+builder.Services.AddScoped<ConnectorActionSummaryService>();
+builder.Services.AddScoped<SearchService>();
+builder.Services.AddSingleton<ConnectorWriteBudget>();
 builder.Services.AddScoped<BootstrapOwnerService>();
 builder.Services.AddScoped<PrivateInitializationService>();
 builder.Services.AddScoped<PrivateOwnerRecoveryService>();
@@ -334,9 +360,11 @@ app.UseCors();
 app.UseMiddleware<Accounts.Api.Middleware.ApiAccessMiddleware>();
 app.UseRateLimiter();
 app.UseMiddleware<Accounts.Api.Middleware.UserSessionMiddleware>();
+app.UseMiddleware<Accounts.Api.Middleware.ConnectorPostureMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.CsrfProtectionMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.TenantAccessMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.AuditTrailMiddleware>();
+app.UseMiddleware<Accounts.Api.Middleware.ConnectorActionApprovalMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.RecentAuthenticationMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.RoleAuthorizationMiddleware>();
 app.UseMiddleware<Accounts.Api.Middleware.PeriodOwnershipMiddleware>();

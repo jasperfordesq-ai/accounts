@@ -29,6 +29,7 @@ $script:ContainerMountedSecrets = @(
     "mfa_encryption_key",
     "accounts_api_key_hash",
     "accounts_api_key",
+    "connector_signing_key",
     "private_initial_owner_password"
 )
 $script:MaximumCompleteBackupArchiveBytes = 1900MB
@@ -567,9 +568,21 @@ function ConvertTo-FbDockerPath {
     return ([IO.Path]::GetFullPath($Path)).Replace('\', '/')
 }
 
+function Initialize-FbConnectorSigningKey {
+    param([Parameter(Mandatory = $true)][string]$SecretDirectory)
+    # Added after preview.9: installations created earlier receive the key on their next
+    # environment write (update/setup). It is not recovery-critical; losing it only signs
+    # connected agents out.
+    $path = Join-Path $SecretDirectory "connector_signing_key"
+    if (Test-Path -LiteralPath $path -PathType Leaf) { return }
+    Write-FbTextExclusive -Path $path -Value (New-PrivateServerRandomSecret)
+    Set-FbSecretAcl -Path $path
+}
+
 function Write-FbEnvironmentFile {
     param($State)
     $secretDirectory = [string]$State.secretDirectory
+    Initialize-FbConnectorSigningKey $secretDirectory
     $localOrigin = "http://localhost:$($State.port)"
     $serverOrigin = [string](Get-FbProperty $State "publicOrigin" $localOrigin)
     if ([string]::IsNullOrWhiteSpace($serverOrigin)) { $serverOrigin = $localOrigin }
@@ -606,6 +619,8 @@ function Write-FbEnvironmentFile {
         MFA_ENCRYPTION_KEY_FILE                       = ConvertTo-FbDockerPath (Join-Path $secretDirectory "mfa_encryption_key")
         ACCOUNTS_API_KEY_HASH_FILE                    = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_api_key_hash")
         ACCOUNTS_API_KEY_FILE                         = ConvertTo-FbDockerPath (Join-Path $secretDirectory "accounts_api_key")
+        CONNECTOR_SIGNING_KEY_FILE                    = ConvertTo-FbDockerPath (Join-Path $secretDirectory "connector_signing_key")
+        PRIVATE_CONNECTOR_ENABLED                     = if ([bool](Get-FbProperty $State "connectorEnabled" $false)) { "true" } else { "false" }
         PRIVATE_INITIAL_OWNER_PASSWORD_FILE           = ConvertTo-FbDockerPath (Join-Path $secretDirectory "private_initial_owner_password")
     }
     $lines = New-Object System.Collections.Generic.List[string]
@@ -987,6 +1002,7 @@ function New-FbInitialSecrets {
         backup_authentication_key                = New-PrivateServerRandomSecret
         accounts_api_key_hash                    = Get-FbSha256Text $apiKey
         accounts_api_key                         = $apiKey
+        connector_signing_key                    = New-PrivateServerRandomSecret
         private_initial_owner_password            = $OwnerPassword
     }
     foreach ($entry in $secrets.GetEnumerator()) {
@@ -2595,6 +2611,9 @@ function New-FbMergedSecretDirectory {
     # including sessions captured at the backup point. Other recovery-critical keys
     # retain audit/MFA/identity continuity; only the session-signing key is rotated.
     [IO.File]::WriteAllText((Join-Path $temporary "auth_session_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
+    # Restored connector rows may include agent sessions revoked after the backup point; a new
+    # connector key invalidates every outstanding agent access token so they must reconnect.
+    [IO.File]::WriteAllText((Join-Path $temporary "connector_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
     foreach ($file in @(Get-ChildItem -LiteralPath $temporary -File -Force)) { Set-FbSecretAcl $file.FullName }
     return $temporary
 }
@@ -3323,6 +3342,8 @@ function Invoke-FbRecoverHost {
         Set-FbSecretAcl (Join-Path $secretDirectory "private_initial_owner_password")
         [IO.File]::WriteAllText((Join-Path $secretDirectory "auth_session_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
         Set-FbSecretAcl (Join-Path $secretDirectory "auth_session_signing_key")
+        [IO.File]::WriteAllText((Join-Path $secretDirectory "connector_signing_key"), (New-PrivateServerRandomSecret), $script:Utf8NoBom)
+        Set-FbSecretAcl (Join-Path $secretDirectory "connector_signing_key")
         $installedComposeFile = Join-Path $resolvedStateDirectory "compose.private.installed.yml"
         Write-FbTextAtomic -Path $installedComposeFile -Value (Read-FbUtf8Text $composeFile)
         Set-FbRestrictedAcl $installedComposeFile
@@ -3444,7 +3465,7 @@ function Invoke-FbDiagnose {
     foreach ($secretName in @(
         "postgres_password", "postgres_application_password", "accounts_migration_connection_string",
         "accounts_application_connection_string", "auth_session_signing_key", "audit_integrity_signing_key",
-        "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "backup_authentication_key", "accounts_api_key_hash", "accounts_api_key")) {
+        "database_tenant_context_key", "identity_hmac_key", "mfa_encryption_key", "backup_authentication_key", "accounts_api_key_hash", "accounts_api_key", "connector_signing_key")) {
         $path = Join-Path ([string]$State.secretDirectory) $secretName
         $checks.Add([pscustomobject]@{ name = "secret:$secretName"; passed = (Test-Path -LiteralPath $path -PathType Leaf); detail = if (Test-Path -LiteralPath $path) { "present" } else { "missing" } })
     }

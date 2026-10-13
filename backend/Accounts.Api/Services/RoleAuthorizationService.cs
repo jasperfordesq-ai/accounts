@@ -13,7 +13,8 @@ public static class RoleAuthorizationService
 
         if (IsAuthenticatedLogout(path, method)
             || IsAuthenticatedPasswordChange(path, method)
-            || IsAuthenticatedSecurityRequest(path, method))
+            || IsAuthenticatedSecurityRequest(path, method)
+            || path.StartsWithSegments("/api/auth/connector", StringComparison.OrdinalIgnoreCase))
             return RoleAuthorizationDecision.Allowed();
 
         if (IsClientMonitoringEvent(path, method))
