@@ -17,7 +17,9 @@ FilingBridge's backend (commit da1df56 and the in-flight PrivilegedRouteCatalog 
   builds one MCP `Server` around any token source, ready for phase 2's per-request HTTP mode.
 - **Client** (`client.ts`, `etag-cache.ts`): `X-FilingBridge-Client: mcp-connector/0.1.0` on every
   request; no Origin, Referer or cookie ever; `X-Correlation-ID` per call; `Idempotency-Key` on every POST
-  (reused on the one retry after a dropped connection); `X-FilingBridge-Reason`; `X-FilingBridge-Approval`;
+  and on the PUTs that require one; a change that meets a dropped connection is repeated (with the same key)
+  only on the routes `idempotency.ts` lists as replaying it, which a test parses from the endpoint source;
+  anywhere else it is `OUTCOME_UNKNOWN` with `action: reread`; `X-FilingBridge-Reason`; `X-FilingBridge-Approval`;
   period `ETag` remembered and sent as `If-Match`, dropped on 409/412 with `action: reread`; one renewal
   on 401; 428 → `ApprovalRequiredError`; every refusal coded with `{code, retryable, action}`.
 - **Catalogue** (`tools-*.ts`, `bodies.ts`, `enums.ts`): 233 route tools + 3 core tools. Body field lists

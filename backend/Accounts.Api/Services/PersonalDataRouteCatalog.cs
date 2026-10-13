@@ -23,7 +23,8 @@ public static partial class PersonalDataRouteCatalog
     {
         if (path.StartsWithSegments("/api/admin/users", StringComparison.OrdinalIgnoreCase)) return true;
         if (path.StartsWithSegments("/api/privacy", StringComparison.OrdinalIgnoreCase)) return true;
-        return HttpMethods.IsGet(method) && IsBinaryArtefact(path);
+        // Generation routes (POST cro-filing-pack / signature-page) also return the artefact bytes.
+        return IsBinaryArtefact(path);
     }
 
     /// <summary>Reads whose response carries personal data even after field filtering is possible.</summary>

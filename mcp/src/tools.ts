@@ -6,6 +6,7 @@ import { ConnectorError } from './errors.js';
 import { FileAccessError, readInsideRoot, writeDownload, CSV_EXTENSIONS, CSV_MAX_BYTES } from './files.js';
 import type { ToolGroup } from './toolsets.js';
 import type { AccessLevel } from './config.js';
+import { honoursIdempotencyKey } from './idempotency.js';
 
 export type BinaryKind = 'pdf' | 'xhtml' | 'csv' | 'zip' | 'json' | 'bin';
 
@@ -133,7 +134,21 @@ export function toolInputSchema(tool: ToolDefinition): Record<string, unknown> {
     ...fromParams.properties,
     ...(fromBody['properties'] as Record<string, unknown>),
   };
-  const required = [...fromParams.required, ...((fromBody['required'] as string[] | undefined) ?? [])];
+  const bodyRequired = (fromBody['required'] as string[] | undefined) ?? [];
+  // A route that also accepts no body at all takes either nothing or a
+  // complete body. A schema cannot say "all or none" in a way every client
+  // honours, so none is required here, each such field says so, and runTool
+  // refuses a partial body.
+  const required = [...fromParams.required, ...(tool.optionalBody ? [] : bodyRequired)];
+  if (tool.optionalBody) {
+    for (const name of bodyRequired) {
+      const property = properties[name] as Record<string, unknown>;
+      properties[name] = {
+        ...property,
+        description: `${String(property['description'] ?? '').trim()} ${optionalBodyNote(bodyRequired)}`.trim(),
+      };
+    }
+  }
 
   if (tool.upload === 'csv') {
     properties['file'] = UPLOAD_FILE_SCHEMA;
@@ -166,6 +181,13 @@ export function toolInputSchema(tool: ToolDefinition): Record<string, unknown> {
   const schema: Record<string, unknown> = { type: 'object', properties, additionalProperties: false };
   if (required.length > 0) schema['required'] = [...new Set(required)];
   return schema;
+}
+
+/** What an all-or-nothing body field tells the caller. */
+export function optionalBodyNote(required: readonly string[]): string {
+  return required.length > 1
+    ? `Give all of ${required.join(', ')}, or none of them to use what is already saved.`
+    : `Give it, or leave it out to use what is already saved.`;
 }
 
 /** Body fields the gate withholds, wherever they sit in the body. */
@@ -248,6 +270,8 @@ export async function runTool(
 ): Promise<unknown> {
   const { urlArgs, bodyArgs, reason, approvalId, file } = partition(tool, args);
   const request = buildRequest(tool.path, allParams(tool), urlArgs);
+  // Only a route that replays a repeated Idempotency-Key may be asked twice.
+  const replaySafe = tool.method !== undefined && honoursIdempotencyKey(tool.method, tool.path);
 
   if (tool.binary) {
     if (Object.keys(bodyArgs).length > 0) {
@@ -261,7 +285,7 @@ export async function runTool(
     }
     const downloaded = await context.client.download(
       request.path,
-      { query: request.query, reason, approvalId },
+      { query: request.query, reason, approvalId, replaySafe },
       tool.method ?? 'GET',
     );
     const written = writeDownload(
@@ -326,12 +350,24 @@ export async function runTool(
     const result = await context.client.upload<unknown>(
       request.path,
       { fieldName: 'file', fileName: csv.name, contentType: 'text/csv', bytes: csv.bytes },
-      { query: request.query, reason },
+      { query: request.query, reason, replaySafe },
     );
     return { imported: result, source: { file: csv.name, bytes: csv.bytes.length, sha256: csv.sha256 } };
   }
 
   const hasBodyArgs = Object.keys(bodyArgs).length > 0;
+  if (tool.body && tool.optionalBody && hasBodyArgs) {
+    const required = tool.body.filter((field) => field.required).map((field) => field.name);
+    const missing = required.filter((name) => bodyArgs[name] === undefined);
+    if (missing.length > 0) {
+      throw new ConnectorError(
+        'INVALID_ARGUMENTS',
+        `${tool.name} takes either no body at all or a complete one; ${missing.join(', ')} `
+          + `${missing.length === 1 ? 'is' : 'are'} missing. ${optionalBodyNote(required)} Nothing was sent.`,
+        { action: 'fix_arguments' },
+      );
+    }
+  }
   let body: Record<string, unknown> | undefined;
   if (tool.body) {
     body = tool.optionalBody && !hasBodyArgs
@@ -349,6 +385,7 @@ export async function runTool(
     body,
     reason,
     approvalId,
+    replaySafe,
   });
   const gated = applyPolicy(tool, raw, context.allowPersonalData);
 

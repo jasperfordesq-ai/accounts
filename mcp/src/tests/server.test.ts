@@ -132,4 +132,15 @@ test('an approval refusal comes back as a structured error the agent can act on'
     { code: (result.structuredContent as { code: string }).code, approvalId: (result.structuredContent as { approvalId: string }).approvalId },
     { code: 'APPROVAL_REQUIRED', approvalId: 'abc-1' },
   );
+
+  // Started with a profile, the server tells the person the command that reaches the same place.
+  const pinned = await connect(
+    () => json(428, { code: 'APPROVAL_REQUIRED', approvalId: 'abc-1', summary: 'Remove debtor 3', command: 'filingbridge-mcp approve abc-1', expiresAt: 'soon' }),
+    { profile: 'private' },
+  );
+  const again = await pinned.client.callTool({ name: 'debtor_delete', arguments: { companyId: 1, periodId: 2, id: 3, reason: 'duplicate' } });
+  assert.equal(
+    (again.structuredContent as { command: string }).command,
+    'filingbridge-mcp approve abc-1 --profile private --base-url http://127.0.0.1:3500',
+  );
 });

@@ -24,14 +24,17 @@ public sealed partial class PrivacyGovernanceService
     private readonly PrivacyGovernanceConfig config;
     private readonly TimeProvider timeProvider;
     private readonly byte[] identifierHmacKey;
+    private readonly ConnectorConfig connectorConfig;
 
     public PrivacyGovernanceService(
         AccountsDbContext db,
         IOptions<PrivacyGovernanceConfig> config,
         IOptions<AuthSessionConfig> authSession,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IOptions<ConnectorConfig>? connector = null)
     {
         this.db = db;
+        connectorConfig = connector?.Value ?? new ConnectorConfig();
         this.config = config.Value;
         this.timeProvider = timeProvider;
         var rootKey = AuthSessionKey.DecodeRequired(authSession.Value.SigningKey);
@@ -508,6 +511,19 @@ public sealed partial class PrivacyGovernanceService
         var deletedRecoveryCodes = await DeleteAsync(recoveryCodes, cancellationToken);
         var deletedRequestMetadata = await DeleteAsync(completedRequests, cancellationToken);
 
+        // Agent (MCP connector) records: activity for the configured period, finished approvals and
+        // ended sessions for a short audit window.
+        var activityCutoff = now.AddDays(-Math.Clamp(connectorConfig.ActivityRetentionDays, 30, 3650));
+        var connectorRecordCutoff = now.AddDays(-30);
+        var deletedConnectorActivity = await DeleteAsync(db.ConnectorActivityEvents.IgnoreQueryFilters()
+            .Where(item => (tenantId == null || item.TenantId == tenantId) && item.OccurredAtUtc <= activityCutoff), cancellationToken);
+        var deletedConnectorApprovals = await DeleteAsync(db.ConnectorActionApprovals.IgnoreQueryFilters()
+            .Where(item => (tenantId == null || item.TenantId == tenantId)
+                && (item.ExpiresAtUtc <= connectorRecordCutoff || item.ConsumedAtUtc <= connectorRecordCutoff)), cancellationToken);
+        var deletedConnectorSessions = await DeleteAsync(db.ConnectorSessions.IgnoreQueryFilters()
+            .Where(item => (tenantId == null || item.TenantId == tenantId)
+                && (item.ExpiresAtUtc <= connectorRecordCutoff || item.RevokedAtUtc <= connectorRecordCutoff)), cancellationToken);
+
         var staleFailureUsers = await db.UserAccounts
             .IgnoreQueryFilters()
             .Where(user => (tenantId == null || user.TenantId == tenantId)
@@ -531,7 +547,8 @@ public sealed partial class PrivacyGovernanceService
             deletedMfaChallenges,
             deletedRecoveryCodes,
             deletedRequestMetadata,
-            staleFailureUsers.Count);
+            staleFailureUsers.Count,
+            deletedConnectorActivity + deletedConnectorApprovals + deletedConnectorSessions);
     }
 
     public async Task<PrivacyIncidentExercise> RecordIncidentExerciseAsync(
@@ -708,7 +725,8 @@ public sealed partial class PrivacyGovernanceService
         int DeletedMfaChallenges,
         int DeletedUsedRecoveryCodes,
         int DeletedSubjectRequestMetadata,
-        int ClearedStaleLoginFailureStates);
+        int ClearedStaleLoginFailureStates,
+        int DeletedConnectorRecords = 0);
 
     public sealed record SubjectEvidenceReference(
         string RecordType,

@@ -40,9 +40,12 @@ import {
   type SessionPosture,
 } from './session-level.js';
 import { inToolsets, type ToolGroup } from './toolsets.js';
+import type { ConnectorProfile } from './config.js';
 
 export interface ServerOptions {
   baseUrl: string;
+  /** The profile the connector was started with; named in the approve command shown to the person. */
+  profile?: ConnectorProfile | undefined;
   tokens: TokenSource;
   toolsets?: readonly ToolGroup[] | undefined;
   downloadDir?: string | undefined;
@@ -94,6 +97,7 @@ export function createServer(options: ServerOptions): Server {
   const client = new ApiClient({
     tokens: options.tokens,
     baseUrl: options.baseUrl,
+    profile: options.profile,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
   });
   const server = new Server(

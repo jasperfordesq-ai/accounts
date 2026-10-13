@@ -14,7 +14,8 @@ import { API_ROOT, contract } from './helpers.js';
 const MUST_BE_GATED = [
   'Company', 'CompanyOfficer', 'CompanyDashboardRow', 'QuarantinedCompanySummary', 'UserAdministrationSummary',
   'UserProvisioningResult', 'AuthResponse', 'DirectorLoan', 'DirectorLoanDetail', 'DirectorLoanComplianceResult',
-  'RelatedPartyTransaction', 'AuditLog', 'CroOfficerInput', 'B1ShareholderHandoff',
+  'DirectorLoanSignOffPacket', 'NotesDisclosure', 'RelatedPartyTransaction', 'AuditLog', 'CroOfficerInput',
+  'B1ShareholderHandoff',
 ] as const;
 
 /** The product owner's list: each of these must be withheld, whatever else changes. */
@@ -34,6 +35,24 @@ const REQUIRED_WITHHELD: Record<string, readonly string[]> = {
   B1ShareholderHandoff: ['name', 'address'],
   CompanyDashboardRow: ['assignedReviewerName', 'assignedReviewerEmail'],
   QuarantinedCompanySummary: ['quarantinedByDisplayName', 'reason'],
+  NotesDisclosure: ['reviewedBy'],
+};
+
+/**
+ * Free text: names that say a field is prose or messages, which can carry a
+ * name whatever the model. Such a field may not simply be released; it is
+ * withheld, or rewritten by a hook that knows what it carries.
+ */
+const FREE_TEXT = /(^|[a-z])(Note|Notes|Message|Messages|Reason|Description|Content|Text|Comment|Comments|Issues|Warning|Warnings|Blockers|Narrative|Explanation)$|^(note|notes|message|messages|reason|description|content|text|comment|comments|warning|warnings|issues|blockers|narrative|explanation)$/;
+/** A flag about free text (hasUnresolvedComplianceBlockers) is not free text. */
+const isFreeText = (field: string) => FREE_TEXT.test(field) && !/^(is|has|requires|ready)[A-Z]/.test(field);
+
+/** The product owner's list of free text that names people: never released as it is. */
+const REQUIRED_REWRITTEN: Record<string, readonly string[]> = {
+  DirectorLoanDetail: ['blockingIssues', 'warnings'],
+  DirectorLoanComplianceResult: ['blockingIssues', 'warnings', 'warning'],
+  DirectorLoanSignOffPacket: ['openBlockers', 'openWarnings'],
+  NotesDisclosure: ['content'],
 };
 
 const camel = (name: string) => name.charAt(0).toLowerCase() + name.slice(1);
@@ -116,7 +135,7 @@ test('every field of every gated model is classified safe, withheld or nested', 
   const unclassified: string[] = [];
   for (const model of MUST_BE_GATED) {
     const policy = POLICIES[model];
-    const known = new Set([...policy.safe, ...policy.withheld, ...Object.keys(policy.nested ?? {})]);
+    const known = new Set([...policy.safe, ...policy.withheld, ...(policy.rewritten ?? []), ...Object.keys(policy.nested ?? {})]);
     for (const field of sourceFields(model)) {
       if (!known.has(field)) unclassified.push(`${model}.${field}`);
     }
@@ -129,7 +148,7 @@ test('no policy entry names a field the model does not have', () => {
   for (const model of MUST_BE_GATED) {
     const policy = POLICIES[model];
     const real = new Set(sourceFields(model));
-    for (const field of [...policy.safe, ...policy.withheld, ...Object.keys(policy.nested ?? {})]) {
+    for (const field of [...policy.safe, ...policy.withheld, ...(policy.rewritten ?? []), ...Object.keys(policy.nested ?? {})]) {
       if (!real.has(field)) phantom.push(`${model}.${field}`);
     }
   }
@@ -149,6 +168,41 @@ test('every field the product owner listed is withheld', () => {
     assert.ok(policy, `${model} is not gated`);
     for (const field of fields) {
       assert.ok(policy.withheld.includes(field), `${model}.${field} must be withheld`);
+      assert.ok(!policy.safe.includes(field), `${model}.${field} must not be safe`);
+    }
+  }
+});
+
+test('a field is in exactly one of safe, withheld, rewritten and nested', () => {
+  for (const model of MUST_BE_GATED) {
+    const policy = POLICIES[model];
+    const all = [...policy.safe, ...policy.withheld, ...(policy.rewritten ?? []), ...Object.keys(policy.nested ?? {})];
+    assert.deepEqual(all.filter((field, index) => all.indexOf(field) !== index), [], model);
+  }
+});
+
+test('free text on a gated model is never released as it is: it is withheld or rewritten', () => {
+  assert.ok(isFreeText('blockingIssues') && isFreeText('warning') && isFreeText('content') && isFreeText('openWarnings'));
+  assert.ok(isFreeText('reviewNote') && isFreeText('quarantineReason'));
+  assert.ok(!isFreeText('legalName') && !isFreeText('reviewEvidence') && !isFreeText('hasUnresolvedComplianceBlockers'));
+  const released: string[] = [];
+  for (const model of MUST_BE_GATED) {
+    for (const field of POLICIES[model].safe) {
+      if (isFreeText(field)) released.push(`${model}.${field}`);
+    }
+  }
+  assert.deepEqual(released, [], 'Classify free text as withheld, or as rewritten with a hook in mcp/src/field-policy.ts.');
+});
+
+test('every rewritten field has a hook, and the owner free-text list is rewritten', () => {
+  for (const model of MUST_BE_GATED) {
+    const policy = POLICIES[model];
+    if ((policy.rewritten ?? []).length > 0) assert.equal(typeof policy.rewrite, 'function', `${model} rewrites fields without a hook`);
+  }
+  for (const [model, fields] of Object.entries(REQUIRED_REWRITTEN)) {
+    const policy = POLICIES[model as ModelName];
+    for (const field of fields) {
+      assert.ok((policy.rewritten ?? []).includes(field), `${model}.${field} must be rewritten`);
       assert.ok(!policy.safe.includes(field), `${model}.${field} must not be safe`);
     }
   }
