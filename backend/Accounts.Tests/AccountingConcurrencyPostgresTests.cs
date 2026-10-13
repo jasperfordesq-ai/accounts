@@ -308,6 +308,44 @@ public sealed class AccountingConcurrencyPostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
+    public async Task RefusedOrFailedRequestAudit_DoesNotAdvancePeriodETag()
+    {
+        // A request refused before it changed anything (an approval prompt, a role refusal) is
+        // still audited against the period. That record is not a change to the period, so a client
+        // holding the token from before the refusal must be able to repeat the request with it.
+        var seeded = await SeedAsync();
+        await using var db = CreateDb(protectWrites: false);
+        var tokens = new PeriodConcurrencyTokenService(db);
+        var before = await tokens.GetAsync(seeded.CompanyId, seeded.PeriodId);
+        Assert.NotNull(before);
+
+        var audit = new AuditService(db);
+        foreach (var action in new[] { "ApiWriteRejected", "ApiWriteFailed" })
+        {
+            await audit.LogAsync(
+                seeded.CompanyId,
+                seeded.PeriodId,
+                "ApiRequest",
+                seeded.PeriodId,
+                action,
+                newValue: new { method = "DELETE", statusCode = 428 },
+                tenantId: seeded.TenantId);
+        }
+
+        Assert.Equal(before, await tokens.GetAsync(seeded.CompanyId, seeded.PeriodId));
+
+        await audit.LogAsync(
+            seeded.CompanyId,
+            seeded.PeriodId,
+            "Debtor",
+            seeded.DebtorId,
+            "DebtorDeleted",
+            tenantId: seeded.TenantId);
+
+        Assert.NotEqual(before, await tokens.GetAsync(seeded.CompanyId, seeded.PeriodId));
+    }
+
+    [PostgresFact]
     public async Task QuarantinedCompanyWithNoPeriods_StillRejectsCompanyOwnedAccountingWrite()
     {
         var companyId = Interlocked.Increment(ref nextIsolatedCompanyId);
