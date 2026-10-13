@@ -142,8 +142,10 @@ public class ProductionSafetyService(
         if (session.MfaChallengeMinutes is < 2 or > 10)
             failures.Add("AuthSession:MfaChallengeMinutes must be between 2 and 10 minutes outside development.");
 
-        if (!session.RequirePrivilegedMfa)
-            failures.Add("AuthSession:RequirePrivilegedMfa must be true outside development.");
+        // Private Server may run without privileged MFA while the product is pre-release; Public
+        // Production never may.
+        if (!session.RequirePrivilegedMfa && !privateServer)
+            failures.Add("AuthSession:RequirePrivilegedMfa must be true in Public Production.");
 
         if (!session.SecureCookiesInProduction)
             failures.Add("AuthSession:SecureCookiesInProduction must be true outside development.");

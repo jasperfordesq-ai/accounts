@@ -137,7 +137,8 @@ services:
       AuthSession__AbsoluteLifetimeMinutes: "480"
       AuthSession__RecentMfaMinutes: "10"
       AuthSession__MfaChallengeMinutes: "5"
-      AuthSession__RequirePrivilegedMfa: "true"
+      # 2FA is off for the pre-release Private Server; set FILINGBRIDGE_REQUIRE_MFA=true to turn it back on.
+      AuthSession__RequirePrivilegedMfa: "${FILINGBRIDGE_REQUIRE_MFA:-false}"
       IdentitySecurity__RequireInProduction: "true"
       IdentitySecurity__BreachedPasswordCheckEnabled: "false"
       IdentitySecurity__BreachedPasswordFailClosed: "false"

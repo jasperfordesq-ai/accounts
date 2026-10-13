@@ -265,7 +265,12 @@ Invitation and reset links contain a short-lived one-time token in the URL fragm
 is removed from browser history immediately and only a keyed hash is stored in PostgreSQL. Share the
 link through a private channel and never paste it into a support bundle.
 
-Privileged roles must enrol MFA and retain recovery codes. If the sole Owner loses both the
+Two-factor sign-in (MFA) is **off by default** on the pre-release Private Server: privileged roles
+sign in, re-verify and approve agent actions with their password alone. Set
+`FILINGBRIDGE_REQUIRE_MFA=true` in the installation environment to require it again; Public
+Production always requires it and refuses to start without it.
+
+When MFA is on, privileged roles must enrol it and retain recovery codes. If the sole Owner loses both the
 authenticator and recovery codes, use physical-host recovery rather than direct database editing:
 
 ```powershell

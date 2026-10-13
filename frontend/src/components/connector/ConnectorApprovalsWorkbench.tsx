@@ -222,7 +222,7 @@ export function ConnectorApprovalsWorkbench() {
         confirmLabel="Approve action"
         variant="warning"
         loading={granting}
-        confirmDisabled={!password || !totpCode.trim()}
+        confirmDisabled={!password}
         onConfirm={() => void grant()}
         onCancel={closeApproval}
       >
@@ -230,7 +230,7 @@ export function ConnectorApprovalsWorkbench() {
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (password && totpCode.trim()) void grant();
+            if (password) void grant();
           }}
         >
           {grantError && (
@@ -243,8 +243,8 @@ export function ConnectorApprovalsWorkbench() {
             <Input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} disabled={granting} required />
           </TextField>
           <TextField fullWidth>
-            <Label>Authenticator code</Label>
-            <Input inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} disabled={granting} required />
+            <Label>Authenticator code (if two-factor sign-in is on)</Label>
+            <Input inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} disabled={granting} />
           </TextField>
           <p className="text-xs text-gray-600 dark:text-gray-400">Each authenticator code works once. If you have just used one to sign in, wait for the next code.</p>
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">Submit approval</button>

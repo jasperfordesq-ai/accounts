@@ -240,6 +240,12 @@ public sealed class IdentityAccessService(
             || !await authService.VerifyCurrentPasswordAsync(currentUser.UserId, password))
             return ReauthenticationResult.Failed("Password or authenticator code was not accepted.");
 
+        // With privileged MFA switched off (Development and Private Server only; Public Production
+        // refuses to start that way) the password alone confirms the person. The session keeps its
+        // existing MFA fields, so nothing here claims a TOTP ceremony that did not happen.
+        if (!config.RequirePrivilegedMfa)
+            return ReauthenticationResult.Success(currentUser);
+
         var credential = await db.UserMfaCredentials.SingleOrDefaultAsync(
             candidate => candidate.UserId == currentUser.UserId && candidate.EnabledAtUtc != null,
             cancellationToken);
