@@ -360,7 +360,7 @@ export class Session {
       // FilingBridge answers every failure identically, so a caller cannot
       // learn which of the conditions was the one that failed.
       throw new Error(
-        'That approval could not be granted. Check the password and the authenticator code, '
+        'That approval could not be granted. Check the password (and the authenticator code, if two-factor sign-in is on) '
           + 'and that the identifier is the one just printed and has not expired. Nothing was approved.',
       );
     }

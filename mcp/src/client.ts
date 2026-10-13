@@ -82,7 +82,8 @@ export class ApprovalRequiredError extends Error {
         + (details.approvalsUrl
           ? `this link to approve it in their browser:\n\n    ${details.approvalsUrl}\n\nor this command for their own terminal:\n\n    ${details.command}\n\n`
           : `this command to run in their own terminal:\n\n    ${details.command}\n\n`)
-        + 'They confirm it with their password and an authenticator code. Then call approval_wait with '
+        + 'They confirm it with their password, and an authenticator code if two-factor sign-in is on. '
+        + 'Then call approval_wait with '
         + `approvalId ${details.approvalId}; it returns when they have approved. Then call this tool again `
         + `with exactly the same arguments plus approvalId: ${details.approvalId}. The approval expires at `
         + `${details.expiresAt} and covers only this one action. Do not run the command yourself and never `
