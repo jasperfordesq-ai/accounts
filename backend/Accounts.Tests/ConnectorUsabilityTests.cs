@@ -65,6 +65,65 @@ public sealed class ConnectorUsabilityTests
         Assert.DoesNotContain("Mary", summary);
     }
 
+    [Theory]
+    [InlineData("/api/companies/4/periods/9/year-end-reviews/directors-report", "'directors-report'")]
+    [InlineData("/api/companies/4/periods/9/debtors/12", "#12")]
+    [InlineData("/api/auth/connector/sessions/9b2d6a3e-1f4c-4c5e-8d7a-2b3c4d5e6f70", "#9b2d6a3e-1f4c-4c5e-8d7a-2b3c4d5e6f70")]
+    [InlineData("/api/companies/4/periods/9/year-end-reviews/%3Cscript%3Ebad", "'scriptbad'")]
+    [InlineData("/api/companies/4/periods/9/year-end-reviews/%20%2F", null)]
+    public void RecordKey_IsTheFinalRouteValue_NotAnEarlierIdentifier(string path, string? expected)
+    {
+        Assert.Equal(expected, ConnectorActionSummaryService.RecordKeyOf(path));
+    }
+
+    [Fact]
+    public async Task ApprovalSummary_ForAReviewSection_NamesTheSection_NotThePeriod()
+    {
+        await using var fixture = await ConnectorTestFixture.CreateAsync();
+        var login = (await fixture.ConnectOwnerAsync()).Response!;
+        var session = (await fixture.Connectors.AuthenticateAsync(login.AccessToken))!.Value;
+        var context = fixture.NewHttpContext("PUT", $"/api/companies/{fixture.Company.Id}/periods/987/year-end-reviews/directors-report", "{}");
+        context.SetEndpoint(new RouteEndpoint(
+            _ => Task.CompletedTask,
+            RoutePatternFactory.Parse("/api/companies/{companyId:int}/periods/{periodId:int}/year-end-reviews/{sectionKey}"),
+            0,
+            EndpointMetadataCollection.Empty,
+            "review update"));
+        context.Items[AuthContext.ItemKey] = session.User;
+        context.Items[ConnectorSessionContext.ItemKey] = session.Session;
+
+        var summary = await new ConnectorActionSummaryService(fixture.Db).DescribeAsync(context, ConnectorPostureMiddleware.RoutePatternOf(context));
+
+        Assert.StartsWith("Change year end review 'directors-report'", summary);
+        Assert.DoesNotContain("#987", summary);
+    }
+
+    [Fact]
+    public async Task AWorkspaceAuditFailure_DoesNotReplaceTheCompletedAnswer()
+    {
+        await using var fixture = await ConnectorTestFixture.CreateAsync();
+        var login = (await fixture.ConnectOwnerAsync()).Response!;
+        var session = (await fixture.Connectors.AuthenticateAsync(login.AccessToken))!.Value;
+        var context = fixture.NewHttpContext("POST", "/api/companies", "{\"legalName\":\"New Co\"}");
+        context.Items[AuthContext.ItemKey] = session.User;
+        context.Items[ConnectorSessionContext.ItemKey] = session.Session;
+
+        await new AuditTrailMiddleware(async inner =>
+        {
+            inner.Response.StatusCode = StatusCodes.Status201Created;
+            await inner.Response.WriteAsync("{\"id\":99}");
+        }).InvokeAsync(context, fixture.Db, null, new FailingScopeFactory());
+
+        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal("{\"id\":99}", await ConnectorTestFixture.ReadResponseAsync(context));
+    }
+
+    private sealed class FailingScopeFactory : Microsoft.Extensions.DependencyInjection.IServiceScopeFactory
+    {
+        public Microsoft.Extensions.DependencyInjection.IServiceScope CreateScope() =>
+            throw new InvalidOperationException("The audit database is unavailable.");
+    }
+
     [Fact]
     public void Approvals_LastFifteenMinutesByDefault_AndAtMostThirty()
     {

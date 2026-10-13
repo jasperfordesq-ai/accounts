@@ -116,6 +116,11 @@ export interface RequestOptions {
   replaySafe?: boolean | undefined;
   /** Overrides the cached period token. */
   ifMatch?: string | undefined;
+  /**
+   * Abandons the request when it fires. Only reads use it: a change whose
+   * request was abandoned may still have been applied.
+   */
+  signal?: AbortSignal | undefined;
 }
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -352,8 +357,17 @@ export class ApiClient {
 
       let response: Response;
       try {
-        response = await this.#fetch(url, { method, headers, ...(body === undefined ? {} : { body }) });
+        response = await this.#fetch(url, {
+          method,
+          headers,
+          ...(body === undefined ? {} : { body }),
+          ...(options.signal ? { signal: options.signal } : {}),
+        });
       } catch (cause) {
+        // The caller gave up (a deadline or a cancelled tool call): never retried.
+        if (options.signal?.aborted) {
+          throw new ConnectorError('REQUEST_ABANDONED', `The ${method} to FilingBridge was abandoned before it answered.`, { retryable: true });
+        }
         // A request that never reached FilingBridge changed nothing, and a
         // read changes nothing either way. A change on a route that replays a
         // repeated Idempotency-Key is safe to ask once more: FilingBridge

@@ -89,7 +89,7 @@ test('approval_wait stops waiting when the call is cancelled', async () => {
     },
   });
   assert.equal(result.status, 'waiting');
-  assert.equal(calls(), 2);
+  assert.equal(calls(), 1, 'nothing more is fetched once the call is cancelled');
 });
 
 test('approval_wait refuses arguments it does not know and identifiers FilingBridge never issues', () => {
@@ -120,4 +120,43 @@ test('an approval refusal tells the agent to show the link and then wait, not to
   assert.match(error.message, /approve it in their browser:\n\n {4}http:\/\/localhost:3500\/settings\/approvals\?id=/);
   assert.match(error.message, /call approval_wait with approvalId/);
   assert.match(error.message, /never ask for the password or authenticator code/);
+});
+
+/** A client whose lookup never answers until its signal fires, like a stalled FilingBridge. */
+function stalledClient(seen: { signal?: AbortSignal | undefined }) {
+  return {
+    get(_path: string, options: { signal?: AbortSignal } = {}) {
+      seen.signal = options.signal;
+      return new Promise((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    },
+  } as unknown as ApiClient;
+}
+
+test('approval_wait keeps to waitSeconds even when FilingBridge stalls mid-lookup', async () => {
+  const seen: { signal?: AbortSignal | undefined } = {};
+  const started = Date.now();
+  const result = await runApprovalWait(stalledClient(seen), { approvalId: ID, waitSeconds: 1 });
+  const elapsed = Date.now() - started;
+  assert.equal(result.status, 'waiting');
+  assert.ok(seen.signal, 'the lookup carries a signal');
+  assert.ok(elapsed >= 900 && elapsed < 2500, `returned after ${elapsed} ms`);
+});
+
+test('cancelling approval_wait abandons the pending lookup at once', async () => {
+  const seen: { signal?: AbortSignal | undefined } = {};
+  const controller = new AbortController();
+  const started = Date.now();
+  const pending = runApprovalWait(stalledClient(seen), { approvalId: ID, waitSeconds: 60 }, { signal: controller.signal });
+  setTimeout(() => controller.abort(), 50);
+  const result = await pending;
+  assert.equal(result.status, 'waiting');
+  assert.ok(Date.now() - started < 1000, 'cancellation does not wait for the deadline');
+  assert.equal(seen.signal?.aborted, true);
+});
+
+test('a lookup error that is not a deadline or a cancellation still reaches the agent', async () => {
+  const failing = { get: async () => { throw new Error('FilingBridge said no'); } } as unknown as ApiClient;
+  await assert.rejects(runApprovalWait(failing, { approvalId: ID, waitSeconds: 5 }), /FilingBridge said no/);
 });

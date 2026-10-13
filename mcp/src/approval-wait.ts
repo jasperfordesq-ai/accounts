@@ -1,5 +1,8 @@
 import type { ApiClient } from './client.js';
 import { ConnectorError } from './errors.js';
+
+/** The shortest time a single lookup is given, so a 1-second wait can still read the approval once. */
+const MIN_LOOKUP_MS = 250;
 import type { ToolAnnotations } from './tools.js';
 
 /** Approval identifiers are GUIDs issued by FilingBridge. */
@@ -140,8 +143,33 @@ export async function runApprovalWait(
   const deadline = now() + waitMs;
   const path = `/api/auth/connector/approvals/${encodeURIComponent(approvalId)}`;
 
+  let last: ApprovalView | null = null;
+  const waiting = (): ApprovalWaitResult => ({
+    status: 'waiting',
+    approvalId,
+    summary: last?.summary ?? '',
+    expiresAt: last?.expiresAtUtc ?? '',
+    next: NEXT.waiting,
+  });
+
   for (;;) {
-    const view = readView(await client.get<unknown>(path));
+    if (deps.signal?.aborted) return waiting();
+    // Each lookup is bounded by what is left of the wait and by cancellation, so a stalled
+    // FilingBridge cannot hold the tool past waitSeconds.
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), Math.max(MIN_LOOKUP_MS, deadline - now()));
+    const lookup = deps.signal ? AbortSignal.any([timeout.signal, deps.signal]) : timeout.signal;
+    let body: unknown;
+    try {
+      body = await client.get<unknown>(path, { signal: lookup });
+    } catch (error) {
+      if (lookup.aborted) return waiting();
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+    const view = readView(body);
+    last = view;
     // A granted approval that has since expired can no longer be spent, so it reports expired.
     const status: ApprovalWaitStatus | null = view.consumedAtUtc !== null
       ? 'used'
@@ -151,10 +179,10 @@ export async function runApprovalWait(
           ? 'approved'
           : null;
     const remaining = deadline - now();
-    if (status !== null || remaining <= 0 || deps.signal?.aborted) {
-      const final = status ?? 'waiting';
-      return { status: final, approvalId, summary: view.summary, expiresAt: view.expiresAtUtc, next: NEXT[final] };
+    if (status !== null) {
+      return { status, approvalId, summary: view.summary, expiresAt: view.expiresAtUtc, next: NEXT[status] };
     }
+    if (remaining <= 0 || deps.signal?.aborted) return waiting();
     await sleep(Math.min(POLL_MS, remaining), deps.signal);
   }
 }

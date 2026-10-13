@@ -191,20 +191,33 @@ public class AuditTrailMiddleware(RequestDelegate next)
 
         var replayed = string.Equals(context.Response.Headers[IdempotencyHttpContract.ReplayedHeader], "true", StringComparison.OrdinalIgnoreCase);
         if (replayed) return;
-        await LogApiWriteAsync(
-            audit,
-            scopeFactory,
-            context,
-            null,
-            null,
-            IsSuccess(context.Response.StatusCode) ? "ApiWriteSucceeded" : "ApiWriteRejected",
-            useFreshScope: true,
-            payload: new
-            {
-                method = context.Request.Method,
-                path = context.Request.Path.Value,
-                statusCode = context.Response.StatusCode
-            });
+        try
+        {
+            await LogApiWriteAsync(
+                audit,
+                scopeFactory,
+                context,
+                null,
+                null,
+                IsSuccess(context.Response.StatusCode) ? "ApiWriteSucceeded" : "ApiWriteRejected",
+                useFreshScope: true,
+                payload: new
+                {
+                    method = context.Request.Method,
+                    path = context.Request.Path.Value,
+                    statusCode = context.Response.StatusCode
+                });
+        }
+        catch (Exception ex)
+        {
+            // The route has already committed its change and may have started its response; an
+            // audit failure here must not replace that answer with an error. The connector activity
+            // record written by ConnectorPostureMiddleware still attributes the change.
+            context.RequestServices?.GetService<ILoggerFactory>()?
+                .CreateLogger<AuditTrailMiddleware>()
+                .LogError(ex, "Could not write the workspace-level connector audit entry for {Method} {Path} ({StatusCode}).",
+                    context.Request.Method, context.Request.Path.Value, context.Response.StatusCode);
+        }
     }
 
     private static async Task<int?> TryGetVerifiedImportPeriodIdAsync(HttpRequest request, AccountsDbContext db, int companyId)

@@ -20,7 +20,8 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
         var resourceId = ConnectorPostureMiddleware.ResourceIdOf(context.Request.Path);
         var targetsOneRecord = TargetsOneRecord(routePattern);
         var action = DescribeAction(method, routePattern);
-        var parts = new List<string> { targetsOneRecord && resourceId is not null ? $"{action} #{resourceId}" : action };
+        var recordKey = targetsOneRecord ? RecordKeyOf(path) : null;
+        var parts = new List<string> { recordKey is null ? action : $"{action} {recordKey}" };
         try
         {
             if (TenantAccessMiddleware.TryGetCompanyId(context.Request.Path, out var companyId))
@@ -189,6 +190,25 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
             _ => "Run"
         };
         return $"{verb} {subject}";
+    }
+
+    /// <summary>
+    /// The value of the route's final segment, which names the one record acted on: "#12" for a
+    /// numeric or GUID identifier, or the quoted key for a string-keyed record such as a year-end
+    /// review section. Only letters, digits, '-', '_' and '.' are kept, so nothing else can reach
+    /// the person's approval prompt.
+    /// </summary>
+    public static string? RecordKeyOf(string path)
+    {
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0) return null;
+        var raw = Uri.UnescapeDataString(segments[^1]);
+        if (long.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _)
+            || Guid.TryParse(raw, out _))
+            return "#" + raw;
+        var cleaned = new string(raw.Where(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.').ToArray());
+        if (cleaned.Length == 0) return null;
+        return "'" + (cleaned.Length > 60 ? cleaned[..60] : cleaned) + "'";
     }
 
     /// <summary>"debtors" becomes "debtor", "inventories" "inventory", "fixed assets" "fixed asset".</summary>
