@@ -13,6 +13,7 @@ import {
 import { TOOLS } from './catalogue.js';
 import { annotationsFor, describeTool, downloadsOff, localOnlyRefusal, runTool, toolInputSchema, uploadsOff, type ToolDefinition } from './tools.js';
 import { ApiClient } from './client.js';
+import type { ETagCache } from './etag-cache.js';
 import type { TokenSource } from './token-source.js';
 import { CONNECTOR_VERSION } from './version.js';
 import { INSTRUCTIONS } from './instructions.js';
@@ -57,6 +58,12 @@ export interface ServerOptions {
   uploadRoot?: string | undefined;
   verbose?: boolean;
   fetchImpl?: typeof fetch;
+  /**
+   * The period concurrency tokens this server's client reads and sends.
+   * serve --http passes the caller's own cache, kept across that caller's
+   * requests, so a write carries the If-Match its earlier read learned.
+   */
+  etags?: ETagCache | undefined;
   /** Replaced in tests; the default asks FilingBridge. */
   posture?: () => Promise<SessionPosture>;
   /** Where diagnostics go when verbose; stderr by default. */
@@ -109,6 +116,7 @@ export function createServer(options: ServerOptions): Server {
     baseUrl: options.baseUrl,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.serviceHeaders ? { serviceHeaders: options.serviceHeaders } : {}),
+    ...(options.etags ? { etags: options.etags } : {}),
   });
   const publicUrl = options.publicUrl ?? options.baseUrl;
   const inline = options.fileMode === 'inline';

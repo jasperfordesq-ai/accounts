@@ -5,8 +5,30 @@ import { json, stubFetch, type Recorded, type Responder } from './helpers.js';
 
 export const SERVICE_KEY = 'svc-key-0123456789abcdef0123456789abcdef';
 export const PUBLIC_URL = 'https://fb.example';
-export const GOOD_TOKEN = 'fbc1.7.good-access-token-aaaaaaaaaaaa';
-export const REVOKED_TOKEN = 'fbc1.7.revoked-access-token-bbbbbbbbbb';
+/** Far enough ahead that no test clock reaches it (2100-01-01). */
+export const FAR_FUTURE_UNIX_SECONDS = 4_102_444_800;
+
+/**
+ * A connector access token shaped as FilingBridge issues them:
+ * fbc1.<base64url camelCase JSON of ConnectorAccessPayload>.<signature>.
+ * Only the API checks the signature; the connector reads the expiry.
+ */
+export function accessToken(options: { expiresAtUnixSeconds?: unknown; userId?: number; tag?: string } = {}): string {
+  const payload = {
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    familyId: '22222222-2222-4222-8222-222222222222',
+    userId: options.userId ?? 4,
+    tenantId: 1,
+    issuedAtUnixSeconds: 1_700_000_000,
+    expiresAtUnixSeconds: 'expiresAtUnixSeconds' in options ? options.expiresAtUnixSeconds : FAR_FUTURE_UNIX_SECONDS,
+    passwordLastChangedAtTicks: 638_000_000_000_000_000,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  return `fbc1.${encoded}.${Buffer.from(`signature-${options.tag ?? 'aaaaaaaa'}`).toString('base64url')}`;
+}
+
+export const GOOD_TOKEN = accessToken({ tag: 'good-access-token' });
+export const REVOKED_TOKEN = accessToken({ tag: 'revoked-access-token' });
 
 export const POSTURE_BODY = {
   accessLevel: 'Write',

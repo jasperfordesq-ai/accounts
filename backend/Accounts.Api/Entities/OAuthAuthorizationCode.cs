@@ -21,6 +21,7 @@ public class OAuthAuthorizationCode
     public required string AccessLevel { get; set; }
     public required string DataScope { get; set; }
     public long PasswordLastChangedAtTicks { get; set; }
+    public int SessionVersion { get; set; }
     public DateTime? MfaVerifiedAtUtc { get; set; }
     public string? MfaMethod { get; set; }
     public DateTime CreatedAtUtc { get; set; }

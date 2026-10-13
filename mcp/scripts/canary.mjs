@@ -105,6 +105,27 @@ const CANARIES = [
     replace: '  const serviceHeaders = {};',
   },
   {
+    name: 'caller-etags-per-request',
+    what: 'serve --http forgets a caller\'s period ETags between requests, so a later write sends no If-Match',
+    file: 'src/http-server.ts',
+    find: '      etags: callerEtags.for(key, tokenExpiresAt!),\n',
+    replace: '',
+  },
+  {
+    name: 'expired-token-not-challenged',
+    what: 'serve --http lets an expired access token through on a cached posture instead of challenging it',
+    file: 'src/http-server.ts',
+    find: '    if (tokenExpiresAt <= now()) {',
+    replace: '    if (tokenExpiresAt <= Number.NEGATIVE_INFINITY) {',
+  },
+  {
+    name: 'refused-during-call-as-tool-error',
+    what: 'serve --http answers a bearer the API refused mid-call with a 200 tool error instead of the 401 challenge',
+    file: 'src/http-server.ts',
+    find: '    if (refused) {',
+    replace: '    if (refused && gone) {',
+  },
+  {
     name: 'confirmation-rule-dropped',
     what: 'mark-filed no longer mirrored as a human-confirmation route',
     file: 'src/route-coverage.ts',
@@ -148,6 +169,10 @@ let survivors = 0;
 for (const canary of selected) {
   const file = resolve(root, canary.file);
   const original = readFileSync(file, 'utf8');
+  // A Windows checkout (core.autocrlf) has CRLF on disk; the canaries are written with LF.
+  const eol = original.includes('\r\n') ? '\r\n' : '\n';
+  canary.find = canary.find.replaceAll('\n', eol);
+  canary.replace = canary.replace.replaceAll('\n', eol);
   if (!original.includes(canary.find)) {
     console.error(`CANARY BROKEN: ${canary.name}: the text to mutate was not found in ${canary.file}. Update the canary.`);
     survivors += 1;

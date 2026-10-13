@@ -151,6 +151,8 @@ public sealed class OAuthService
         var name = Clean(input.ClientName, 80) ?? "MCP client";
         var issuedAt = timeProvider.GetUtcNow().ToUnixTimeSeconds();
         var clientId = clients.Encode(new OAuthClientRegistration(name, input.RedirectUris.Select(uri => uri.Trim()).ToArray(), issuedAt));
+        if (clientId.Length > OAuthClientCodec.MaxClientIdLength)
+            return OAuthResult<object>.Fail(400, "invalid_client_metadata", "The registration is too large; register fewer or shorter redirect_uris.");
         return OAuthResult<object>.Ok(new Dictionary<string, object>
         {
             ["client_id"] = clientId,
@@ -241,6 +243,7 @@ public sealed class OAuthService
             AccessLevel = verified.AccessLevel!,
             DataScope = verified.DataScope!,
             PasswordLastChangedAtTicks = principal.PasswordLastChangedAt.Ticks,
+            SessionVersion = principal.SessionVersion,
             MfaVerifiedAtUtc = principal.MfaVerifiedAtUtc?.UtcDateTime,
             MfaMethod = principal.MfaMethod,
             CreatedAtUtc = now,
@@ -268,7 +271,7 @@ public sealed class OAuthService
 
         if (grantType == "refresh_token")
         {
-            var refreshed = await connectors.RefreshAsync(form["refresh_token"].ToString(), cancellationToken);
+            var refreshed = await connectors.RefreshAsync(form["refresh_token"].ToString(), cancellationToken, OAuthClientCodec.Hash(clientId));
             return refreshed is null
                 ? TokenFail(400, "invalid_grant", "The refresh token is invalid, expired or already used.")
                 : OAuthResult<IReadOnlyDictionary<string, object>>.Ok(TokenResponse(refreshed));
@@ -285,21 +288,31 @@ public sealed class OAuthService
         var now = UtcNow();
         var grant = await db.OAuthAuthorizationCodes.AsNoTracking()
             .SingleOrDefaultAsync(candidate => candidate.CodeHash == codeHash && candidate.TenantId == tenantId, cancellationToken);
-        if (grant is null || !await TryConsumeAsync(grant.Id, now, cancellationToken))
+        if (grant is null || grant.ConsumedAtUtc is not null || grant.ExpiresAtUtc <= now)
             return TokenFail(400, "invalid_grant", "The authorization code is invalid, expired or already used.");
 
+        // Everything a holder of the code alone cannot supply is checked before the code is spent,
+        // so a wrong verifier cannot burn the legitimate client's exchange.
         if (!string.Equals(grant.ClientIdHash, OAuthClientCodec.Hash(clientId), StringComparison.Ordinal)
             || !string.Equals(grant.RedirectUri, form["redirect_uri"].ToString().Trim(), StringComparison.Ordinal)
             || !PkceMatches(form["code_verifier"].ToString(), grant.CodeChallenge)
             || (!string.IsNullOrWhiteSpace(form["resource"]) && !SameResource(form["resource"].ToString(), grant.Resource)))
             return TokenFail(400, "invalid_grant", "The authorization code does not match this client, redirect address or code verifier.");
 
+        if (!await TryConsumeAsync(grant.Id, now, cancellationToken))
+            return TokenFail(400, "invalid_grant", "The authorization code is invalid, expired or already used.");
+
         var principal = await connectors.ReloadPrincipalAsync(
             grant.UserId, grant.TenantId, grant.PasswordLastChangedAtTicks, grant.MfaVerifiedAtUtc, grant.MfaMethod, cancellationToken);
-        if (principal is null)
+        // A role change, session revocation or offboarding after consent bumps SessionVersion: the
+        // pending code must not outlive it, and Full scope must still belong to an Owner.
+        if (principal is null || principal.SessionVersion != grant.SessionVersion)
             return TokenFail(400, "invalid_grant", "The account changed after sign-in. Sign in again.");
+        if (grant.DataScope == ConnectorDataScopes.Full
+            && !principal.Role.Trim().Equals("Owner", StringComparison.OrdinalIgnoreCase))
+            return TokenFail(400, "invalid_grant", "Full personal-data access needs an Owner. Sign in again.");
 
-        var issued = await connectors.IssueAsync(principal, grant.AccessLevel, grant.DataScope, grant.ClientName, "oauth", cancellationToken);
+        var issued = await connectors.IssueAsync(principal, grant.AccessLevel, grant.DataScope, grant.ClientName, "oauth", cancellationToken, grant.ClientIdHash);
         return OAuthResult<IReadOnlyDictionary<string, object>>.Ok(TokenResponse(issued));
     }
 

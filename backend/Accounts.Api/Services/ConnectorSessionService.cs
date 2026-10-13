@@ -226,7 +226,8 @@ public sealed class ConnectorSessionService
         string dataScope,
         string? deviceLabel,
         string? clientVersion,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? clientIdHash = null)
     {
         var now = UtcNow();
         var familyId = Guid.NewGuid();
@@ -246,6 +247,7 @@ public sealed class ConnectorSessionService
             MfaMethod = principal.MfaMethod,
             DeviceLabel = Truncate(deviceLabel, 120),
             ClientVersion = Truncate(clientVersion, 40),
+            ClientIdHash = clientIdHash,
             CreatedAtUtc = now,
             ExpiresAtUtc = RefreshExpiry(now, now)
         };
@@ -295,7 +297,12 @@ public sealed class ConnectorSessionService
         await LogoutAsync(authenticated.Value.User, authenticated.Value.Session, null, cancellationToken);
     }
 
-    public async Task<ConnectorLoginResponse?> RefreshAsync(string? rawRefresh, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Rotates a refresh token. <paramref name="expectedClientIdHash"/> is the OAuth client presenting
+    /// it (null for the CLI route): an agent issued to one OAuth client can only be refreshed by that
+    /// client, and an OAuth-issued agent cannot be refreshed through the CLI route.
+    /// </summary>
+    public async Task<ConnectorLoginResponse?> RefreshAsync(string? rawRefresh, CancellationToken cancellationToken = default, string? expectedClientIdHash = null)
     {
         if (!IsAvailable) return null;
         var tenantId = ConnectorTokenCodec.ReadRefreshTokenTenant(rawRefresh);
@@ -318,6 +325,7 @@ public sealed class ConnectorSessionService
             return null;
         }
         if (current.ExpiresAtUtc <= now) return null;
+        if (!string.Equals(current.ClientIdHash, expectedClientIdHash, StringComparison.Ordinal)) return null;
 
         var principal = await LoadValidPrincipalAsync(current.UserId, current.TenantId, current.PasswordLastChangedAtTicks, now, cancellationToken);
         if (principal is null)
@@ -350,6 +358,7 @@ public sealed class ConnectorSessionService
             MfaMethod = current.MfaMethod,
             DeviceLabel = current.DeviceLabel,
             ClientVersion = current.ClientVersion,
+            ClientIdHash = current.ClientIdHash,
             CreatedAtUtc = now,
             LastUsedAtUtc = now,
             ExpiresAtUtc = RefreshExpiry(now, current.FamilyCreatedAtUtc),

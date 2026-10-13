@@ -17,6 +17,7 @@ public sealed record OAuthClientRegistration(
 public sealed class OAuthClientCodec
 {
     public const string Prefix = "fbcl1";
+    public const int MaxClientIdLength = 4096;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly byte[] key;
 
@@ -34,7 +35,7 @@ public sealed class OAuthClientCodec
 
     public OAuthClientRegistration? Decode(string? clientId)
     {
-        if (string.IsNullOrWhiteSpace(clientId) || clientId.Length > 4096) return null;
+        if (string.IsNullOrWhiteSpace(clientId) || clientId.Length > MaxClientIdLength) return null;
         var parts = clientId.Split('.');
         if (parts.Length != 3 || parts[0] != Prefix) return null;
         if (!TryBase64UrlDecode(parts[2], out var presented)) return null;

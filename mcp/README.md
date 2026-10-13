@@ -160,8 +160,11 @@ Routes: `GET /healthz` (open), `POST /mcp` (Streamable HTTP, stateless, JSON res
 answer 405 once authenticated), `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728, fetched from
 the API and cached five minutes). Without a bearer `/mcp` answers 401 with
 `WWW-Authenticate: Bearer resource_metadata="<origin>/.well-known/oauth-protected-resource/mcp"`; a bearer
-FilingBridge refuses answers 401 `error="invalid_token"`. Each request gets its own MCP server around its
-own bearer; the session's posture is asked of FilingBridge and cached for at most 60 seconds per token. No
+FilingBridge refuses, or one past its own expiry, answers 401 `error="invalid_token"`, and so does a tool
+call during which FilingBridge refuses the bearer, so the client refreshes rather than seeing a tool error.
+Each request gets its own MCP server around its own bearer; the session's posture is asked of FilingBridge
+and cached for at most 60 seconds per token (never past the token's expiry), and the period versions a
+caller has read are kept for that caller's bearer only, so its later writes carry `If-Match`. No
 inbound header but the bearer is forwarded: a browser's `Origin`, `Referer`, `Cookie` and `Sec-Fetch-*`
 never reach the API. Bodies over 5 MiB answer 413. One JSON line per request goes to stderr (method, path,
 status, time, JSON-RPC method and tool name; never a token, argument or result).
