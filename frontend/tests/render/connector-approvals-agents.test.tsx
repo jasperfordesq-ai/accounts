@@ -18,6 +18,8 @@ import { ConnectorApprovalsWorkbench } from "@/components/connector/ConnectorApp
 import { ConnectorAgentsWorkbench } from "@/components/connector/ConnectorAgentsWorkbench";
 import { SESSION_EXPIRED_EVENT } from "@/lib/api";
 
+// The field is optional: it reads "Authenticator code (if two-factor sign-in is on)".
+const AUTHENTICATOR_CODE = /^Authenticator code/;
 const approvalId = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const otherApprovalId = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 
@@ -91,7 +93,7 @@ describe("agent approvals page", () => {
     const confirm = within(dialog).getByRole("button", { name: "Approve action" });
     expect(confirm).toBeDisabled();
     await user.type(within(dialog).getByLabelText("Password"), "correct horse battery staple");
-    await user.type(within(dialog).getByLabelText("Authenticator code"), "654321");
+    await user.type(within(dialog).getByLabelText(AUTHENTICATOR_CODE), "654321");
     await user.click(within(dialog).getByRole("button", { name: "Approve action" }));
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Approved: Delete officers")));
@@ -100,6 +102,29 @@ describe("agent approvals page", () => {
     expect(grant.csrf).toBe("csrf-token");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Approved, waiting for the agent")).toBeInTheDocument();
+  });
+
+  it("grants with the password alone when two-factor sign-in is off", async () => {
+    const user = userEvent.setup();
+    const fetchMock = installFetchMock((request) => {
+      if (request.url === "/api/auth/connector/approvals") return { body: [approval(approvalId, "Delete officers")] };
+      if (request.url === "/api/auth/connector/approve") {
+        return { body: { ok: true, approvalId, summary: "Delete officers", expiresAtUtc: new Date(Date.now() + 240_000).toISOString() } };
+      }
+      return { status: 404, body: {} };
+    });
+    render(<ConnectorApprovalsWorkbench />);
+
+    await user.click(await screen.findByRole("button", { name: "Approve Delete officers" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText(AUTHENTICATOR_CODE)).not.toBeRequired();
+    await user.type(within(dialog).getByLabelText("Password"), "correct horse battery staple");
+    const confirm = within(dialog).getByRole("button", { name: "Approve action" });
+    expect(confirm).toBeEnabled();
+    await user.click(confirm);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining("Approved: Delete officers")));
+    expect(fetchMock.one("POST", "/api/auth/connector/approve").body).toEqual({ approvalId, password: "correct horse battery staple", totpCode: "" });
   });
 
   it("shows the refusal message in the dialog without signing the person out", async () => {
@@ -121,12 +146,12 @@ describe("agent approvals page", () => {
     await user.click(await screen.findByRole("button", { name: "Approve Delete officers" }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText("Password"), "wrong");
-    await user.type(within(dialog).getByLabelText("Authenticator code"), "000000");
+    await user.type(within(dialog).getByLabelText(AUTHENTICATOR_CODE), "000000");
     await user.click(within(dialog).getByRole("button", { name: "Approve action" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("The approval was not granted.");
     // A refused code is cleared so the person types a fresh one, and the dialog says why that matters.
-    expect(within(dialog).getByLabelText("Authenticator code")).toHaveValue("");
+    expect(within(dialog).getByLabelText(AUTHENTICATOR_CODE)).toHaveValue("");
     expect(within(dialog).getByText(/Each authenticator code works once/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Expires in \d+:\d{2}/)).toBeInTheDocument();
     expect(sessionExpired).not.toHaveBeenCalled();
