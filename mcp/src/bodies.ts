@@ -185,7 +185,7 @@ export const FILING_REGIME_INPUT_FIELDS = bodyFields('FilingRegimeInput', [
 
 export const MEMBER_AUDIT_NOTICE_INPUT_FIELDS = bodyFields('MemberAuditNoticeInput', [
   { kind: 'boolean', name: 'received', required: true, describe: "Members served notice requiring an audit (section 334)." },
-  { kind: 'date', name: 'noticeDate', required: true, describe: "Date of the notice; required when received." },
+  { kind: 'date', name: 'noticeDate', nullable: true, describe: "Date of the notice; required when received. Leave it out, or pass null, to clear it." },
 ]);
 
 export const CATEGORISE_INPUT_FIELDS = bodyFields('CategoriseInput', [

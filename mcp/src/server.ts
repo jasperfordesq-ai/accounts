@@ -42,12 +42,15 @@ import {
 } from './session-level.js';
 import { inToolsets, type ToolGroup } from './toolsets.js';
 import type { FileMode } from './files.js';
+import type { ConnectorProfile } from './config.js';
 
 export interface ServerOptions {
   /** Where the API is reached: the frontend origin in stdio mode, the API itself in serve --http. */
   baseUrl: string;
   /** The address people open FilingBridge at, for links. Defaults to baseUrl. */
   publicUrl?: string | undefined;
+  /** The profile the connector was started with; named in the approve command shown to the person. */
+  profile?: ConnectorProfile | undefined;
   tokens: TokenSource;
   /** Added to every API request (serve --http: the service key). */
   serviceHeaders?: Readonly<Record<string, string>> | undefined;
@@ -114,6 +117,7 @@ export function createServer(options: ServerOptions): Server {
   const client = new ApiClient({
     tokens: options.tokens,
     baseUrl: options.baseUrl,
+    profile: options.profile,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.serviceHeaders ? { serviceHeaders: options.serviceHeaders } : {}),
     ...(options.etags ? { etags: options.etags } : {}),

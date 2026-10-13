@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ApiClient, ApiError, ApprovalRequiredError } from '../client.js';
-import { ConnectionError } from '../errors.js';
+import { ConnectionError, ConnectorError } from '../errors.js';
 import { CLIENT_HEADER_VALUE } from '../version.js';
 import { registerSecret } from '../redact.js';
 import { describeError, errorResult } from '../results.js';
@@ -119,7 +119,7 @@ test('validation problems are passed back field by field', async () => {
   });
 });
 
-test('a dropped connection is retried once when the request is safe to repeat', async () => {
+test('a dropped connection is retried once, with the same key, only where FilingBridge replays a repeat', async () => {
   let attempts = 0;
   const stub = stubFetch(() => {
     attempts += 1;
@@ -127,13 +127,53 @@ test('a dropped connection is retried once when the request is safe to repeat', 
     return json(200, {});
   });
   const client = new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: stub.fetch });
-  await client.request('POST', '/api/companies/1/x');
+  await client.request('POST', '/api/companies', { replaySafe: true });
+  assert.equal(stub.calls.length, 2);
   assert.equal(stub.calls[0]!.headers['idempotency-key'], stub.calls[1]!.headers['idempotency-key'], 'the retry reuses the key');
 
-  const put = stubFetch(() => { throw new TypeError('down'); });
-  const putClient = new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: put.fetch });
-  await assert.rejects(putClient.request('PUT', '/api/companies/1'), ConnectionError);
-  assert.equal(put.calls.length, 1, 'a PUT without a key is not blindly repeated');
+  const get = stubFetch((_r, i) => { if (i === 0) throw new TypeError('socket hang up'); return json(200, {}); });
+  await new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: get.fetch }).get('/api/companies');
+  assert.equal(get.calls.length, 2, 'a read is simply asked again');
+});
+
+test('a dropped change on a route that ignores Idempotency-Key is never repeated: the outcome is unknown', async () => {
+  for (const method of ['POST', 'PUT', 'DELETE'] as const) {
+    const stub = stubFetch(() => { throw new TypeError('socket hang up'); });
+    const client = new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: stub.fetch });
+    await assert.rejects(client.request(method, '/api/companies/1/officers', { body: { name: 'A' } }), (error: unknown) => {
+      assert.ok(error instanceof ConnectorError);
+      assert.ok(!(error instanceof ConnectionError));
+      assert.equal(error.code, 'OUTCOME_UNKNOWN');
+      assert.equal(error.retryable, false);
+      assert.equal(error.action, 'reread');
+      assert.match(error.message, /Read the record/);
+      assert.deepEqual(describeError(error), { code: 'OUTCOME_UNKNOWN', retryable: false, action: 'reread' });
+      return true;
+    });
+    assert.equal(stub.calls.length, 1, `${method} was sent exactly once`);
+  }
+});
+
+test('a change that never reached FilingBridge is asked once more, and then reported as unreachable', async () => {
+  const refused = () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) }); };
+  const stub = stubFetch(refused);
+  const client = new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: stub.fetch });
+  await assert.rejects(client.request('POST', '/api/companies/1/officers', { body: {} }), ConnectionError);
+  assert.equal(stub.calls.length, 2);
+
+  // Refused first, then sent and dropped: that second attempt may have landed.
+  const mixed = stubFetch((_r, i) => (i === 0 ? refused() : (() => { throw new TypeError('socket hang up'); })()));
+  const mixedClient = new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: mixed.fetch });
+  await assert.rejects(mixedClient.request('POST', '/api/companies/1/officers', { body: {} }), (error: unknown) =>
+    error instanceof ConnectorError && error.code === 'OUTCOME_UNKNOWN');
+});
+
+test('a replay-safe PUT carries an Idempotency-Key, which FilingBridge requires there; an ordinary PUT does not', async () => {
+  const { client, calls } = clientWith(() => json(200, {}));
+  await client.request('PUT', `${PERIOD}/filing/cro-status`, { body: {}, replaySafe: true });
+  await client.request('PUT', `${PERIOD}/payroll`, { body: {} });
+  assert.match(calls[0]!.headers['idempotency-key'] ?? '', /^[0-9a-f-]{36}$/);
+  assert.equal(calls[1]!.headers['idempotency-key'], undefined);
 });
 
 test('secrets never reach error text', () => {

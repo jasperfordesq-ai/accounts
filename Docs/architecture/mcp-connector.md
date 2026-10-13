@@ -74,8 +74,7 @@ People approve agent actions and disconnect agents in the web app at `/settings/
 | Owner revoke-sessions, role/company change, deactivate, offboard | `UserLifecycleService.RevokeSecurityStateAsync` revokes every connector row |
 | Account lockout | Tokens refused while the lockout lasts |
 | `filingbridge-mcp disconnect`, `POST /api/auth/connector/logout`, `POST …/sessions/{familyId}/revoke` | That agent only |
-| `AuthSession:SigningKey` rotation | All refresh tokens (their hashes are keyed from it) |
-| `Connector:SigningKey` rotation, Private Server restore or host recovery | All access tokens |
+| `Connector:SigningKey` rotation, Private Server restore or host recovery | Every agent at once: access tokens are signed with it and refresh-token hashes are keyed from it, so a restored database cannot revive a disconnected agent |
 
 ## Access levels and data scope
 

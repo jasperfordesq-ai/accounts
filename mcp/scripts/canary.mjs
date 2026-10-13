@@ -87,8 +87,8 @@ const CANARIES = [
     name: 'gate-open',
     what: 'the field policy releases everything whatever the scope',
     file: 'src/field-policy.ts',
-    find: '  if (allowPersonalData) return value;\n  const record = asRecord(value);',
-    replace: '  if (allowPersonalData || model) return value;\n  const record = asRecord(value);',
+    find: '  if (allowPersonalData) return value;\n  const context = gateContextFor(value);',
+    replace: '  if (allowPersonalData || model) return value;\n  const context = gateContextFor(value);',
   },
   {
     name: 'resource-metadata-missing',
@@ -132,6 +132,55 @@ const CANARIES = [
     find: "  '/mark-filed',\n",
     replace: '',
   },
+  {
+    name: 'replay-claimed-without-backend',
+    what: 'officer creation claimed as replaying Idempotency-Key, which FilingBridge does not do there',
+    file: 'src/idempotency.ts',
+    find: "  'POST /api/companies/onboard',\n",
+    replace: "  'POST /api/companies/onboard',\n  'POST /api/companies/{companyId}/officers',\n",
+  },
+  {
+    name: 'unknown-outcome-retried',
+    what: 'a change that met a dropped connection is repeated on any route',
+    file: 'src/client.ts',
+    find: '        if (!replaySafe && !neverConnected(cause)) {',
+    replace: '        if (method === \'PATCH\' && !replaySafe && !neverConnected(cause)) {',
+  },
+  {
+    name: 'secret-echoed',
+    what: 'the hidden prompt writes each typed character to the terminal',
+    file: 'src/terminal-input.ts',
+    find: '        bytes.push(byte);\n',
+    replace: '        bytes.push(byte);\n        output.write(\'*\');\n',
+  },
+  {
+    name: 'loan-label-released',
+    what: 'director-loan messages released with the counterparty name they begin with',
+    file: 'src/field-policy.ts',
+    find: "  if (typeof message !== 'string') return message;\n",
+    replace: "  if (typeof message !== 'string' || message.length > 0) return message;\n",
+  },
+  {
+    name: 'withheld-note-released',
+    what: 'the director-transactions note text released to a withheld session',
+    file: 'src/field-policy.ts',
+    find: "  if (noteIsWithheld(record) && typeof content === 'string' && content.trim() !== '') {",
+    replace: "  if (noteIsWithheld(record) && typeof content === 'number') {",
+  },
+  {
+    name: 'optional-body-required',
+    what: 'an optional body advertised with its fields required',
+    file: 'src/tools.ts',
+    find: '...(tool.optionalBody ? [] : bodyRequired)',
+    replace: '...bodyRequired',
+  },
+  {
+    name: 'approve-command-unpinned',
+    what: 'the approve command shown without the profile and base URL in use',
+    file: 'src/client.ts',
+    find: 'command: this.#profile ? approveCommandFor(approvalId, this.#profile, this.#baseUrl) : command,',
+    replace: 'command: this.#profile ? command : approveCommandFor(approvalId, \'default\', this.#baseUrl),',
+  },
 ];
 
 function runSuite() {
@@ -169,21 +218,21 @@ let survivors = 0;
 for (const canary of selected) {
   const file = resolve(root, canary.file);
   const original = readFileSync(file, 'utf8');
-  // A Windows checkout (core.autocrlf) has CRLF on disk; the canaries are written with LF.
+  // A Windows checkout (core.autocrlf) has CRLF where the repository has LF.
   const eol = original.includes('\r\n') ? '\r\n' : '\n';
-  canary.find = canary.find.replaceAll('\n', eol);
-  canary.replace = canary.replace.replaceAll('\n', eol);
-  if (!original.includes(canary.find)) {
+  const find = canary.find.replaceAll('\n', eol);
+  const replace = canary.replace.replaceAll('\n', eol);
+  if (!original.includes(find)) {
     console.error(`CANARY BROKEN: ${canary.name}: the text to mutate was not found in ${canary.file}. Update the canary.`);
     survivors += 1;
     continue;
   }
   originals.set(file, original);
   try {
-    let mutated = original.replace(canary.find, canary.replace);
+    let mutated = original.replace(find, replace);
     if (canary.lineComment) {
       // Comment out the whole entry (it may span one line).
-      const start = original.indexOf(canary.find);
+      const start = original.indexOf(find);
       const end = original.indexOf('\n', start);
       mutated = original.slice(0, start) + original.slice(end + 1);
     }

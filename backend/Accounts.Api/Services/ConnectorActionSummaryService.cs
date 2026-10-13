@@ -80,8 +80,66 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
 
         var resourceId = ConnectorPostureMiddleware.ResourceIdOf(context.Request.Path);
         if (parts.Count == 1 && resourceId is not null) parts.Add($"record {resourceId}");
+        if (await RequestedValuesAsync(context.Request) is { Length: > 0 } requested)
+            parts.Add("requested: " + requested);
         var summary = string.Join(", ", parts);
         return summary.Length > 500 ? summary[..500] : summary;
+    }
+
+    /// <summary>
+    /// Fields whose new value decides what the person is approving. Only enumerations, flags,
+    /// dates and identifiers are shown; free text, names and addresses never are.
+    /// </summary>
+    private static readonly HashSet<string> RequestedFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "status", "role", "isActive", "active", "decision", "approved", "accessLevel",
+        "filedDate", "filingDate", "dateFiled", "paymentDate", "approvalDate", "noticeDate",
+        "chartOfAccountsVariant", "variant", "taxType", "regime", "filingRegime", "electedRegime",
+        "sizeClass", "received", "outcome", "kind", "workflow", "submissionReference"
+    };
+
+    private static async Task<string?> RequestedValuesAsync(HttpRequest request)
+    {
+        if (request.ContentLength is 0 or > 1_000_000) return null;
+        try
+        {
+            request.EnableBuffering();
+            request.Body.Position = 0;
+            using var document = await System.Text.Json.JsonDocument.ParseAsync(request.Body);
+            request.Body.Position = 0;
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            var values = new List<string>();
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Name.Equals("companyIds", StringComparison.OrdinalIgnoreCase)
+                    && property.Value.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    values.Add($"companyIds=[{string.Join(",", property.Value.EnumerateArray().Take(20).Select(item => item.GetRawText()))}]");
+                    continue;
+                }
+                if (!RequestedFields.Contains(property.Name)) continue;
+                var value = property.Value.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => property.Value.GetString(),
+                    System.Text.Json.JsonValueKind.Number or System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => property.Value.GetRawText(),
+                    System.Text.Json.JsonValueKind.Null => "(cleared)",
+                    _ => null
+                };
+                if (value is null) continue;
+                value = new string(value.Where(character => !char.IsControl(character)).ToArray());
+                if (value.Length > 60) value = value[..60];
+                values.Add($"{property.Name}={value}");
+            }
+            return values.Count == 0 ? null : string.Join(", ", values);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (request.Body.CanSeek) request.Body.Position = 0;
+        }
     }
 
     public static string DescribeAction(string method, string routePattern)

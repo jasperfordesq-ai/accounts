@@ -82,9 +82,9 @@ Codex, Claude Desktop) that acts as them. Architecture and guarantees:
   It must differ from the session signing key and the identity HMAC key; startup refuses otherwise.
 - Set `CONNECTOR_ENABLED=true` to turn the feature on. `Connector:PublicBaseUrl` follows
   `ACCOUNTS_ALLOWED_ORIGIN` and builds the web approvals link in approval prompts.
-- Rotating `CONNECTOR_SIGNING_KEY_FILE` signs every agent out within 15 minutes (access tokens);
-  rotating the session signing key also invalidates every agent refresh token. Both are the
-  emergency "disconnect all agents" levers.
+- Rotating `CONNECTOR_SIGNING_KEY_FILE` signs every agent out at once: it signs the access tokens
+  and keys the refresh-token hashes. That is the
+  emergency "disconnect all agents" lever.
 - Agents reach the API only through the HTTPS frontend, exactly like browsers. Every irreversible
   action still needs the human to approve it with password + authenticator code.
 

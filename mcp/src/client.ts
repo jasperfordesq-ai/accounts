@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type { TokenSource } from './token-source.js';
 import { redactSecrets } from './redact.js';
 import { CLIENT_HEADER_VALUE } from './version.js';
-import { ConnectionError, type ErrorAction } from './errors.js';
+import { ConnectionError, ConnectorError, type ErrorAction } from './errors.js';
 import { ETagCache } from './etag-cache.js';
+import { APPROVAL_ID, approveCommandFor } from './approve-command.js';
+import type { ConnectorProfile } from './config.js';
 
 export const CLIENT_HEADER = 'x-filingbridge-client';
 export const REASON_HEADER = 'x-filingbridge-reason';
@@ -105,6 +107,13 @@ export interface RequestOptions {
   approvalId?: string | undefined;
   /** Names this POST so a retry is answered rather than repeated. Generated when absent. */
   idempotencyKey?: string | undefined;
+  /**
+   * FilingBridge honours Idempotency-Key on this route (see idempotency.ts):
+   * a key is sent whatever the method, and a change whose answer was lost to
+   * a dropped connection is asked once more with the same key. Without it a
+   * change is never repeated, because the route would record it twice.
+   */
+  replaySafe?: boolean | undefined;
   /** Overrides the cached period token. */
   ifMatch?: string | undefined;
 }
@@ -136,6 +145,12 @@ interface ApiClientOptions {
    * stdio mode. Never logged.
    */
   serviceHeaders?: Readonly<Record<string, string>>;
+  /**
+   * The profile this connector was started with. When known, the approve
+   * command shown to the person names it and the base URL, so it reaches the
+   * same FilingBridge with the same credential.
+   */
+  profile?: ConnectorProfile | undefined;
 }
 
 const CONNECTOR_REFUSALS: Record<string, { text: string; action: ErrorAction }> = {
@@ -212,6 +227,27 @@ function fileNameFrom(disposition: string | null): string | null {
 }
 
 /**
+ * Failures that happen before a connection exists (name resolution, a refused
+ * or unreachable port, a refused TLS certificate): nothing was sent, so
+ * nothing can have happened. Read from the error and its causes.
+ */
+const NEVER_CONNECTED_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EADDRNOTAVAIL',
+  'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
+
+function neverConnected(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== null && typeof current === 'object'; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === 'string' && NEVER_CONNECTED_CODES.has(code)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/**
  * Every request the tools make to FilingBridge.
  *
  * Adds the headers the API's connector path requires, renews an expired
@@ -224,6 +260,7 @@ export class ApiClient {
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
   readonly #serviceHeaders: Readonly<Record<string, string>>;
+  readonly #profile: ConnectorProfile | undefined;
   readonly etags: ETagCache;
 
   constructor(options: ApiClientOptions) {
@@ -232,6 +269,7 @@ export class ApiClient {
     this.#fetch = options.fetchImpl ?? fetch;
     this.etags = options.etags ?? new ETagCache();
     this.#serviceHeaders = options.serviceHeaders ?? {};
+    this.#profile = options.profile;
   }
 
   get<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -286,7 +324,10 @@ export class ApiClient {
   ): Promise<Response> {
     if (!path.startsWith('/api/')) throw new Error(`Refusing a request outside /api: ${path}`);
     const url = `${this.#baseUrl}${path}${buildQuery(options.query)}`;
-    const idempotencyKey = method === 'POST' ? (options.idempotencyKey ?? randomUUID()) : options.idempotencyKey;
+    const replaySafe = method === 'GET' || options.replaySafe === true;
+    const idempotencyKey = method === 'POST' || (method !== 'GET' && options.replaySafe === true)
+      ? (options.idempotencyKey ?? randomUUID())
+      : options.idempotencyKey;
     const unsafe = method !== 'GET';
     const ifMatch = unsafe ? (options.ifMatch ?? this.etags.ifMatchFor(path)) : undefined;
 
@@ -313,18 +354,28 @@ export class ApiClient {
       try {
         response = await this.#fetch(url, { method, headers, ...(body === undefined ? {} : { body }) });
       } catch (cause) {
-        // A change that met a dropped connection may already have happened.
-        // With an idempotency key it is safe to ask once more: FilingBridge
-        // either performs it, never having seen the first, or replays the
-        // answer to the first. Without one, the failure is reported.
-        if (!reconnected && (method === 'GET' || idempotencyKey !== undefined)) {
+        // A request that never reached FilingBridge changed nothing, and a
+        // read changes nothing either way. A change on a route that replays a
+        // repeated Idempotency-Key is safe to ask once more: FilingBridge
+        // either performs it, never having seen the first, or answers with
+        // the first's outcome. Any other change may already have happened,
+        // and repeating it would perform it twice.
+        if (!replaySafe && !neverConnected(cause)) {
+          throw new ConnectorError(
+            'OUTCOME_UNKNOWN',
+            `The connection to FilingBridge at ${this.#baseUrl} dropped after this ${method} was sent, so it may `
+              + 'or may not have been applied. This route does not recognise a repeated request, so the connector '
+              + 'did not send it again: a second attempt could record the change twice. Read the record (or the '
+              + 'list it belongs to) first, and make the change again only if it is not there. '
+              + `(${redactSecrets((cause as Error).message)})`,
+            { retryable: false, action: 'reread' },
+          );
+        }
+        if (!reconnected) {
           reconnected = true;
           continue;
         }
-        throw new ConnectionError(
-          `Cannot reach FilingBridge at ${this.#baseUrl}. Check the address and, for a Private `
-            + `Server, that Tailscale is connected. (${redactSecrets((cause as Error).message)})`,
-        );
+        throw this.#unreachable(cause);
       }
 
       this.etags.remember(path, response.headers.get('etag'));
@@ -339,6 +390,13 @@ export class ApiClient {
       if (response.ok) return response;
       throw await this.#refusal(response, path, correlationId);
     }
+  }
+
+  #unreachable(cause: unknown): ConnectionError {
+    return new ConnectionError(
+      `Cannot reach FilingBridge at ${this.#baseUrl}. Check the address and, for a Private `
+        + `Server, that Tailscale is connected. (${redactSecrets((cause as Error).message)})`,
+    );
   }
 
   async #parse<T>(response: Response): Promise<T> {
@@ -377,11 +435,13 @@ export class ApiClient {
     if (response.status === 428) {
       const approvalId = typeof body['approvalId'] === 'string' ? body['approvalId'] : null;
       const command = typeof body['command'] === 'string' ? body['command'] : null;
-      if (code === 'APPROVAL_REQUIRED' && approvalId && command) {
+      if (code === 'APPROVAL_REQUIRED' && approvalId && APPROVAL_ID.test(approvalId) && command) {
         return new ApprovalRequiredError({
           approvalId,
           summary: typeof body['summary'] === 'string' ? body['summary'] : 'An action that needs a person to approve it',
-          command,
+          // FilingBridge cannot know how this connector was started; the
+          // command it prints names neither the profile nor the address.
+          command: this.#profile ? approveCommandFor(approvalId, this.#profile, this.#baseUrl) : command,
           expiresAt: typeof body['expiresAt'] === 'string' ? body['expiresAt'] : 'shortly',
           resourceId: typeof body['resourceId'] === 'string' || typeof body['resourceId'] === 'number'
             ? String(body['resourceId'])

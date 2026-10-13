@@ -7,9 +7,11 @@ import { createHash } from 'node:crypto';
 import { TOOLS, findTool } from '../catalogue.js';
 import { annotationsFor, runTool, toolInputSchema, personalFieldPaths, type ToolContext } from '../tools.js';
 import { TOOL_GROUPS } from '../toolsets.js';
-import { ApprovalRequiredError } from '../client.js';
+import { ApiClient, ApprovalRequiredError } from '../client.js';
 import { ConnectorError } from '../errors.js';
-import { clientWith, json } from './helpers.js';
+import { describeError } from '../results.js';
+import { parseArgs } from '../config.js';
+import { FakeTokens, clientWith, json, stubFetch } from './helpers.js';
 
 const tool = (name: string) => {
   const found = findTool(name);
@@ -168,4 +170,116 @@ test('personal field paths are known for the tools that write them', () => {
   assert.deepEqual(personalFieldPaths(tool('officer_create')), ['address']);
   assert.ok(personalFieldPaths(tool('company_onboard')).includes('officers.address'));
   assert.ok(personalFieldPaths(tool('company_onboard')).includes('company.registeredOfficeAddress1'));
+});
+
+/** Answers from `after`, or drops the connection where it returns null. */
+function dropping(after: (index: number) => Response | null) {
+  return (_request: unknown, index: number) => {
+    const answer = after(index);
+    if (answer === null) throw new TypeError('socket hang up');
+    return answer;
+  };
+}
+
+test('a create on a route that ignores Idempotency-Key is sent once; a dropped answer says read before retrying', async () => {
+  const { context, calls } = ctx(dropping(() => null));
+  await assert.rejects(runTool(tool('officer_create'), context, { companyId: 2, name: 'Aoife', role: 'Director' }), (error: unknown) => {
+    assert.ok(error instanceof ConnectorError);
+    assert.equal(error.code, 'OUTCOME_UNKNOWN');
+    assert.equal(error.retryable, false);
+    assert.equal(error.action, 'reread');
+    return true;
+  });
+  assert.equal(calls.length, 1, 'officer_create was not repeated');
+});
+
+test('a create on a route that replays its key is asked once more with the same key', async () => {
+  const { context, calls } = ctx(dropping((index) => (index === 0 ? null : json(201, { id: 5 }))));
+  await runTool(tool('period_create'), context, { companyId: 2, periodStart: '2025-01-01', periodEnd: '2025-12-31' });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0]!.headers['idempotency-key'], calls[1]!.headers['idempotency-key']);
+});
+
+test('a status PUT that FilingBridge keys by Idempotency-Key carries one; an ordinary PUT does not', async () => {
+  const { context, calls } = ctx(() => json(200, {}));
+  await runTool(tool('period_status_set'), context, { companyId: 2, id: 3, status: 'Review', reason: 'ready for review', approvalId: 'a1b2' });
+  await runTool(tool('member_audit_notice_set'), context, { companyId: 2, periodId: 3, received: false });
+  assert.match(calls[0]!.headers['idempotency-key'] ?? '', /^[0-9a-f-]{36}$/);
+  assert.equal(calls[1]!.headers['idempotency-key'], undefined);
+});
+
+test('optional-body tools advertise either no body or a complete one, and refuse a partial one', async () => {
+  for (const name of ['size_classify', 'filing_regime_determine']) {
+    const schema = toolInputSchema(tool(name)) as { required?: string[] };
+    for (const field of tool(name).body!) {
+      assert.ok(!(schema.required ?? []).includes(field.name), `${name}.${field.name} must not be required`);
+    }
+  }
+  const classify = toolInputSchema(tool('size_classify')) as { properties: Record<string, { description?: string }>; required: string[] };
+  assert.deepEqual(classify.required, ['companyId', 'periodId']);
+  assert.match(classify.properties['turnover']!.description ?? '', /all of turnover, balanceSheetTotal, avgEmployees, or none/);
+  const save = toolInputSchema(tool('size_figures_save')) as { required: string[] };
+  assert.ok(save.required.includes('turnover'), 'a tool whose body is not optional still requires its fields');
+
+  const { context, calls } = ctx(() => json(200, {}));
+  await runTool(tool('size_classify'), context, { companyId: 1, periodId: 2 });
+  assert.equal(calls[0]!.body, undefined, 'no fields: no body');
+  await runTool(tool('size_classify'), context, { companyId: 1, periodId: 2, turnover: 100, balanceSheetTotal: 50, avgEmployees: 3 });
+  assert.deepEqual(calls[1]!.body, { turnover: 100, balanceSheetTotal: 50, avgEmployees: 3 });
+  await assert.rejects(runTool(tool('size_classify'), context, { companyId: 1, periodId: 2, turnover: 100 }), (error: unknown) => {
+    assert.ok(error instanceof ConnectorError);
+    assert.equal(error.code, 'INVALID_ARGUMENTS');
+    assert.equal(error.action, 'fix_arguments');
+    assert.match(error.message, /balanceSheetTotal, avgEmployees are missing/);
+    return true;
+  });
+  await runTool(tool('filing_regime_determine'), context, { companyId: 1, periodId: 2 });
+  assert.equal(calls[2]!.body, undefined);
+  assert.equal(calls.length, 3, 'the partial body was never sent');
+});
+
+test('a member audit notice date can be left out or cleared with null', async () => {
+  const schema = toolInputSchema(tool('member_audit_notice_set')) as { required: string[] };
+  assert.ok(!schema.required.includes('noticeDate'));
+  const { context, calls } = ctx(() => json(200, {}));
+  await runTool(tool('member_audit_notice_set'), context, { companyId: 1, periodId: 2, received: false, noticeDate: null });
+  await runTool(tool('member_audit_notice_set'), context, { companyId: 1, periodId: 2, received: false });
+  await runTool(tool('member_audit_notice_set'), context, { companyId: 1, periodId: 2, received: true, noticeDate: '2026-03-01' });
+  assert.deepEqual(calls.map((call) => call.body), [
+    { received: false, noticeDate: null },
+    { received: false },
+    { received: true, noticeDate: '2026-03-01' },
+  ]);
+});
+
+test('notes reach a withheld session without the director-transactions text or the reviewer', async () => {
+  const notes = [
+    { id: 1, periodId: 2, noteNumber: 1, code: 'ACC-POLICIES', title: 'Accounting Policies', content: 'FRS 102 Section 1A.', isRequired: true, isIncluded: true, checklistState: 'Required' },
+    { id: 2, periodId: 2, noteNumber: 9, code: 'DIRECTOR-TRANSACTIONS', title: 'Advances, Credits and Guarantees to Directors', content: 'Siobhan Murphy: 5,000 advanced interest free.', isRequired: true, isIncluded: true, checklistState: 'Required', reviewedBy: 'Reviewer Name' },
+  ];
+  for (const name of ['note_list', 'note_generate']) {
+    const { context } = ctx(() => json(200, notes));
+    const out = await runTool(tool(name), context, { companyId: 1, periodId: 2 }) as { content: string }[];
+    assert.equal(out[0]!.content, 'FRS 102 Section 1A.', name);
+    assert.doesNotMatch(JSON.stringify(out), /Siobhan|interest free|Reviewer Name/, name);
+    const full = await runTool(tool(name), { ...context, allowPersonalData: true }, { companyId: 1, periodId: 2 }) as { content: string }[];
+    assert.match(full[1]!.content, /Siobhan/, `${name} under full scope`);
+  }
+});
+
+test('a 428 names the profile and address the connector actually uses in the approve command', async () => {
+  const stub = stubFetch(() => json(428, {
+    code: 'APPROVAL_REQUIRED', approvalId: 'a1b2-c3', summary: 'Delete debtor 3', command: 'filingbridge-mcp approve a1b2-c3', expiresAt: 'soon',
+  }));
+  const client = new ApiClient({ tokens: new FakeTokens(), baseUrl: 'http://127.0.0.1:3500', fetchImpl: stub.fetch, profile: 'private' });
+  await assert.rejects(runTool(tool('debtor_delete'), { client, allowPersonalData: false }, { companyId: 1, periodId: 2, id: 3, reason: 'dup' }), (error: unknown) => {
+    assert.ok(error instanceof ApprovalRequiredError);
+    assert.equal(error.command, 'filingbridge-mcp approve a1b2-c3 --profile private --base-url http://127.0.0.1:3500');
+    assert.ok(error.message.includes(error.command), 'the text the agent relays carries the full command');
+    assert.equal(describeError(error).command, error.command);
+    // The printed command is one the CLI accepts, and it reaches the same place.
+    const parsed = parseArgs(error.command.split(' ').slice(1), {});
+    assert.deepEqual([parsed.command, parsed.approvalId, parsed.profile, parsed.baseUrl], ['approve', 'a1b2-c3', 'private', 'http://127.0.0.1:3500']);
+    return true;
+  });
 });

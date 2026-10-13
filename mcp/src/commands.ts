@@ -12,6 +12,7 @@ import { startStdioServer } from './server.js';
 import { CONNECTOR_VERSION } from './version.js';
 import { TOOL_GROUPS } from './toolsets.js';
 import { httpConfigFromEnv, startHttpServer } from './http-server.js';
+import { readSecret, type SecretInput } from './terminal-input.js';
 
 export const USAGE = `filingbridge-mcp ${CONNECTOR_VERSION}
 
@@ -69,38 +70,14 @@ export interface CliIo {
 }
 
 async function prompt(io: CliIo, question: string, hidden: boolean): Promise<string> {
+  // A secret never passes through readline: see terminal-input.ts.
+  if (hidden) return readSecret(io.stdin as unknown as SecretInput, io.stdout, question);
   const rl = createInterface({ input: io.stdin, output: io.stdout, terminal: true });
-  if (!hidden) {
-    const answer = await rl.question(question);
-    rl.close();
-    return answer.trim();
-  }
-  io.stdout.write(question);
-  const previouslyRaw = io.stdin.isRaw ?? false;
-  io.stdin.setRawMode?.(true);
-  let bytes = Buffer.alloc(0);
   try {
-    outer: for await (const chunk of io.stdin as AsyncIterable<Buffer>) {
-      for (const byte of chunk) {
-        if (byte === 0x0d || byte === 0x0a) break outer;
-        if (byte === 0x03) {
-          io.stdin.setRawMode?.(previouslyRaw);
-          rl.close();
-          throw new Error('Cancelled.');
-        }
-        if (byte === 0x7f || byte === 0x08) {
-          bytes = Buffer.from(bytes.toString('utf8').slice(0, -1), 'utf8');
-          continue;
-        }
-        bytes = Buffer.concat([bytes, Buffer.from([byte])]);
-      }
-    }
+    return (await rl.question(question)).trim();
   } finally {
-    io.stdin.setRawMode?.(previouslyRaw);
+    rl.close();
   }
-  io.stdout.write('\n');
-  rl.close();
-  return bytes.toString('utf8');
 }
 
 function storeFor(config: ConnectorConfig, io: CliIo): CredentialStore {
@@ -235,6 +212,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<void> {
 
   await startStdioServer({
     baseUrl: config.baseUrl,
+    profile: config.profile,
     tokens: new RefreshingSession(session),
     toolsets: config.toolsets,
     downloadDir: config.downloadDir,

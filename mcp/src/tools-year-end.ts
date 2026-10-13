@@ -198,9 +198,12 @@ export const DISCLOSURE_TOOLS: readonly ToolDefinition[] = [
   {
     name: 'note_list',
     group: 'disclosures',
-    description: 'The notes to the financial statements for the period, in order, with whether each is included and required.',
+    description:
+      'The notes to the financial statements for the period, in order, with whether each is included and required. '
+      + 'Withheld while the data scope is Withheld: the text of the director-transactions (section 307) and '
+      + 'related-party notes, which name the people concerned, and the name of whoever reviewed a note.',
     path: `${PER}/notes`,
-    noRecordsBecause: 'Notes to the financial statements, which are published with them.',
+    model: 'NotesDisclosure',
   },
   {
     name: 'note_generate',
@@ -211,7 +214,7 @@ export const DISCLOSURE_TOOLS: readonly ToolDefinition[] = [
     method: 'POST',
     path: `${PER}/notes/generate`,
     level: 'write',
-    noRecordsBecause: 'Notes to the financial statements, which are published with them.',
+    model: 'NotesDisclosure',
   },
   {
     name: 'note_create',
@@ -222,7 +225,7 @@ export const DISCLOSURE_TOOLS: readonly ToolDefinition[] = [
     level: 'write',
     body: NOTES_DISCLOSURE_INPUT_FIELDS,
     bodySchema: 'NotesDisclosureInput',
-    noRecordsBecause: 'Notes to the financial statements, which are published with them.',
+    model: 'NotesDisclosure',
   },
   {
     name: 'note_update',
@@ -233,7 +236,7 @@ export const DISCLOSURE_TOOLS: readonly ToolDefinition[] = [
     level: 'write',
     body: NOTES_DISCLOSURE_INPUT_FIELDS,
     bodySchema: 'NotesDisclosureInput',
-    noRecordsBecause: 'Notes to the financial statements, which are published with them.',
+    model: 'NotesDisclosure',
   },
   {
     name: 'note_delete',
