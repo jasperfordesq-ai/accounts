@@ -131,6 +131,18 @@ test('an approval refusal tells the agent to show the link and then wait, not to
   assert.match(error.message, /approve it in their browser:\n\n {4}http:\/\/localhost:3500\/settings\/approvals\?id=/);
   assert.match(error.message, /call approval_wait with approvalId/);
   assert.match(error.message, /never ask for the password or authenticator code/);
+  // Two-factor sign-in can be off (Development and Private Server), so the code is not always asked for.
+  assert.match(error.message, /They confirm it with their password, and an authenticator code if two-factor sign-in is on\./);
+});
+
+test('every agent-facing description of approving says the authenticator code depends on two-factor sign-in', async () => {
+  const { INSTRUCTIONS } = await import('../instructions.js');
+  const { APPROVAL_NOTE } = await import('../tool-helpers.js');
+  for (const text of [INSTRUCTIONS, APPROVAL_NOTE]) {
+    assert.doesNotMatch(text, /password and (an )?authenticator code\)?[ .;]/);
+    assert.match(text, /authenticator code if two-factor sign-in is on/);
+  }
+  assert.match(APPROVAL_NOTE, /before it happens; see the approval flow/);
 });
 
 /** A client whose lookup never answers until its signal fires, like a stalled FilingBridge. */

@@ -30,7 +30,8 @@ Commands (run these yourself, in a terminal):
                  --password-stdin                  (--profile local only, for test harnesses)
   status         Who the stored credential acts as, and the level and scope FilingBridge holds.
   approve <id>   Approve one action FilingBridge refused. Terminal only; shows the
-                 action first, then asks for your password and authenticator code.
+                 action first, then asks for your password and, if two-factor
+                 sign-in is on, your authenticator code.
   disconnect     Revoke the connector session in FilingBridge and forget the credential.
   serve          Serve MCP over stdio (the default).
   serve --http   Serve MCP over Streamable HTTP for remote clients (Claude.ai, Claude Code,
