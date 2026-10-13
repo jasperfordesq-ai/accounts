@@ -71,7 +71,7 @@ test('every flag the bundle passes is one the CLI accepts, set or left blank', (
   }
 
   // The profile is still a pin when it comes from a dialog.
-  assert.throws(() => parseArgs(substitute({ profile: 'private', base_url: 'https://evil.example' }), {}), /ts\.net/);
+  assert.throws(() => parseArgs(substitute({ profile: 'private', base_url: 'https://evil.example' }), {}), /only reaches the Private Server's loopback address/);
   assert.throws(() => parseArgs(substitute({ profile: 'anything', base_url: 'https://fb.example.ie' }), {}), /Unknown profile/);
 });
 

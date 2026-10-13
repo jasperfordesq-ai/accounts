@@ -120,27 +120,25 @@ export function OAuthAuthorizeWorkbench({ navigate }: OAuthAuthorizeWorkbenchPro
       setPhase(next);
     };
 
-    if (!params.get("client_id") || !params.get("redirect_uri")) {
-      queueMicrotask(() => settle({
-        kind: "invalid",
-        message: "This link is missing the application details FilingBridge needs. Start the connection again from your agent.",
-      }));
-    } else {
-      describeOAuthAuthorization(params)
-        .then((description) => {
-          if (cancelled) return;
-          setAccessLevel(description.requestedAccessLevel);
-          setDataScope(description.requestedDataScope);
-          settle({ kind: "ready", description });
-        })
-        .catch((err: unknown) => {
-          settle({
-            kind: "invalid",
-            message: apiErrorDetail(err).message
+    // The server decides whether a request is valid; this page never skips that check. A link
+    // missing its application details is explained in plain words when the server refuses it.
+    const missingDetails = !params.has("client_id") || !params.has("redirect_uri");
+    describeOAuthAuthorization(params)
+      .then((description) => {
+        if (cancelled) return;
+        setAccessLevel(description.requestedAccessLevel);
+        setDataScope(description.requestedDataScope);
+        settle({ kind: "ready", description });
+      })
+      .catch((err: unknown) => {
+        settle({
+          kind: "invalid",
+          message: missingDetails
+            ? "This link is missing the application details FilingBridge needs. Start the connection again from your agent."
+            : apiErrorDetail(err).message
               ?? "FilingBridge could not verify this connection request. Start the connection again from your agent.",
-          });
         });
-    }
+      });
 
     return () => {
       cancelled = true;

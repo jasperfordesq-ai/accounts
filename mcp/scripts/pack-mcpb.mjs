@@ -14,6 +14,7 @@
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { buildThirdPartyNotices } from './third-party-notices.mjs';
+import { quoteWindowsArgument } from './windows-args.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -26,9 +27,10 @@ const repoRoot = resolve(root, '..');
 const output = resolve(root, 'filingbridge.mcpb');
 const windows = process.platform === 'win32';
 
+
 function run(command, args, cwd) {
   // npm and npx are .cmd shims on Windows, which only a shell can start.
-  const quoted = windows ? args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)) : args;
+  const quoted = windows ? args.map(quoteWindowsArgument) : args;
   execFileSync(command, quoted, { cwd, stdio: 'inherit', shell: windows });
 }
 
