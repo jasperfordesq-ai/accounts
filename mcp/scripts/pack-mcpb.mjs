@@ -14,7 +14,6 @@
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { buildThirdPartyNotices } from './third-party-notices.mjs';
-import { quoteWindowsArgument } from './windows-args.mjs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -25,13 +24,18 @@ export const MCPB_VERSION = '2.1.2';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = resolve(root, '..');
 const output = resolve(root, 'filingbridge.mcpb');
-const windows = process.platform === 'win32';
 
+// Run npm and npx through their own JavaScript entry points with this Node binary: no shell is
+// involved on any platform, so paths containing spaces, & | ^ % or quotes need no escaping.
+function npmEntry(command) {
+  const entry = resolve(dirname(process.execPath), 'node_modules', 'npm', 'bin', `${command}-cli.js`);
+  const unixEntry = resolve(dirname(process.execPath), '..', 'lib', 'node_modules', 'npm', 'bin', `${command}-cli.js`);
+  for (const candidate of [entry, unixEntry]) if (existsSync(candidate)) return candidate;
+  throw new Error(`Cannot find ${command}-cli.js next to ${process.execPath}; install npm alongside Node.`);
+}
 
 function run(command, args, cwd) {
-  // npm and npx are .cmd shims on Windows, which only a shell can start.
-  const quoted = windows ? args.map(quoteWindowsArgument) : args;
-  execFileSync(command, quoted, { cwd, stdio: 'inherit', shell: windows });
+  execFileSync(process.execPath, [npmEntry(command), ...args], { cwd, stdio: 'inherit' });
 }
 
 const stage = mkdtempSync(join(tmpdir(), 'filingbridge-mcpb-'));

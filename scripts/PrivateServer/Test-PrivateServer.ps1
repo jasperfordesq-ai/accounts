@@ -858,7 +858,15 @@ try {
     $brokenDiagnose = New-Object System.Collections.Generic.List[string]
     try { Invoke-FilingBridgePrivateServer -Command diagnose -RepositoryRoot $repositoryRoot -StateDirectory $stateDirectory 6>&1 | ForEach-Object { $brokenDiagnose.Add([string]$_) } } catch { }
     Assert-True (@($brokenDiagnose | Where-Object { $_ -match '^FAIL mcp-service-key-binding:' }).Count -eq 1) "diagnose must fail an MCP key that does not match the API hash"
-    [IO.File]::WriteAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), $validMcpHash, [Text.UTF8Encoding]::new($false))
+    # The repair the advice names (any environment write) must actually replace the mismatched pair.
+    & $privateServerModule { param($directory) Initialize-FbMcpServiceKey -SecretDirectory $directory } $state.secretDirectory
+    $repairedMcpKey = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8).Trim()
+    $repairedMcpHash = [IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key_hash"), $testUtf8).Trim()
+    Assert-True ($repairedMcpHash -ceq (& $privateServerModule { param($value) Get-FbSha256Text $value } $repairedMcpKey)) "an environment write must repair an MCP key pair whose hash does not match"
+    Assert-True ($repairedMcpHash -cne $validMcpHash.Trim()) "the repaired pair must be freshly generated"
+    $consistentMcpKeyBefore = $repairedMcpKey
+    & $privateServerModule { param($directory) Initialize-FbMcpServiceKey -SecretDirectory $directory } $state.secretDirectory
+    Assert-True ([IO.File]::ReadAllText((Join-Path $state.secretDirectory "accounts_mcp_api_key"), $testUtf8).Trim() -ceq $consistentMcpKeyBefore) "a consistent MCP key pair must be left unchanged"
 
     $legacyConnectorState = ([IO.File]::ReadAllText($statePath, $testUtf8)) | ConvertFrom-Json
     $legacyConnectorStateText = [IO.File]::ReadAllText($statePath, $testUtf8)

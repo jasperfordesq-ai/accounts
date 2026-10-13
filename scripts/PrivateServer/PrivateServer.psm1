@@ -593,7 +593,17 @@ function Initialize-FbMcpServiceKey {
     # (update/setup). It is not recovery-critical; restore and replacement-host recovery rotate it.
     $keyPath = Join-Path $SecretDirectory "accounts_mcp_api_key"
     $hashPath = Join-Path $SecretDirectory "accounts_mcp_api_key_hash"
-    if (-not $Rotate -and (Test-Path -LiteralPath $keyPath -PathType Leaf) -and (Test-Path -LiteralPath $hashPath -PathType Leaf)) { return }
+    if (-not $Rotate -and (Test-Path -LiteralPath $keyPath -PathType Leaf) -and (Test-Path -LiteralPath $hashPath -PathType Leaf)) {
+        # Keep a consistent pair; repair one whose hash no longer matches its key (the pair is not
+        # recovery-critical, so a fresh pair is always safe: api and mcp pick it up when recreated).
+        try {
+            $existing = (Read-FbUtf8Text $keyPath).Trim()
+            $bound = $existing.Length -ge 16 -and $existing -notmatch '\s' -and
+                (Test-FbFixedTimeHexEqual (Get-FbSha256Text $existing) (Read-FbUtf8Text $hashPath).Trim())
+            $existing = $null
+            if ($bound) { return }
+        } catch { }
+    }
     $key = New-PrivateServerRandomSecret
     [IO.File]::WriteAllText($keyPath, $key, $script:Utf8NoBom)
     Set-FbSecretAcl -Path $keyPath
@@ -3613,7 +3623,7 @@ function Invoke-FbDiagnose {
         $mcpBound = $mcpKeyValue.Length -ge 16 -and $mcpKeyValue -notmatch '\s' -and
             (Test-FbFixedTimeHexEqual (Get-FbSha256Text $mcpKeyValue) (Read-FbUtf8Text $mcpHashPath).Trim())
         $mcpKeyValue = $null
-        $checks.Add([pscustomobject]@{ name = "mcp-service-key-binding"; passed = $mcpBound; detail = if ($mcpBound) { "service key matches the API key hash" } else { "service key does not match accounts_mcp_api_key_hash; run any environment-writing command (for example tailscale/connector enable) or restore" } })
+        $checks.Add([pscustomobject]@{ name = "mcp-service-key-binding"; passed = $mcpBound; detail = if ($mcpBound) { "service key matches the API key hash" } else { "service key does not match accounts_mcp_api_key_hash; run 'connector disable' or 'connector enable', which rewrite the environment and replace a mismatched pair" } })
     } catch { $checks.Add([pscustomobject]@{ name = "mcp-service-key-binding"; passed = $false; detail = "MCP connector service key or hash unreadable" }) }
     foreach ($nativeCheck in @(
         [pscustomobject]@{ name = "docker-engine"; file = "docker"; args = @("version", "--format", "{{.Server.Os}}") },
