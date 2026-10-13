@@ -510,7 +510,7 @@ Do not commit a custom `distDir` to work around local filesystem locks; the prod
 
 1. Take a pre-release backup and verify the sha256 file.
 2. Download the exact trusted-`main` `container-supply-chain` artifact. Confirm both reports have `status: passed`, `promotionMode: promoted`, `releaseEligible: true`, the expected full commit SHA/run URL, zero blockers, and matching report SHA-256. Reject verification-only evidence.
-3. Copy `images.backend.exactDigestReference` to `ACCOUNTS_API_IMAGE`, `images.frontend.exactDigestReference` to `ACCOUNTS_FRONTEND_IMAGE` and `images.mcp.exactDigestReference` to `ACCOUNTS_MCP_IMAGE`. All three values must match `^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$`; tags are forbidden. The migration and API services must retain the same backend value.
+3. The report's `images` is an array with one entry per `component`. Copy the `exactDigestReference` of the `backend` entry to `ACCOUNTS_API_IMAGE`, the `frontend` entry to `ACCOUNTS_FRONTEND_IMAGE` and the `mcp` entry to `ACCOUNTS_MCP_IMAGE`, for example `(Get-Content container-supply-chain-report.json | ConvertFrom-Json).images | Where-Object component -eq 'mcp' | Select-Object -ExpandProperty exactDigestReference`. All three values must match `^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$`; tags are forbidden. The migration and API services must retain the same backend value.
 4. Verify GitHub provenance, then pull and inspect the exact promoted digests:
 
 ```powershell

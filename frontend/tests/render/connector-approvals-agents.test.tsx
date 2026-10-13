@@ -185,6 +185,7 @@ describe("connected agents page", () => {
 
     await waitFor(() => expect(screen.getByTestId("mcp-remote-url")).toHaveTextContent("https://filingbridge.tail1234.ts.net/mcp"));
     expect(screen.getByText(/claude mcp add --transport http filingbridge https:\/\/filingbridge\.tail1234\.ts\.net\/mcp/)).toBeInTheDocument();
+    expect(screen.getByText("filingbridge-mcp connect --base-url https://filingbridge.tail1234.ts.net")).toBeInTheDocument();
   });
 
   it("disconnects an agent after confirmation and refreshes the list", async () => {
@@ -205,6 +206,7 @@ describe("connected agents page", () => {
     expect(screen.getByText("Personal data withheld")).toBeInTheDocument();
     expect(await screen.findByText("Adding the new director")).toBeInTheDocument();
     expect(screen.getByTestId("mcp-remote-url")).toHaveTextContent(`${window.location.origin}/mcp`);
+    expect(screen.getByText(`filingbridge-mcp connect --base-url ${window.location.origin}`)).toBeInTheDocument();
     expect(screen.queryByLabelText("Show agents connected by")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Disconnect Claude" }));
