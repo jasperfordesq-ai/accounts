@@ -20,6 +20,12 @@ public class AuditTrailMiddleware(RequestDelegate next)
 
         if (!shouldAudit)
         {
+            if (IsConnectorWorkspaceWrite(context))
+            {
+                await AuditConnectorWorkspaceWriteAsync(context, audit, scopeFactory);
+                return;
+            }
+
             await next(context);
             return;
         }
@@ -149,6 +155,58 @@ public class AuditTrailMiddleware(RequestDelegate next)
         return true;
     }
 
+    /// <summary>
+    /// A connector change outside /api/companies/{id} (creating or onboarding a company, user
+    /// administration, privacy and operations routes). Those routes run their own transactions, so
+    /// none is opened here; the attributed record is written afterwards in a fresh scope, so a
+    /// person can see in the audit log which agent made the change and why.
+    /// </summary>
+    private static bool IsConnectorWorkspaceWrite(HttpContext context) =>
+        IsUnsafeMethod(context.Request.Method)
+        && ConnectorSessionContext.Get(context) is not null
+        && context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+        && !context.Request.Path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase)
+        && !context.Request.Path.StartsWithSegments("/api/oauth", StringComparison.OrdinalIgnoreCase);
+
+    private async Task AuditConnectorWorkspaceWriteAsync(HttpContext context, AuditService audit, IServiceScopeFactory? scopeFactory)
+    {
+        try
+        {
+            await next(context);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                await LogApiWriteAsync(audit, scopeFactory, context, null, null, "ApiWriteFailed", useFreshScope: true,
+                    payload: new { method = context.Request.Method, path = context.Request.Path.Value, exceptionType = ex.GetType().Name });
+            }
+            catch
+            {
+                // Preserve the original application exception if audit logging also fails.
+            }
+
+            throw;
+        }
+
+        var replayed = string.Equals(context.Response.Headers[IdempotencyHttpContract.ReplayedHeader], "true", StringComparison.OrdinalIgnoreCase);
+        if (replayed) return;
+        await LogApiWriteAsync(
+            audit,
+            scopeFactory,
+            context,
+            null,
+            null,
+            IsSuccess(context.Response.StatusCode) ? "ApiWriteSucceeded" : "ApiWriteRejected",
+            useFreshScope: true,
+            payload: new
+            {
+                method = context.Request.Method,
+                path = context.Request.Path.Value,
+                statusCode = context.Response.StatusCode
+            });
+    }
+
     private static async Task<int?> TryGetVerifiedImportPeriodIdAsync(HttpRequest request, AccountsDbContext db, int companyId)
     {
         if (!IsImportRoute(request.Path)
@@ -195,7 +253,7 @@ public class AuditTrailMiddleware(RequestDelegate next)
         AuditService audit,
         IServiceScopeFactory? scopeFactory,
         HttpContext context,
-        int companyId,
+        int? companyId,
         int? periodId,
         string action,
         bool useFreshScope,
@@ -215,7 +273,7 @@ public class AuditTrailMiddleware(RequestDelegate next)
     private static async Task WriteApiAuditAsync(
         AuditService audit,
         HttpContext context,
-        int companyId,
+        int? companyId,
         int? periodId,
         string action,
         object payload)
@@ -225,7 +283,7 @@ public class AuditTrailMiddleware(RequestDelegate next)
             companyId,
             periodId,
             "ApiRequest",
-            periodId ?? companyId,
+            periodId ?? companyId ?? 0,
             action,
             newValue: WithConnectorAttribution(context, payload),
             userId: user is null ? null : AuthenticatedIdentity.AuditUserId(user),

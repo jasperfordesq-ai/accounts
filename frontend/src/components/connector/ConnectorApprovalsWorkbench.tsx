@@ -106,7 +106,7 @@ export function ConnectorApprovalsWorkbench() {
     setGrantError(null);
     try {
       const result = await approveConnectorAction(pending.approvalId, password, totpCode.trim());
-      toast.success(`Approved: ${result.summary}. The agent can now repeat the action.`);
+      toast.success(`Approved: ${result.summary}. A waiting agent carries on by itself; otherwise ask it to repeat the action.`);
       setPending(null);
       setPassword("");
       setTotpCode("");
@@ -120,6 +120,7 @@ export function ConnectorApprovalsWorkbench() {
             : error instanceof Error ? error.message : "The approval was not granted."),
       );
       setPassword("");
+      setTotpCode("");
     } finally {
       setGranting(false);
     }
@@ -215,7 +216,9 @@ export function ConnectorApprovalsWorkbench() {
       <ConfirmModal
         open={pending !== null}
         title="Approve this agent action?"
-        description={pending ? `${pending.summary}. The approval covers this exact request once and expires in a few minutes.` : ""}
+        description={pending
+          ? `${pending.summary}. The approval covers this exact request once. ${remainingLabel(pending.expiresAtUtc, now)}.`
+          : ""}
         confirmLabel="Approve action"
         variant="warning"
         loading={granting}
@@ -243,6 +246,7 @@ export function ConnectorApprovalsWorkbench() {
             <Label>Authenticator code</Label>
             <Input inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} disabled={granting} required />
           </TextField>
+          <p className="text-xs text-gray-600 dark:text-gray-400">Each authenticator code works once. If you have just used one to sign in, wait for the next code.</p>
           <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">Submit approval</button>
         </form>
       </ConfirmModal>

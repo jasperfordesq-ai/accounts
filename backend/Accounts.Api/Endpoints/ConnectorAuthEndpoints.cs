@@ -85,7 +85,7 @@ public static class ConnectorAuthEndpoints
         {
             var grant = await connectors.GrantApprovalAsync(AuthContext.RequireUser(context), input.ApprovalId, input.Password, input.TotpCode, cancellationToken);
             return grant is null
-                ? Results.Json(new { error = "The approval was not granted. Check the password and authenticator code, and that the approval has not expired.", code = ConnectorErrorCodes.ApprovalRefused }, statusCode: StatusCodes.Status401Unauthorized)
+                ? Results.Json(new { error = "The approval was not granted. Check the password and authenticator code, and that the approval has not expired. Each authenticator code works once; if you have just used one to sign in, wait for the next code.", code = ConnectorErrorCodes.ApprovalRefused }, statusCode: StatusCodes.Status401Unauthorized)
                 : Results.Ok(new ConnectorApprovalGrantResponse(true, grant.ApprovalId, grant.Summary, grant.ExpiresAtUtc));
         })
             .Produces<ConnectorApprovalGrantResponse>()

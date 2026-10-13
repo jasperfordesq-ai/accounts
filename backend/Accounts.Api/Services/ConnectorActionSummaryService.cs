@@ -17,7 +17,10 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
     {
         var path = context.Request.Path.Value ?? "";
         var method = context.Request.Method.ToUpperInvariant();
-        var parts = new List<string> { DescribeAction(method, routePattern) };
+        var resourceId = ConnectorPostureMiddleware.ResourceIdOf(context.Request.Path);
+        var targetsOneRecord = TargetsOneRecord(routePattern);
+        var action = DescribeAction(method, routePattern);
+        var parts = new List<string> { targetsOneRecord && resourceId is not null ? $"{action} #{resourceId}" : action };
         try
         {
             if (TenantAccessMiddleware.TryGetCompanyId(context.Request.Path, out var companyId))
@@ -53,6 +56,27 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
                 if (row is not null) parts.Add($"officer {row.Name} ({row.Role})");
             }
 
+            var yearEnd = YearEndRecordRoute().Match(path);
+            if (yearEnd.Success && int.TryParse(yearEnd.Groups["id"].Value, out var recordId))
+            {
+                // Amount and type only: a debtor's or creditor's name may be a private individual.
+                var periodIdOfRecord = int.Parse(yearEnd.Groups["period"].Value, System.Globalization.CultureInfo.InvariantCulture);
+                var amount = yearEnd.Groups["kind"].Value.ToLowerInvariant() switch
+                {
+                    "debtors" => await db.Debtors.AsNoTracking()
+                        .Where(candidate => candidate.Id == recordId && candidate.PeriodId == periodIdOfRecord)
+                        .Select(candidate => new { candidate.Amount, Type = candidate.Type.ToString() })
+                        .SingleOrDefaultAsync(cancellationToken),
+                    "creditors" => await db.Creditors.AsNoTracking()
+                        .Where(candidate => candidate.Id == recordId && candidate.PeriodId == periodIdOfRecord)
+                        .Select(candidate => new { candidate.Amount, Type = candidate.Type.ToString() })
+                        .SingleOrDefaultAsync(cancellationToken),
+                    _ => null
+                };
+                if (amount is not null)
+                    parts.Insert(1, $"{amount.Type}, EUR {amount.Amount.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)}");
+            }
+
             var bankAccount = BankAccountRoute().Match(path);
             if (bankAccount.Success && int.TryParse(bankAccount.Groups["id"].Value, out var bankAccountId))
             {
@@ -78,8 +102,7 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
             // A summary lookup must never block the approval prompt; fall back to the route words.
         }
 
-        var resourceId = ConnectorPostureMiddleware.ResourceIdOf(context.Request.Path);
-        if (parts.Count == 1 && resourceId is not null) parts.Add($"record {resourceId}");
+        if (!targetsOneRecord && parts.Count == 1 && resourceId is not null) parts.Add($"record {resourceId}");
         if (await RequestedValuesAsync(context.Request) is { Length: > 0 } requested)
             parts.Add("requested: " + requested);
         var summary = string.Join(", ", parts);
@@ -142,6 +165,13 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
         }
     }
 
+    /// <summary>True when the route ends in a record identifier, so the action is on one record.</summary>
+    public static bool TargetsOneRecord(string routePattern)
+    {
+        var segments = routePattern.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 && segments[^1].StartsWith('{');
+    }
+
     public static string DescribeAction(string method, string routePattern)
     {
         var words = routePattern
@@ -149,6 +179,8 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
             .Where(segment => !segment.StartsWith('{') && segment is not "api" and not "companies" and not "periods")
             .Select(segment => segment.Replace('-', ' '))
             .ToArray();
+        if (words.Length > 0 && TargetsOneRecord(routePattern))
+            words[^1] = Singular(words[^1]);
         var subject = words.Length == 0 ? "record" : string.Join(" ", words);
         var verb = method switch
         {
@@ -158,6 +190,20 @@ public sealed partial class ConnectorActionSummaryService(AccountsDbContext db)
         };
         return $"{verb} {subject}";
     }
+
+    /// <summary>"debtors" becomes "debtor", "inventories" "inventory", "fixed assets" "fixed asset".</summary>
+    public static string Singular(string words)
+    {
+        var lastSpace = words.LastIndexOf(' ');
+        var head = lastSpace < 0 ? "" : words[..(lastSpace + 1)];
+        var word = lastSpace < 0 ? words : words[(lastSpace + 1)..];
+        if (word.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && word.Length > 3) word = word[..^3] + "y";
+        else if (word.EndsWith('s') && !word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) && word.Length > 1) word = word[..^1];
+        return head + word;
+    }
+
+    [GeneratedRegex(@"^/api/companies/\d+/periods/(?<period>\d+)/(?<kind>debtors|creditors)/(?<id>\d+)/?$", RegexOptions.IgnoreCase)]
+    private static partial Regex YearEndRecordRoute();
 
     [GeneratedRegex(@"^/api/companies/\d+/periods/(?<id>\d+)(/|$)", RegexOptions.IgnoreCase)]
     private static partial Regex PeriodRoute();

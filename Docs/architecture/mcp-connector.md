@@ -99,21 +99,32 @@ DELETE, period status changes, approvals, mark-filed, filing-status and handoff 
 administration, privacy, chart adoption, historic anchors, …) answers:
 
 ```json
-{ "code": "APPROVAL_REQUIRED", "approvalId": "…", "summary": "Delete officers, company Example Limited (CRO 123456), officer A Director (Director)",
+{ "code": "APPROVAL_REQUIRED", "approvalId": "…", "summary": "Delete officer #12, company Example Limited (CRO 123456), officer A Director (Director)",
   "expiresAt": "…", "command": "filingbridge-mcp approve …", "approvalsUrl": "https://…/settings/approvals?id=…" }
 ```
 
 The approval is bound to SHA-256 of (agent family, method, path, canonical JSON body). The person runs
 the command in their own terminal or opens the web approvals page linked from the 428, sees the server's
-summary and enters password + authenticator code. The agent then repeats the identical call with
-`X-FilingBridge-Approval`; one conditional update spends it. Any mismatch, expiry (5 minutes) or
-second use gets a fresh 428. The browser's 10-minute recent-TOTP window is never consulted for
+summary and enters password + authenticator code. Meanwhile the agent calls the read-only core tool
+`approval_wait`, which polls `GET /api/auth/connector/approvals/{id}` and returns as soon as the approval
+is granted (or used, or expired, or after at most 120 seconds with `waiting`), so the person never has
+to tell the agent to carry on. The agent then repeats the identical call with
+`X-FilingBridge-Approval`; one conditional update spends it. Any mismatch, expiry (15 minutes by
+default) or second use gets a fresh 428.
+
+The summary names one record when the route ends in an identifier (`Delete debtor #1`), and for
+debtors and creditors adds the type and amount; it never includes a counterparty's name, because a
+debtor or creditor may be a private individual. The browser's 10-minute recent-TOTP window is never consulted for
 agents, so nothing elevates an agent for a period of time.
 
 ## Audit and activity
 
 - API writes under `/api/companies/{id}` keep their `audit_logs` entries; for agents the payload gains
   `client {kind: McpConnector, sessionFamilyId, accessLevel, dataScope, clientVersion, reason}`.
+- Agent writes outside `/api/companies/{id}` (company create and onboarding, user administration,
+  privacy and operations routes) get a workspace-level `ApiWriteSucceeded` / `ApiWriteRejected` /
+  `ApiWriteFailed` entry with the same `client` attribution, written in a fresh scope after the
+  route's own transaction. Browser requests to those routes are unchanged.
   `reason` comes from `X-FilingBridge-Reason` (control characters stripped, 500 characters).
 - `connector_activity_events` records every agent write, every refusal (401/403/428/429) and every
   personal-data read, including on non-company routes. Readable through
@@ -128,7 +139,7 @@ agents, so nothing elevates an agent for a period of time.
 | `Connector:SigningKey` | — | Must be strong and differ from `AuthSession:SigningKey` and `IdentitySecurity:IdentityHmacKey` outside Development |
 | `Connector:AccessTokenMinutes` | 15 | 5–30 |
 | `Connector:RefreshIdleDays` / `FamilyAbsoluteDays` | 30 / 90 | |
-| `Connector:ApprovalMinutes` | 5 | 2–10 |
+| `Connector:ApprovalMinutes` | 15 | 2–30 |
 | `Connector:WriteBudgetPerMinute` | 30 | 5–120 |
 | `Connector:PublicBaseUrl` | — | Public origin: OAuth issuer, MCP resource and web approvals link |
 | `Connector:OAuthRedirectHosts` | `claude.ai`, `claude.com` | Extra HTTPS redirect hosts for OAuth clients (configuration adds to the defaults) |

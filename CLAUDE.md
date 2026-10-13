@@ -383,7 +383,7 @@ Public Production retains the following contract:
 
 - Transport inventory: committed OpenAPI 3.1 contract (204 paths, 241 schemas at this revision).
 - MCP connector inventory: `mcp/src/route-coverage.ts` maps every contract operation to a tool or a
-  written exclusion (236 tools at this revision); see `Docs/architecture/mcp-connector.md`.
+  written exclusion (237 tools at this revision); see `Docs/architecture/mcp-connector.md`.
 - Database inventory: EF model plus append-only migrations; migration/model drift is tested rather
   than represented by a manually maintained count.
 - Test inventory: use test-run output and retained CI evidence for the exact candidate; historical

@@ -91,4 +91,6 @@ test('the instructions carry the filing boundary sentence verbatim, and the shar
   assert.match(INSTRUCTIONS, /web approvals page/);
   assert.match(INSTRUCTIONS, /Hand it to the person immediately/);
   assert.match(INSTRUCTIONS, /changes a minute/);
+  assert.match(INSTRUCTIONS, /call approval_wait with the approvalId/);
+  assert.match(INSTRUCTIONS, /never assert a source, reference or date you have not seen/);
 });

@@ -20,6 +20,7 @@ import { INSTRUCTIONS } from './instructions.js';
 import { ConnectorError } from './errors.js';
 import { errorResult, okResult } from './results.js';
 import { SESSION_INFO_TOOL, runSessionInfo } from './session-info.js';
+import { APPROVAL_WAIT_TOOL, runApprovalWait } from './approval-wait.js';
 import { createDiagnostics } from './diagnostics.js';
 import { findPrompt, promptListing } from './prompts.js';
 import { RESOURCES, RESOURCE_TEMPLATES, readResource } from './resources.js';
@@ -73,7 +74,7 @@ export interface ServerOptions {
   log?: (line: string) => void;
 }
 
-const CORE_TOOLS = [SESSION_INFO_TOOL, SEARCH_TOOL, FETCH_TOOL] as const;
+const CORE_TOOLS = [SESSION_INFO_TOOL, SEARCH_TOOL, FETCH_TOOL, APPROVAL_WAIT_TOOL] as const;
 const CORE_NAMES = new Set<string>(CORE_TOOLS.map((tool) => tool.name));
 
 /** Whether a tool is offered to this session with this configuration. */
@@ -184,13 +185,14 @@ export function createServer(options: ServerOptions): Server {
    * Runs one tool and returns its raw value, or throws. fetch and resource
    * reads come back through here, so every check below applies to them too.
    */
-  async function dispatch(name: string, args: Record<string, unknown>): Promise<unknown> {
+  async function dispatch(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     if (name === SESSION_INFO_TOOL.name) {
       if (Object.keys(args).length > 0) throw new Error('session_info takes no arguments.');
       return runSessionInfo(client, { ...options, baseUrl: publicUrl });
     }
     if (name === SEARCH_TOOL.name) return runSearch(args);
     if (name === FETCH_TOOL.name) return runFetch(args);
+    if (name === APPROVAL_WAIT_TOOL.name) return runApprovalWait(client, args, { signal });
 
     const tool = TOOLS.find((candidate) => candidate.name === name);
     if (!tool) throw new ConnectorError('UNKNOWN_TOOL', `Unknown tool: ${name}`);
@@ -228,11 +230,11 @@ export function createServer(options: ServerOptions): Server {
     tools: buildToolList(await posture(), options),
   }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
     const started = Date.now();
     try {
-      const value = await dispatch(request.params.name, args);
+      const value = await dispatch(request.params.name, args, extra.signal);
       diagnostics.toolCall(request.params.name, 'ok', Date.now() - started);
       return okResult(value);
     } catch (error) {
