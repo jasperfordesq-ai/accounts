@@ -67,6 +67,10 @@ test("the complete action catalog is wired to a route source that consumes its c
       + source("src/components/statements/FinancialStatementsWorkbench.tsx"),
     "working-papers": source("src/app/companies/[companyId]/periods/[periodId]/working-papers/page.tsx")
       + source("src/components/period/AccountantWorkingPaperWorkbench.tsx"),
+    "connector-approvals": source("src/app/settings/approvals/page.tsx")
+      + source("src/components/connector/ConnectorApprovalsWorkbench.tsx"),
+    "connector-agents": source("src/app/settings/agents/page.tsx")
+      + source("src/components/connector/ConnectorAgentsWorkbench.tsx"),
     "production-readiness": source("src/app/production-readiness/page.tsx")
       + source("src/components/AuthProvider.tsx"),
   };

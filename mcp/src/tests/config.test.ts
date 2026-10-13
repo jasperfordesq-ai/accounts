@@ -56,12 +56,20 @@ test('approve takes one identifier', () => {
   assert.throws(() => parseArgs(['approve', 'a;rm -rf', '--profile', 'local'], env), /approval identifier/);
 });
 
-test('toolsets, directories and the phase 2 flag', () => {
+test('toolsets, directories and the HTTP flags', () => {
   const config = parseArgs(['--profile', 'local', '--toolsets', 'year_end,filing', '--download-dir', 'out', '--upload-root', 'in'], env);
   assert.deepEqual(config.toolsets, ['year_end', 'filing']);
   assert.equal(config.downloadDir, 'out');
   assert.throws(() => parseArgs(['--profile', 'local', '--toolsets', 'everything'], env), /Unknown toolset/);
-  assert.throws(() => parseArgs(['serve', '--http'], env), /phase 2/);
+  const http = parseArgs(['serve', '--http', '--host', '0.0.0.0', '--port', '3100'], { FILINGBRIDGE_API_URL: 'http://api:8080/' });
+  assert.equal(http.http, true);
+  assert.equal(http.host, '0.0.0.0');
+  assert.equal(http.port, 3100);
+  assert.equal(http.baseUrl, 'http://api:8080');
+  assert.equal(parseArgs(['serve', '--http'], {}).host, '127.0.0.1');
+  assert.throws(() => parseArgs(['serve', '--http', '--download-dir', 'x'], {}), /base64/);
+  assert.throws(() => parseArgs(['--profile', 'local', '--port', '3100'], env), /only to serve --http/);
+  assert.throws(() => parseArgs(['serve', '--http', '--port', '99999'], {}), /1 to 65535/);
   assert.equal(parseArgs(['--profile', 'local'], { FILINGBRIDGE_DOWNLOAD_DIR: ' d ' }).downloadDir, 'd');
 });
 

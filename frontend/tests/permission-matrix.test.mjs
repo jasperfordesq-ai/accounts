@@ -73,6 +73,8 @@ test("every authenticated user-facing route has an explicit deep-link policy", (
       "charity",
       "classification",
       "company-detail",
+      "connector-agents",
+      "connector-approvals",
       "dashboard",
       "new-company",
       "notes",

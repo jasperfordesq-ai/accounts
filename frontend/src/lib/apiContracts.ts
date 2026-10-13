@@ -2363,3 +2363,82 @@ export function parseUserAdministrationSummary(payload: unknown) {
 export function parseUserProvisioningResult(payload: unknown) {
   return parseApiContract(userProvisioningResultSchema, payload, "user provisioning result");
 }
+
+// --- MCP connector: approvals, connected agents, activity and the OAuth consent page ---
+
+const connectorIntegerSchema = z.number().int();
+export const connectorAccessLevelSchema = z.enum(["Read", "Write", "Admin"]);
+export const connectorDataScopeSchema = z.enum(["Withheld", "Full"]);
+/**
+ * The API omits null properties (System.Text.Json WhenWritingNull), so an absent value and an
+ * explicit null both mean "no value"; both are normalised to null.
+ */
+function absentAsNull<T extends z.ZodTypeAny>(schema: T) {
+  return schema.nullish().transform((value) => value ?? null);
+}
+const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Expected a UUID");
+
+export const connectorApprovalViewSchema = z.object({
+  approvalId: uuidSchema,
+  summary: z.string(),
+  method: z.string().min(1),
+  routePattern: z.string().min(1),
+  resourceId: absentAsNull(z.string()),
+  createdAtUtc: isoDateTimeSchema,
+  expiresAtUtc: isoDateTimeSchema,
+  approvedAtUtc: absentAsNull(isoDateTimeSchema),
+  consumedAtUtc: absentAsNull(isoDateTimeSchema),
+});
+
+export const connectorApprovalGrantSchema = z.object({
+  ok: z.boolean(),
+  approvalId: uuidSchema,
+  summary: z.string(),
+  expiresAtUtc: isoDateTimeSchema,
+});
+
+export const connectorSessionSummarySchema = z.object({
+  familyId: uuidSchema,
+  userId: positiveIdSchema,
+  accessLevel: connectorAccessLevelSchema,
+  dataScope: connectorDataScopeSchema,
+  deviceLabel: absentAsNull(z.string()),
+  clientVersion: absentAsNull(z.string()),
+  connectedAtUtc: isoDateTimeSchema,
+  lastUsedAtUtc: absentAsNull(isoDateTimeSchema),
+  expiresAtUtc: isoDateTimeSchema,
+});
+
+export const connectorActivityRowSchema = z.object({
+  id: connectorIntegerSchema.positive(),
+  sessionFamilyId: uuidSchema,
+  accessLevel: z.string(),
+  dataScope: z.string(),
+  method: z.string(),
+  routePattern: z.string(),
+  resourceId: absentAsNull(z.string()),
+  companyId: absentAsNull(positiveIdSchema),
+  statusCode: connectorIntegerSchema,
+  reason: absentAsNull(z.string()),
+  occurredAtUtc: isoDateTimeSchema,
+});
+
+export const connectorActivityPageSchema = z.object({
+  data: z.array(connectorActivityRowSchema),
+  page: connectorIntegerSchema.positive(),
+  pageSize: connectorIntegerSchema.positive(),
+  hasMore: z.boolean(),
+});
+
+export const oauthAuthorizeDescriptionSchema = z.object({
+  clientName: z.string().min(1),
+  redirectUri: z.string().url(),
+  redirectHost: z.string().min(1),
+  requestedAccessLevel: connectorAccessLevelSchema,
+  requestedDataScope: connectorDataScopeSchema,
+  resource: z.string().min(1),
+});
+
+export const oauthAuthorizeResponseSchema = z.object({
+  redirectTo: z.string().url(),
+});

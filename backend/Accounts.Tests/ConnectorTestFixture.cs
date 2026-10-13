@@ -44,6 +44,7 @@ internal sealed class ConnectorTestFixture : IAsyncDisposable
     public IdentityAccessService Identity => Services.GetRequiredService<IdentityAccessService>();
     public UserLifecycleService Lifecycle => Services.GetRequiredService<UserLifecycleService>();
     public ConnectorSessionService Connectors => Services.GetRequiredService<ConnectorSessionService>();
+    public OAuthService OAuth => Services.GetRequiredService<OAuthService>();
     public Tenant Tenant { get; private set; } = null!;
     public Company Company { get; private set; } = null!;
     public UserAccount Owner { get; private set; } = null!;
@@ -108,6 +109,12 @@ internal sealed class ConnectorTestFixture : IAsyncDisposable
             provider.GetRequiredService<IdentityAccessService>(),
             provider.GetRequiredService<MfaSecurityService>(),
             provider.GetRequiredService<AuditService>(),
+            provider.GetRequiredService<IOptions<ConnectorConfig>>(),
+            provider.GetRequiredService<TimeProvider>()));
+        services.AddScoped(provider => new OAuthService(
+            provider.GetRequiredService<AccountsDbContext>(),
+            provider.GetRequiredService<ConnectorSessionService>(),
+            provider.GetRequiredService<MfaSecurityService>(),
             provider.GetRequiredService<IOptions<ConnectorConfig>>(),
             provider.GetRequiredService<TimeProvider>()));
         services.AddScoped<ConnectorActionSummaryService>();

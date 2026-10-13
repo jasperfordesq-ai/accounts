@@ -41,3 +41,67 @@ export class ETagCache {
     return this.#byPeriod.size;
   }
 }
+
+/** How many callers' caches serve --http keeps at once. */
+export const CALLER_ETAG_CACHE_MAX = 1000;
+/** No caller's cache outlives this, whatever its token says (the access-token lifetime). */
+export const CALLER_ETAG_TTL_MS = 15 * 60_000;
+
+/**
+ * serve --http builds a fresh MCP server and ApiClient for every request, so
+ * the period tokens one tool call learns would be gone by the next, and a
+ * later write would go out without If-Match: FilingBridge treats If-Match as
+ * optional and would accept it over someone else's edit.
+ *
+ * This keeps one ETagCache per caller, keyed by the SHA-256 of their bearer,
+ * for no longer than that bearer lives (capped at CALLER_ETAG_TTL_MS). It is
+ * never shared between bearers: a new token, even the same person's after a
+ * refresh, starts empty, which costs a re-read and never a wrong version.
+ */
+export class CallerETagCaches {
+  readonly #entries = new Map<string, { cache: ETagCache; expires: number }>();
+  readonly #now: () => number;
+  readonly #max: number;
+
+  constructor(now: () => number = Date.now, max = CALLER_ETAG_CACHE_MAX) {
+    this.#now = now;
+    this.#max = max;
+  }
+
+  /** The caller's cache, created empty if none is current. */
+  for(key: string, tokenExpiresAtMs: number): ETagCache {
+    const now = this.#now();
+    const existing = this.#entries.get(key);
+    if (existing && existing.expires > now) {
+      // Most recently used last, so eviction takes the idlest caller.
+      this.#entries.delete(key);
+      this.#entries.set(key, existing);
+      return existing.cache;
+    }
+    if (existing) this.#entries.delete(key);
+    for (const [k, entry] of this.#entries) {
+      if (entry.expires <= now) this.#entries.delete(k);
+    }
+    while (this.#entries.size >= this.#max) {
+      const oldest = this.#entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.#entries.delete(oldest);
+    }
+    const cache = new ETagCache();
+    this.#entries.set(key, { cache, expires: Math.min(tokenExpiresAtMs, now + CALLER_ETAG_TTL_MS) });
+    return cache;
+  }
+
+  /** The API refused this bearer: whatever it learned is no longer trusted. */
+  drop(key: string): void {
+    this.#entries.delete(key);
+  }
+
+  clear(): void {
+    this.#entries.clear();
+  }
+
+  size(): number {
+    return this.#entries.size;
+  }
+}

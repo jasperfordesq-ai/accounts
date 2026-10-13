@@ -177,6 +177,7 @@ export const ADMIN_TOOLS: readonly ToolDefinition[] = [
     approval: true,
     binary: { kind: 'json', defaultName: 'subject-access-export.json' },
     requiresFullScope: 'A subject access export is all of one person\'s personal data.',
+    localOnly: 'Over HTTP the export would be returned into this conversation, and it must never enter it.',
   },
   {
     name: 'privacy_erasure_execute',

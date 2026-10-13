@@ -7,6 +7,7 @@ public static class EndpointRegistration
         app.MapAuthEndpoints();
         app.MapConnectorAuthEndpoints();
         app.MapSearchEndpoints();
+        app.MapOAuthEndpoints();
         app.MapUserAdministrationEndpoints();
         app.MapClassificationEndpoints();
         app.MapBankingEndpoints();

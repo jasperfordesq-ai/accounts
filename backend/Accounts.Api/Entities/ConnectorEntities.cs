@@ -23,6 +23,8 @@ public class ConnectorSession
     public string? MfaMethod { get; set; }
     public string? DeviceLabel { get; set; }
     public string? ClientVersion { get; set; }
+    /// <summary>SHA-256 of the OAuth client id that received this agent; null for CLI sign-ins.</summary>
+    public string? ClientIdHash { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime ExpiresAtUtc { get; set; }
     public DateTime? LastUsedAtUtc { get; set; }

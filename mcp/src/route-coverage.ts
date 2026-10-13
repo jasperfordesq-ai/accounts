@@ -19,6 +19,8 @@ const BROWSER_AUTH =
   + 'authenticates with its own bearer credential (filingbridge-mcp connect), and FilingBridge refuses these '
   + 'routes for connector sessions.';
 
+const OAUTH_PLUMBING = 'OAuth authorization-server plumbing for remote clients; never a model tool';
+
 export const EXCLUDED_ROUTES: readonly ExcludedRoute[] = [
   { route: 'POST /api/auth/login', reason: `${BROWSER_AUTH} The connector signs in through /api/auth/connector/login instead.` },
   { route: 'POST /api/auth/mfa/challenge', reason: `${BROWSER_AUTH} The connector passes the authenticator code at connect.` },
@@ -60,6 +62,16 @@ export const EXCLUDED_ROUTES: readonly ExcludedRoute[] = [
   { route: 'POST /api/auth/connector/refresh', reason: 'Connector credential plumbing; used by the CLI, never by the model. The connector rotates its single-use refresh token here under a cross-process lock.' },
   { route: 'POST /api/auth/connector/logout', reason: 'Connector credential plumbing; used by the CLI, never by the model. filingbridge-mcp disconnect revokes the session family here.' },
   { route: 'POST /api/auth/connector/approve', reason: 'Connector credential plumbing; used by the CLI, never by the model. Granting takes the person\'s password and authenticator code at a terminal (filingbridge-mcp approve) or on the web approvals page; a model able to call it could approve its own actions, so it must never be a tool.' },
+
+  // The OAuth authorization server remote clients (Claude.ai, Claude Code,
+  // Codex) use to obtain connector tokens for serve --http.
+  { route: 'GET /api/oauth/metadata/authorization-server', reason: OAUTH_PLUMBING },
+  { route: 'GET /api/oauth/metadata/protected-resource', reason: OAUTH_PLUMBING },
+  { route: 'POST /api/oauth/register', reason: OAUTH_PLUMBING },
+  { route: 'GET /api/oauth/authorize/describe', reason: OAUTH_PLUMBING },
+  { route: 'POST /api/oauth/authorize', reason: OAUTH_PLUMBING },
+  { route: 'POST /api/oauth/token', reason: OAUTH_PLUMBING },
+  { route: 'POST /api/oauth/revoke', reason: OAUTH_PLUMBING },
 ];
 
 /**

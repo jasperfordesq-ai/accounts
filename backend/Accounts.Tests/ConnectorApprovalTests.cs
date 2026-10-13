@@ -75,8 +75,7 @@ public sealed class ConnectorApprovalTests
         Assert.Equal(ConnectorErrorCodes.ApprovalRequired, body.RootElement.GetProperty("code").GetString());
         var approvalId = body.RootElement.GetProperty("approvalId").GetGuid();
         Assert.Equal($"filingbridge-mcp approve {approvalId}", body.RootElement.GetProperty("command").GetString());
-        Assert.False(body.RootElement.TryGetProperty("approvalsUrl", out var link) && link.ValueKind == JsonValueKind.String,
-            "No web approvals link until the approvals page exists.");
+        Assert.Equal($"https://filingbridge.example/settings/approvals?id={approvalId}", body.RootElement.GetProperty("approvalsUrl").GetString());
         Assert.Contains("Example Limited", body.RootElement.GetProperty("summary").GetString());
         var stored = await fixture.Db.ConnectorActionApprovals.AsNoTracking().SingleAsync();
         Assert.Equal(approvalId, stored.Id);

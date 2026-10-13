@@ -520,6 +520,11 @@ public sealed partial class PrivacyGovernanceService
         var deletedConnectorApprovals = await DeleteAsync(db.ConnectorActionApprovals.IgnoreQueryFilters()
             .Where(item => (tenantId == null || item.TenantId == tenantId)
                 && (item.ExpiresAtUtc <= connectorRecordCutoff || item.ConsumedAtUtc <= connectorRecordCutoff)), cancellationToken);
+        // OAuth authorization codes live 60 seconds; keep finished ones a day for incident review.
+        var codeCutoff = now.AddDays(-1);
+        var deletedOAuthCodes = await DeleteAsync(db.OAuthAuthorizationCodes.IgnoreQueryFilters()
+            .Where(item => (tenantId == null || item.TenantId == tenantId)
+                && (item.ExpiresAtUtc <= codeCutoff || item.ConsumedAtUtc <= codeCutoff)), cancellationToken);
         var deletedConnectorSessions = await DeleteAsync(db.ConnectorSessions.IgnoreQueryFilters()
             .Where(item => (tenantId == null || item.TenantId == tenantId)
                 && (item.ExpiresAtUtc <= connectorRecordCutoff || item.RevokedAtUtc <= connectorRecordCutoff)), cancellationToken);
@@ -548,7 +553,7 @@ public sealed partial class PrivacyGovernanceService
             deletedRecoveryCodes,
             deletedRequestMetadata,
             staleFailureUsers.Count,
-            deletedConnectorActivity + deletedConnectorApprovals + deletedConnectorSessions);
+            deletedConnectorActivity + deletedConnectorApprovals + deletedConnectorSessions + deletedOAuthCodes);
     }
 
     public async Task<PrivacyIncidentExercise> RecordIncidentExerciseAsync(

@@ -22,6 +22,8 @@ const ALLOW_LIST = new Map([
   ["POST /api/auth/invitations/accept", "pre-authentication invitation token"],
   // One-time password-recovery token flow, before any session exists.
   ["POST /api/auth/recovery/complete", "pre-authentication recovery token"],
+  // OAuth consent for a remote MCP client: verifies its own credentials form and never uses or creates a browser session.
+  ["POST /api/oauth/authorize", "pre-authentication OAuth consent"],
   // Effective gate is Owner only (the endpoint refuses others); the role service alone also admits Accountant, so no single catalog permission matches both.
   ["POST /api/companies/onboard", "endpoint narrows the role-service gate to Owner"],
   // Effective gate is Owner only (the endpoint refuses others); the role service alone also admits Accountant, so no single catalog permission matches both.

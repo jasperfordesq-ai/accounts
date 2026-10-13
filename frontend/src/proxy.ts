@@ -51,7 +51,10 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!api|_next/static|_next/image|favicon.ico|theme-init.js).*)",
+      // Route handlers that answer JSON or event streams (the API proxy, the remote MCP endpoint and
+      // the OAuth discovery documents) carry no HTML, so they skip the per-request CSP nonce. Every
+      // page, including /oauth/authorize, keeps it.
+      source: "/((?!api(?:/|$)|mcp(?:/|$)|\\.well-known/|_next/static|_next/image|favicon.ico|theme-init.js).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

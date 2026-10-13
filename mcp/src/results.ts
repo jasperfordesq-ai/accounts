@@ -1,6 +1,6 @@
 import { ApiError, ApprovalRequiredError } from './client.js';
 import { NotConnectedError } from './session.js';
-import { FileAccessError } from './files.js';
+import { FileAccessError, InlineFile } from './files.js';
 import { ConnectorError } from './errors.js';
 import { redactSecrets } from './redact.js';
 
@@ -11,11 +11,18 @@ import { redactSecrets } from './redact.js';
  * only text, and as structured content, for clients that can branch on it.
  * Every error carries a code and what to do next.
  */
+export type ResultContent =
+  | { type: 'text'; text: string }
+  | { type: 'resource'; resource: { uri: string; mimeType: string; blob: string } };
+
 export type ToolResult = {
-  content: { type: 'text'; text: string }[];
+  content: ResultContent[];
   structuredContent: Record<string, unknown>;
   isError?: true;
 };
+
+/** A result that is text only: every error, and every value that is not a file. */
+export type TextResult = ToolResult & { content: { type: 'text'; text: string }[] };
 
 export interface StructuredError {
   code: string;
@@ -41,6 +48,18 @@ export function asObject(value: unknown): Record<string, unknown> {
 }
 
 export function okResult(value: unknown): ToolResult {
+  if (value instanceof InlineFile) {
+    // serve --http: the file goes back inside the result, as an embedded
+    // resource, because there is no disk of the caller's to write it to.
+    const summary = value.summary();
+    return {
+      content: [
+        { type: 'text', text: JSON.stringify(summary, null, 2) },
+        { type: 'resource', resource: { uri: value.uri(), mimeType: value.contentType, blob: value.bytes.toString('base64') } },
+      ],
+      structuredContent: summary,
+    };
+  }
   const payload = asObject(value);
   return {
     content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
@@ -88,7 +107,7 @@ export function describeError(error: unknown): StructuredError {
   return { code: 'INVALID_ARGUMENTS', retryable: false, action: 'fix_arguments' };
 }
 
-export function errorResult(error: unknown): ToolResult {
+export function errorResult(error: unknown): TextResult {
   const described = describeError(error);
   const message = error instanceof Error ? error.message : String(error);
   return {

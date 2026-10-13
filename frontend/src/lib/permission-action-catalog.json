@@ -140,5 +140,11 @@
   { "id": "ct-support-worksheet-csv", "routeId": "statements", "requiredPermission": "canRead", "method": "GET", "path": "/api/companies/1/periods/3/revenue/ct1-support/worksheet.csv" },
   { "id": "working-paper-pack-read", "routeId": "working-papers", "requiredPermission": "canReadInternalWorkingPapers", "method": "GET", "path": "/api/companies/1/periods/3/working-papers" },
   { "id": "working-paper-pack-generate", "routeId": "working-papers", "requiredPermission": "canWriteWorkingPapers", "method": "POST", "path": "/api/companies/1/periods/3/working-papers/generate" },
-  { "id": "production-readiness-detail", "routeId": "production-readiness", "requiredPermission": "canReviewReleaseEvidence", "method": "GET", "path": "/api/system/production-readiness" }
+  { "id": "production-readiness-detail", "routeId": "production-readiness", "requiredPermission": "canReviewReleaseEvidence", "method": "GET", "path": "/api/system/production-readiness" },
+  { "id": "connector-approvals-read", "routeId": "connector-approvals", "requiredPermission": "canRead", "method": "GET", "path": "/api/auth/connector/approvals" },
+  { "id": "connector-approval-grant", "routeId": "connector-approvals", "requiredPermission": "canRead", "method": "POST", "path": "/api/auth/connector/approve" },
+  { "id": "connector-sessions-read", "routeId": "connector-agents", "requiredPermission": "canRead", "method": "GET", "path": "/api/auth/connector/sessions" },
+  { "id": "connector-session-revoke", "routeId": "connector-agents", "requiredPermission": "canRead", "method": "POST", "path": "/api/auth/connector/sessions/11111111-1111-4111-8111-111111111111/revoke" },
+  { "id": "connector-activity-read", "routeId": "connector-agents", "requiredPermission": "canRead", "method": "GET", "path": "/api/auth/connector/activity" },
+  { "id": "connector-agents-user-picker", "routeId": "connector-agents", "requiredPermission": "canManageUsers", "method": "GET", "path": "/api/admin/users" }
 ]

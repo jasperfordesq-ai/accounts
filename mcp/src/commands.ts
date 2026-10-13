@@ -11,6 +11,7 @@ import { approvalState, explainState, formatApprovalPreview } from './approval-p
 import { startStdioServer } from './server.js';
 import { CONNECTOR_VERSION } from './version.js';
 import { TOOL_GROUPS } from './toolsets.js';
+import { httpConfigFromEnv, startHttpServer } from './http-server.js';
 import { readSecret, type SecretInput } from './terminal-input.js';
 
 export const USAGE = `filingbridge-mcp ${CONNECTOR_VERSION}
@@ -32,6 +33,9 @@ Commands (run these yourself, in a terminal):
                  action first, then asks for your password and authenticator code.
   disconnect     Revoke the connector session in FilingBridge and forget the credential.
   serve          Serve MCP over stdio (the default).
+  serve --http   Serve MCP over Streamable HTTP for remote clients (Claude.ai, Claude Code,
+                 Codex) that sign in with FilingBridge's OAuth. Runs inside the stack as
+                 the mcp service; see "HTTP service" below.
   help, version
 
 Options:
@@ -43,7 +47,14 @@ ${profileSummary('                          ')}
   --toolsets <a,b>        Offer only these tool groups (core is always on): ${TOOL_GROUPS.filter((g) => g !== 'core').join(', ')}.
   --verbose               Log each tool call (name, outcome, time) to stderr.
 
-Claude.ai (Streamable HTTP with OAuth, serve --http) arrives in phase 2.
+HTTP service (serve --http [--host 127.0.0.1] [--port 3100]):
+  FILINGBRIDGE_API_URL        The API, e.g. http://api:8080.
+  FILINGBRIDGE_API_KEY_FILE   File holding the connector's service key (sent as X-Accounts-Api-Key).
+  FILINGBRIDGE_PUBLIC_URL     The FilingBridge origin people use: the OAuth issuer. The MCP
+                              resource is <origin>/mcp.
+  FILINGBRIDGE_ALLOWED_HOSTS  Comma-separated Host values accepted (default: the public host,
+                              mcp:<port> and localhost).
+  Files travel base64-encoded over HTTP: downloads up to 1 MiB, CSV imports up to 5 MiB.
 `;
 
 export interface CliIo {
@@ -88,6 +99,16 @@ export async function runCli(argv: string[], io: CliIo): Promise<void> {
   }
   if (config.command === 'help') {
     io.stdout.write(USAGE);
+    return;
+  }
+
+  // Before any credential store is made: the HTTP service never touches a
+  // keychain, and its image does not need the native binding at all.
+  if (config.http) {
+    await startHttpServer(
+      httpConfigFromEnv(io.env, { host: config.host, port: config.port, toolsets: config.toolsets }),
+      { handleSignals: true },
+    );
     return;
   }
 

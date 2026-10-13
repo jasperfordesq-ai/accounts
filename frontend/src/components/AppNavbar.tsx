@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@heroui/react";
-import { Building2, KeyRound, LayoutDashboard, LogOut, Menu, Plus, UserCircle, UserCog, X } from "lucide-react";
+import { Bot, Building2, KeyRound, LayoutDashboard, LogOut, Menu, Plus, ShieldCheck, UserCircle, UserCog, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { ActionLink } from "@/components/workbench";
 import { useUnsavedNavigationGuard } from "@/lib/useUnsavedChanges";
@@ -39,7 +39,7 @@ export function AppNavbar() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [mobileOpen]);
 
-  if (["/login", "/change-password", "/accept-invite", "/reset-password"].includes(pathname)) return null;
+  if (["/login", "/change-password", "/accept-invite", "/reset-password", "/oauth/authorize"].includes(pathname)) return null;
 
   return (
     <nav className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700 px-6 py-3 no-print">
@@ -102,6 +102,24 @@ export function AppNavbar() {
                   {logoutError}
                 </div>
               )}
+              <ActionLink
+                href="/settings/agents"
+                variant={isActive("/settings/agents") ? "secondary" : "ghost"}
+                ariaCurrent={isActive("/settings/agents") ? "page" : undefined}
+                ariaLabel="Agents"
+              >
+                <Bot className="h-4 w-4" />
+                <span className="hidden xl:inline">Agents</span>
+              </ActionLink>
+              <ActionLink
+                href="/settings/approvals"
+                variant={isActive("/settings/approvals") ? "secondary" : "ghost"}
+                ariaCurrent={isActive("/settings/approvals") ? "page" : undefined}
+                ariaLabel="Approvals"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                <span className="hidden xl:inline">Approvals</span>
+              </ActionLink>
               <ActionLink
                 href="/change-password"
                 variant={isActive("/change-password") ? "secondary" : "ghost"}
@@ -214,6 +232,26 @@ export function AppNavbar() {
                     {logoutError}
                   </div>
                 )}
+                <ActionLink
+                  href="/settings/agents"
+                  variant={isActive("/settings/agents") ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                  ariaCurrent={isActive("/settings/agents") ? "page" : undefined}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Bot className="h-4 w-4" />
+                  Connected agents
+                </ActionLink>
+                <ActionLink
+                  href="/settings/approvals"
+                  variant={isActive("/settings/approvals") ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                  ariaCurrent={isActive("/settings/approvals") ? "page" : undefined}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Agent approvals
+                </ActionLink>
                 <ActionLink
                   href="/change-password"
                   variant="ghost"

@@ -109,6 +109,61 @@ parses the C# to keep them in step.
   coordinator's request; none can grant anything. `connector_session_revoke` is write level and needs no
   approval (the server exempts `/api/auth/connector/*`).
 
+## Phase 2: connector HTTP service (workstream B)
+
+- `src/http-server.ts`: `serve --http` (`--host`, `--port`; env `FILINGBRIDGE_API_URL`,
+  `FILINGBRIDGE_API_KEY_FILE`, `FILINGBRIDGE_PUBLIC_URL`, `FILINGBRIDGE_ALLOWED_HOSTS`). Node `http` server,
+  SDK `WebStandardStreamableHTTPServerTransport` stateless (`sessionIdGenerator` left undefined) with JSON
+  responses (the service writes the answer itself, so it can still turn it into a 401),
+  one `createServer()` per request around a `StaticBearer`. Bearer validated by
+  `GET /api/auth/connector/session` (posture cached ≤ 60 s per SHA-256 of the token and never past the
+  token's own `expiresAtUnixSeconds`, evicted the moment the API answers 401). A token past its expiry, or
+  whose payload expiry cannot be read (`access-token.ts`), is 401 `invalid_token` before any API call; an
+  API 401 during a tools/call answers the whole HTTP request with the 401 challenge instead of a tool
+  error, so the client refreshes. Period ETags are kept per caller (`CallerETagCaches`: SHA-256 of the
+  bearer, ≤ 1000 callers, ≤ token expiry and ≤ 15 min, dropped on a 401) because the API treats `If-Match`
+  as optional: without it a later write would overwrite another person's edit. Never shared between
+  bearers; a refreshed token starts empty (costs a re-read, never a wrong version). PR #88 review
+  (Greptile). 401 / `invalid_token` challenges per the phase 2 contract; 403 for a Host not
+  allowed (checked by the service itself, with the SDK's deprecated host check kept as a second line);
+  413 over 5 MiB; GET/DELETE `/mcp` 405 after authentication (stateless: no stream, no session).
+- Protected-resource metadata: fetched from `GET /api/oauth/metadata/protected-resource` with the
+  service key, cached 5 min; if the API does not answer, a document built from `FILINGBRIDGE_PUBLIC_URL`
+  stands in for 30 s.
+- File mode `inline` (`files.ts`, `tools.ts`, `tool-body.ts`, `results.ts`): downloads return an
+  `InlineFile` that becomes a base64 embedded resource (≤ 1 MiB, else `DOWNLOAD_TOO_LARGE`); the CSV
+  import takes `contentBase64` + `fileName`; `fileBytes` evidence fields take base64. Schemas and
+  descriptions are rewritten for the mode. `privacy_access_export` is `localOnly` (never offered over
+  HTTP: the export must never enter a conversation).
+- `@napi-rs/keyring` is now loaded lazily (`createRequire`) so the HTTP image never loads the native
+  binding.
+- `ApiClient` takes `serviceHeaders` (the service key); `ServerOptions` gained `publicUrl` (links and
+  `session_info` name the public origin, not `http://api:8080`), `serviceHeaders` and `fileMode`.
+- Route coverage: the seven `/api/oauth/*` operations are exclusions ("OAuth authorization-server
+  plumbing for remote clients; never a model tool").
+- Tests: `http-transport-auth`, `oauth-metadata`, `http-file-mode` (18 tests) — real Node HTTP server,
+  stubbed API, a real SDK `StreamableHTTPClientTransport` for initialize/tools/list/tools/call. Canaries
+  `resource-metadata-missing` and `service-key-dropped` added.
+- Infrastructure: `Dockerfile.mcp` (node:24-alpine digest, three stages, npm/yarn/corepack stripped,
+  uid 1002, port 3100); compose `mcp` service in `compose.production.yml` (frontend_api only, no ports,
+  secret `accounts_mcp_api_key`; API key 1 "MCP service" Admin by hash; frontend `MCP_URL`); verifiers,
+  CI image build/scan/SBOM/attestation and `scripts/mcp-live-roundtrip.mjs` in production-smoke.
+- Live evidence (2026-10-12): the `accounts-mcp:dev` image against a throwaway API — OAuth token, then
+  initialize, tools/list, `session_info`, `company_create`, `officer_create`, `officer_delete` → 428 with
+  the web approvals link → human grant → approved delete: 11/11.
+
+### Phase 2 open items
+
+- **Private Server is deliberately not wired in this phase.** The first draft added the `mcp` service to
+  `compose.private.yml`, but the Private Server release chain (release builder, container supply-chain
+  report and verifier, `verify-private-server-release.ps1`, the evidence pack and the release workflow)
+  only knows the backend and frontend images, so a release built from it would be refused at setup, and
+  the launcher's lifecycle commands only start `db`, `api` and `frontend`. Those edits were reverted;
+  phase 3 adds the third image to the release evidence, the launcher lifecycle, the MCP service key and
+  a connector enable command together. Until then a Private Server uses the stdio connector.
+- A full OAuth round trip (register → authorize with password + TOTP → token → `/mcp`) is not in CI; see
+  the comment in `scripts/mcp-live-roundtrip.mjs`.
+
 ## Known gaps
 
 - **Actor names outside the owner's list are not gated**: period `lockedBy`/`reopenedBy`, ARD history
@@ -124,7 +179,7 @@ parses the C# to keep them in step.
   optional on others) need `--upload-root`; they are listed regardless and say so when called without it.
 - **Bodies with nullable C# value types** are sent as given; omitting a non-nullable field lets the server
   default it (false/0). Update tools say "replaces the whole record".
-- `--http`, OAuth, the MCPB bundle and Private Server VM acceptance are phases 2 and 3.
+- The MCPB bundle and Private Server VM acceptance are phase 3.
 - CI wiring, `verify-no-direct-filing-submission.ps1` scanning `mcp/`, and the non-`mcp/` docs are Task 11
   items outside this package and were not touched.
 

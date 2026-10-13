@@ -76,16 +76,18 @@ if (/^\s+no_proxy:/m.test(workflow)) {
   failures.push("Use the canonical uppercase NO_PROXY key; GitHub treats case variants as duplicate environment keys.");
 }
 
-if (count(`uses: docker/build-push-action@${approvedReferences.get("docker/build-push-action")}`) !== 2) {
-  failures.push("CI must invoke the container builder exactly once for backend and once for frontend.");
+// Three application images: backend, frontend and the MCP connector (Dockerfile.mcp).
+const APPLICATION_IMAGES = 3;
+if (count(`uses: docker/build-push-action@${approvedReferences.get("docker/build-push-action")}`) !== APPLICATION_IMAGES) {
+  failures.push("CI must invoke the container builder exactly once each for backend, frontend and the MCP connector.");
 }
-if (count(`uses: aquasecurity/trivy-action@${approvedReferences.get("aquasecurity/trivy-action")}`) !== 2) {
+if (count(`uses: aquasecurity/trivy-action@${approvedReferences.get("aquasecurity/trivy-action")}`) !== APPLICATION_IMAGES) {
   failures.push("CI must retain one exact-image Trivy scan per application image.");
 }
-if (count(`uses: anchore/sbom-action@${approvedReferences.get("anchore/sbom-action")}`) !== 2) {
+if (count(`uses: anchore/sbom-action@${approvedReferences.get("anchore/sbom-action")}`) !== APPLICATION_IMAGES) {
   failures.push("CI must retain one SPDX SBOM generation step per application image.");
 }
-if (count(`uses: actions/attest-build-provenance@${approvedReferences.get("actions/attest-build-provenance")}`) !== 2) {
+if (count(`uses: actions/attest-build-provenance@${approvedReferences.get("actions/attest-build-provenance")}`) !== APPLICATION_IMAGES) {
   failures.push("CI must retain one GitHub provenance attestation per promoted image.");
 }
 if (/\bdocker\s+(?:build|buildx\s+build)\b/.test(workflow)) {
@@ -94,8 +96,8 @@ if (/\bdocker\s+(?:build|buildx\s+build)\b/.test(workflow)) {
 if (count("persist-credentials: false") !== count(`uses: actions/checkout@${approvedReferences.get("actions/checkout")}`)) {
   failures.push("Every checkout must disable persisted Git credentials, including pull request and fork runs.");
 }
-if (count("push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}") !== 2 ||
-    count("load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}") !== 2) {
+if (count("push: ${{ steps.promotion-mode.outputs.enabled == 'true' }}") !== APPLICATION_IMAGES ||
+    count("load: ${{ steps.promotion-mode.outputs.enabled != 'true' }}") !== APPLICATION_IMAGES) {
   failures.push("Each application image build must push only for trusted promotion and load only for verification-only runs.");
 }
 
@@ -114,6 +116,10 @@ requireText("format: spdx-json", "Container SBOMs must use SPDX JSON.");
 requireText("push-to-registry: true", "GitHub provenance attestations must be associated with the promoted registry images.");
 requireText('docker pull "$ACCOUNTS_API_IMAGE"', "Production smoke must pull the exact backend digest.");
 requireText('docker pull "$ACCOUNTS_FRONTEND_IMAGE"', "Production smoke must pull the exact frontend digest.");
+requireText("mcp_ref='${{ steps.promotion-mode.outputs.mcp-name }}'@\"$mcp_digest\"", "MCP connector promotion must resolve an immutable digest reference.");
+requireText('docker pull "$ACCOUNTS_MCP_IMAGE"', "Production smoke must pull the exact MCP connector digest.");
+requireText("file: Dockerfile.mcp", "CI must build the MCP connector image from Dockerfile.mcp.");
+requireText("node scripts/mcp-live-roundtrip.mjs", "Production smoke must run the live MCP connector round trip.");
 requireText("./scripts/write-container-supply-chain-report.ps1", "CI must emit the machine-checkable container supply-chain report.");
 requireText("./scripts/verify-container-supply-chain-report.ps1", "CI must verify container supply-chain evidence before release packing.");
 requireText("./scripts/test-container-supply-chain-report.ps1", "CI must exercise clean and malformed Trivy evidence parser shapes.");

@@ -1,74 +1,42 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
   ApiProxyRequestConfigurationError,
   buildApiProxyRequestHeaders,
   configuredApiKeyHeaderName,
   deleteHopByHopHeaders,
 } from "@/lib/apiProxyRequest";
-import { DEFAULT_API_PROXY_MAX_BODY_BYTES } from "@/lib/apiProxyLimits";
+import {
+  boundedRequestBody,
+  contentLengthExceedsLimit,
+  isPayloadTooLargeError,
+  maxProxyBodyBytes,
+  positiveIntegerFromEnv,
+} from "@/lib/apiProxyBody";
+import {
+  ApiProxyConfigurationError,
+  apiBaseUrl,
+  proxyConfigurationResponse,
+  requireApiKey,
+  upstreamFailureResponse,
+} from "@/lib/apiProxyUpstream";
 import { allowSetCookieForProxyResponse, proxyResponseForUpstream } from "@/lib/apiProxyResponse";
 import { withStrictTransportSecurity } from "@/lib/securityHeaders";
-import { readServerSecret } from "@/lib/serverSecrets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const apiUrl = process.env.API_URL;
-const UPSTREAM_TIMEOUT_MS = Number.parseInt(process.env.API_PROXY_TIMEOUT_MS ?? "15000", 10);
-const DOCUMENT_TIMEOUT_MS = Number.parseInt(process.env.API_PROXY_DOCUMENT_TIMEOUT_MS ?? "120000", 10);
-const MAX_PROXY_BODY_BYTES = Number.parseInt(process.env.API_PROXY_MAX_BODY_BYTES ?? String(DEFAULT_API_PROXY_MAX_BODY_BYTES), 10);
 const TRUST_PROXY_HEADERS = process.env.TRUST_PROXY_HEADERS === "true";
-const DEFAULT_DEVELOPMENT_API_URL = "http://localhost:5090";
-const isDevelopmentRuntime = process.env.NODE_ENV === "development";
 
 type RouteContext = {
   params: Promise<{ path: string[] }>;
 };
 
-class ApiProxyConfigurationError extends Error {}
-
-class PayloadTooLargeError extends Error {
-  constructor() {
-    super("Request body exceeds the frontend API proxy limit.");
-    this.name = "PayloadTooLargeError";
-  }
-}
-
-function getApiBaseUrl() {
-  const configuredApiUrl = apiUrl || (isDevelopmentRuntime ? DEFAULT_DEVELOPMENT_API_URL : "");
-  if (!configuredApiUrl) {
-    throw new ApiProxyConfigurationError("API_URL is required for the frontend API proxy outside development.");
-  }
-
-  let parsedApiUrl: URL;
-  try {
-    parsedApiUrl = new URL(configuredApiUrl);
-  } catch {
-    throw new ApiProxyConfigurationError("API_URL must be an absolute URL for the frontend API proxy.");
-  }
-
-  if (parsedApiUrl.protocol !== "http:" && parsedApiUrl.protocol !== "https:") {
-    throw new ApiProxyConfigurationError("API_URL must use http or https for the frontend API proxy.");
-  }
-
-  return parsedApiUrl;
-}
-
-function requireApiKey() {
-  const configuredApiKey = readServerSecret(process.env, "ACCOUNTS_API_KEY").trim();
-  if (!isDevelopmentRuntime && !configuredApiKey) {
-    throw new ApiProxyConfigurationError("ACCOUNTS_API_KEY is required for the frontend API proxy outside development.");
-  }
-
-  return configuredApiKey;
-}
-
 function upstreamTimeoutMs() {
-  return Number.isFinite(UPSTREAM_TIMEOUT_MS) && UPSTREAM_TIMEOUT_MS > 0 ? UPSTREAM_TIMEOUT_MS : 15000;
+  return positiveIntegerFromEnv(process.env.API_PROXY_TIMEOUT_MS, 15000);
 }
 
 function documentGenerationTimeoutMs() {
-  return Number.isFinite(DOCUMENT_TIMEOUT_MS) && DOCUMENT_TIMEOUT_MS > 0 ? DOCUMENT_TIMEOUT_MS : 120000;
+  return positiveIntegerFromEnv(process.env.API_PROXY_DOCUMENT_TIMEOUT_MS, 120000);
 }
 
 function isPositiveIntegerSegment(value: string) {
@@ -95,53 +63,8 @@ function proxyTimeoutMs(path: string[]) {
   return isDocumentGenerationPath(path) ? documentGenerationTimeoutMs() : upstreamTimeoutMs();
 }
 
-function maxProxyBodyBytes() {
-  return Number.isFinite(MAX_PROXY_BODY_BYTES) && MAX_PROXY_BODY_BYTES > 0 ? MAX_PROXY_BODY_BYTES : DEFAULT_API_PROXY_MAX_BODY_BYTES;
-}
-
-function contentLengthExceedsLimit(request: NextRequest) {
-  const contentLength = request.headers.get("content-length");
-  if (!contentLength) return false;
-
-  const parsedLength = Number.parseInt(contentLength, 10);
-  return Number.isFinite(parsedLength) && parsedLength > maxProxyBodyBytes();
-}
-
-function boundedRequestBody(body: ReadableStream<Uint8Array> | null) {
-  if (!body) return null;
-
-  let bytesRead = 0;
-  return body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        bytesRead += chunk.byteLength;
-        if (bytesRead > maxProxyBodyBytes()) {
-          throw new PayloadTooLargeError();
-        }
-
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-}
-
-function upstreamFailureResponse(error: unknown) {
-  const message =
-    error instanceof Error && error.name === "TimeoutError"
-      ? "The Accounts API did not respond before the proxy timeout."
-      : "The Accounts API is unavailable.";
-
-  return withStrictTransportSecurity(NextResponse.json(
-    {
-      error: "upstream_unavailable",
-      message,
-    },
-    { status: 502 },
-  ));
-}
-
 function payloadTooLargeResponse() {
-  return withStrictTransportSecurity(NextResponse.json(
+  return withStrictTransportSecurity(Response.json(
     {
       error: "payload_too_large",
       message: `Request body exceeds the ${maxProxyBodyBytes()} byte frontend API proxy limit.`,
@@ -150,27 +73,10 @@ function payloadTooLargeResponse() {
   ));
 }
 
-function proxyConfigurationMessage(error: Error) {
-  return isDevelopmentRuntime
-    ? error.message
-    : "The frontend API proxy is unavailable.";
-}
-
-function proxyConfigurationResponse(error: Error) {
-  console.error("Frontend API proxy configuration error", error);
-  return withStrictTransportSecurity(NextResponse.json(
-    {
-      error: "api_proxy_misconfigured",
-      message: proxyConfigurationMessage(error),
-    },
-    { status: 500 },
-  ));
-}
-
 async function proxyApiRequest(request: NextRequest, context: RouteContext) {
   try {
     const { path } = await context.params;
-    const target = new URL(`/api/${path.map(encodeURIComponent).join("/")}`, getApiBaseUrl());
+    const target = new URL(`/api/${path.map(encodeURIComponent).join("/")}`, apiBaseUrl());
     const configuredApiKey = requireApiKey();
     const apiKeyHeader = configuredApiKeyHeaderName(process.env.ACCOUNTS_API_KEY_HEADER);
     target.search = request.nextUrl.search;
@@ -191,11 +97,12 @@ async function proxyApiRequest(request: NextRequest, context: RouteContext) {
     };
 
     if (request.method !== "GET" && request.method !== "HEAD") {
-      if (contentLengthExceedsLimit(request)) {
+      const limit = maxProxyBodyBytes();
+      if (contentLengthExceedsLimit(request.headers, limit)) {
         return payloadTooLargeResponse();
       }
 
-      const body = boundedRequestBody(request.body);
+      const body = boundedRequestBody(request.body, limit);
       if (body) {
         Object.assign(init, {
           body,
@@ -216,7 +123,7 @@ async function proxyApiRequest(request: NextRequest, context: RouteContext) {
       return proxyConfigurationResponse(error);
     }
 
-    if (error instanceof PayloadTooLargeError || (error instanceof Error && error.cause instanceof PayloadTooLargeError)) {
+    if (isPayloadTooLargeError(error)) {
       return payloadTooLargeResponse();
     }
 

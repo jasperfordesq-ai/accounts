@@ -139,6 +139,13 @@ interface ApiClientOptions {
   fetchImpl?: typeof fetch;
   etags?: ETagCache;
   /**
+   * Headers added to every request, before the connector's own. serve --http
+   * uses it for the service key (X-Accounts-Api-Key), because it calls the API
+   * directly rather than through the frontend proxy that adds the key in
+   * stdio mode. Never logged.
+   */
+  serviceHeaders?: Readonly<Record<string, string>>;
+  /**
    * The profile this connector was started with. When known, the approve
    * command shown to the person names it and the base URL, so it reaches the
    * same FilingBridge with the same credential.
@@ -252,6 +259,7 @@ export class ApiClient {
   readonly #tokens: TokenSource;
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
+  readonly #serviceHeaders: Readonly<Record<string, string>>;
   readonly #profile: ConnectorProfile | undefined;
   readonly etags: ETagCache;
 
@@ -260,6 +268,7 @@ export class ApiClient {
     this.#baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.#fetch = options.fetchImpl ?? fetch;
     this.etags = options.etags ?? new ETagCache();
+    this.#serviceHeaders = options.serviceHeaders ?? {};
     this.#profile = options.profile;
   }
 
@@ -329,6 +338,7 @@ export class ApiClient {
       const correlationId = randomUUID();
       const body = makeBody();
       const headers: Record<string, string> = {
+        ...this.#serviceHeaders,
         authorization: `Bearer ${token}`,
         accept,
         [CLIENT_HEADER]: CLIENT_HEADER_VALUE,

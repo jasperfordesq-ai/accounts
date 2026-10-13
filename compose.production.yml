@@ -165,6 +165,10 @@ services:
       ApiAccess__Keys__0__Name: "Frontend proxy"
       ApiAccess__Keys__0__Role: "Admin"
       ApiAccess__Keys__0__KeyHash: "${ACCOUNTS_API_KEY_HASH:?set ACCOUNTS_API_KEY_HASH}"
+      # The connector HTTP service (mcp) calls the API directly with its own key.
+      ApiAccess__Keys__1__Name: "MCP service"
+      ApiAccess__Keys__1__Role: "Admin"
+      ApiAccess__Keys__1__KeyHash: "${ACCOUNTS_MCP_API_KEY_HASH:?set ACCOUNTS_MCP_API_KEY_HASH}"
       Monitoring__ErrorTrackingProvider: "${MONITORING_ERROR_TRACKING_PROVIDER:-Sentry-compatible}"
       Monitoring__ErrorTrackingDsn: "${MONITORING_ERROR_TRACKING_DSN:?set MONITORING_ERROR_TRACKING_DSN}"
       Monitoring__StructuredJsonConsole: "true"
@@ -265,6 +269,10 @@ services:
       ApiAccess__Keys__0__Name: "Frontend proxy"
       ApiAccess__Keys__0__Role: "Admin"
       ApiAccess__Keys__0__KeyHash: "${ACCOUNTS_API_KEY_HASH:?set ACCOUNTS_API_KEY_HASH}"
+      # The connector HTTP service (mcp) calls the API directly with its own key.
+      ApiAccess__Keys__1__Name: "MCP service"
+      ApiAccess__Keys__1__Role: "Admin"
+      ApiAccess__Keys__1__KeyHash: "${ACCOUNTS_MCP_API_KEY_HASH:?set ACCOUNTS_MCP_API_KEY_HASH}"
       Monitoring__ErrorTrackingProvider: "${MONITORING_ERROR_TRACKING_PROVIDER:-Sentry-compatible}"
       Monitoring__ErrorTrackingDsn: "${MONITORING_ERROR_TRACKING_DSN:?set MONITORING_ERROR_TRACKING_DSN}"
       Monitoring__StructuredJsonConsole: "true"
@@ -322,6 +330,7 @@ services:
       API_PROXY_TIMEOUT_MS: "${API_PROXY_TIMEOUT_MS:-15000}"
       API_PROXY_DOCUMENT_TIMEOUT_MS: "${API_PROXY_DOCUMENT_TIMEOUT_MS:-120000}"
       API_PROXY_MAX_BODY_BYTES: "${API_PROXY_MAX_BODY_BYTES:-6291456}"
+      MCP_URL: "http://mcp:3100/mcp"
       ENABLE_HSTS: "${ENABLE_HSTS:-false}"
       TRUST_PROXY_HEADERS: "${TRUST_PROXY_HEADERS:?set TRUST_PROXY_HEADERS to true only behind a trusted ingress that overwrites X-Forwarded-For}"
     depends_on:
@@ -333,6 +342,41 @@ services:
       timeout: 15s
       retries: 12
       start_period: 60s
+
+  mcp:
+    image: "${ACCOUNTS_MCP_IMAGE:?set ACCOUNTS_MCP_IMAGE}"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: "${MCP_PIDS_LIMIT:-128}"
+    mem_limit: "${MCP_MEMORY_LIMIT:-384m}"
+    cpus: "${MCP_CPU_LIMIT:-0.50}"
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    # Reached only by the frontend's /mcp route; it reaches only the API. No
+    # published port.
+    networks:
+      - frontend_api
+    secrets:
+      - accounts_mcp_api_key
+    environment:
+      NODE_ENV: production
+      FILINGBRIDGE_API_URL: "http://api:8080"
+      FILINGBRIDGE_API_KEY_FILE: /run/secrets/accounts_mcp_api_key
+      FILINGBRIDGE_PUBLIC_URL: "${ACCOUNTS_ALLOWED_ORIGIN:?set ACCOUNTS_ALLOWED_ORIGIN}"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 30s
 
 volumes:
   accounts_production_data:
@@ -380,5 +424,7 @@ secrets:
     file: "${CONNECTOR_SIGNING_KEY_FILE:?set CONNECTOR_SIGNING_KEY_FILE}"
   accounts_api_key:
     file: "${ACCOUNTS_API_KEY_FILE:?set ACCOUNTS_API_KEY_FILE}"
+  accounts_mcp_api_key:
+    file: "${ACCOUNTS_MCP_API_KEY_FILE:?set ACCOUNTS_MCP_API_KEY_FILE}"
   bootstrap_owner_password:
     file: "${BOOTSTRAP_OWNER_PASSWORD_FILE:?set BOOTSTRAP_OWNER_PASSWORD_FILE}"

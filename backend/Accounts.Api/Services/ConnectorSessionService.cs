@@ -67,6 +67,15 @@ public sealed record ConnectorApprovalView(
     DateTime? ApprovedAtUtc,
     DateTime? ConsumedAtUtc);
 
+public sealed record ConnectorCredentialCheck(
+    AuthenticatedUser? Principal,
+    string? AccessLevel,
+    string? DataScope,
+    ConnectorLoginResult? Refusal)
+{
+    public static ConnectorCredentialCheck Refused(ConnectorLoginResult refusal) => new(null, null, null, refusal);
+}
+
 public sealed record ConnectorApprovalGrant(Guid ApprovalId, string Summary, DateTime ExpiresAtUtc);
 
 public sealed record ConnectorLoginResult(
@@ -158,17 +167,32 @@ public sealed class ConnectorSessionService
         string? clientVersion,
         CancellationToken cancellationToken = default)
     {
+        var verified = await VerifyCredentialsAsync(input, cancellationToken);
+        if (verified.Principal is null)
+            return verified.Refusal!;
+        var issued = await IssueAsync(verified.Principal, verified.AccessLevel!, verified.DataScope!, input.DeviceLabel, clientVersion, cancellationToken);
+        return ConnectorLoginResult.Success(issued);
+    }
+
+    /// <summary>
+    /// The full sign-in ceremony (password, lockout, second factor, posture rules) without minting
+    /// anything. Shared by the CLI sign-in and the OAuth authorization endpoint.
+    /// </summary>
+    public async Task<ConnectorCredentialCheck> VerifyCredentialsAsync(
+        ConnectorLoginInput input,
+        CancellationToken cancellationToken = default)
+    {
         if (!IsAvailable)
-            return ConnectorLoginResult.Refused(404, ConnectorErrorCodes.SessionInvalid, "The connector is not enabled on this server.");
+            return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(404, ConnectorErrorCodes.SessionInvalid, "The connector is not enabled on this server."));
         var accessLevel = ConnectorAccessLevels.Normalize(input.AccessLevel);
         var dataScope = ConnectorDataScopes.Normalize(input.DataScope ?? ConnectorDataScopes.Withheld);
         if (accessLevel is null || dataScope is null)
-            return ConnectorLoginResult.Refused(400, ConnectorErrorCodes.InvalidArguments,
-                "accessLevel must be Read, Write or Admin and dataScope must be Withheld or Full.");
+            return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(400, ConnectorErrorCodes.InvalidArguments,
+                "accessLevel must be Read, Write or Admin and dataScope must be Withheld or Full."));
 
         var firstFactor = await identityAccess.BeginLoginAsync(input.TenantSlug, input.Email, input.Password, cancellationToken);
         if (!firstFactor.Succeeded)
-            return ConnectorLoginResult.Refused(401, ConnectorErrorCodes.InvalidCredentials, AuthService.InvalidLoginMessage);
+            return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(401, ConnectorErrorCodes.InvalidCredentials, AuthService.InvalidLoginMessage));
 
         AuthenticatedUser principal;
         if (firstFactor.User is not null)
@@ -179,27 +203,40 @@ public sealed class ConnectorSessionService
         {
             var challenge = firstFactor.MfaChallenge!;
             if (challenge.RequiresEnrollment)
-                return ConnectorLoginResult.Refused(403, ConnectorErrorCodes.MfaEnrolmentRequired,
-                    "Set up an authenticator in the FilingBridge web app before connecting an agent.");
+                return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(403, ConnectorErrorCodes.MfaEnrolmentRequired,
+                    "Set up an authenticator in the FilingBridge web app before connecting an agent."));
             if (string.IsNullOrWhiteSpace(input.TotpCode) && string.IsNullOrWhiteSpace(input.RecoveryCode))
-                return ConnectorLoginResult.Refused(401, ConnectorErrorCodes.SecondFactorRequired,
-                    "An authenticator code or recovery code is required for this role.");
+                return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(401, ConnectorErrorCodes.SecondFactorRequired,
+                    "An authenticator code or recovery code is required for this role."));
             var completion = await identityAccess.CompleteChallengeAsync(
                 challenge.ChallengeToken, input.TotpCode, input.RecoveryCode, cancellationToken);
             if (!completion.Succeeded || completion.User is null)
-                return ConnectorLoginResult.Refused(401, ConnectorErrorCodes.SecondFactorRejected,
-                    "The authenticator or recovery code was not accepted.");
+                return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(401, ConnectorErrorCodes.SecondFactorRejected,
+                    "The authenticator or recovery code was not accepted."));
             principal = completion.User;
         }
 
         if (principal.MustChangePassword)
-            return ConnectorLoginResult.Refused(403, ConnectorErrorCodes.PasswordChangeRequired,
-                "Change the temporary password in the FilingBridge web app before connecting an agent.");
+            return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(403, ConnectorErrorCodes.PasswordChangeRequired,
+                "Change the temporary password in the FilingBridge web app before connecting an agent."));
         if (dataScope == ConnectorDataScopes.Full
             && !principal.Role.Trim().Equals("Owner", StringComparison.OrdinalIgnoreCase))
-            return ConnectorLoginResult.Refused(403, ConnectorErrorCodes.DataScopeForbidden,
-                "Only an Owner can connect with full personal-data access.");
+            return ConnectorCredentialCheck.Refused(ConnectorLoginResult.Refused(403, ConnectorErrorCodes.DataScopeForbidden,
+                "Only an Owner can connect with full personal-data access."));
 
+        return new ConnectorCredentialCheck(principal, accessLevel, dataScope, null);
+    }
+
+    /// <summary>Starts a new connected agent (session family) for an already verified principal.</summary>
+    public async Task<ConnectorLoginResponse> IssueAsync(
+        AuthenticatedUser principal,
+        string accessLevel,
+        string dataScope,
+        string? deviceLabel,
+        string? clientVersion,
+        CancellationToken cancellationToken = default,
+        string? clientIdHash = null)
+    {
         var now = UtcNow();
         var familyId = Guid.NewGuid();
         var rawRefresh = ConnectorTokenCodec.CreateRefreshToken(principal.TenantId);
@@ -216,8 +253,9 @@ public sealed class ConnectorSessionService
             PasswordLastChangedAtTicks = principal.PasswordLastChangedAt.Ticks,
             MfaVerifiedAtUtc = principal.MfaVerifiedAtUtc?.UtcDateTime,
             MfaMethod = principal.MfaMethod,
-            DeviceLabel = Truncate(input.DeviceLabel, 120),
+            DeviceLabel = Truncate(deviceLabel, 120),
             ClientVersion = Truncate(clientVersion, 40),
+            ClientIdHash = clientIdHash,
             CreatedAtUtc = now,
             ExpiresAtUtc = RefreshExpiry(now, now)
         };
@@ -228,13 +266,51 @@ public sealed class ConnectorSessionService
             sessionFamilyId = familyId,
             accessLevel,
             dataScope,
-            clientVersion = session.ClientVersion
+            clientVersion = session.ClientVersion,
+            deviceLabel = session.DeviceLabel
         }, cancellationToken);
 
-        return ConnectorLoginResult.Success(BuildResponse(principal, session, rawRefresh, now));
+        return BuildResponse(principal, session, rawRefresh, now);
     }
 
-    public async Task<ConnectorLoginResponse?> RefreshAsync(string? rawRefresh, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Re-validates the user behind a stored grant (an OAuth authorization code) and returns the
+    /// principal carrying the second-factor evidence recorded with the grant, or null if the
+    /// account changed since.
+    /// </summary>
+    public async Task<AuthenticatedUser?> ReloadPrincipalAsync(
+        int userId,
+        int tenantId,
+        long passwordLastChangedAtTicks,
+        DateTime? mfaVerifiedAtUtc,
+        string? mfaMethod,
+        CancellationToken cancellationToken = default)
+    {
+        tenantBootstrap?.UseVerifiedSessionTenant(tenantId);
+        var principal = await LoadValidPrincipalAsync(userId, tenantId, passwordLastChangedAtTicks, UtcNow(), cancellationToken);
+        return principal is null
+            ? null
+            : principal with
+            {
+                MfaVerifiedAtUtc = mfaVerifiedAtUtc is { } verified ? new DateTimeOffset(DateTime.SpecifyKind(verified, DateTimeKind.Utc)) : null,
+                MfaMethod = mfaMethod
+            };
+    }
+
+    /// <summary>Revokes the agent behind an access token, if it is valid.</summary>
+    public async Task RevokeByAccessTokenAsync(string? accessToken, CancellationToken cancellationToken = default)
+    {
+        var authenticated = await AuthenticateAsync(accessToken, cancellationToken);
+        if (authenticated is null) return;
+        await LogoutAsync(authenticated.Value.User, authenticated.Value.Session, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Rotates a refresh token. <paramref name="expectedClientIdHash"/> is the OAuth client presenting
+    /// it (null for the CLI route): an agent issued to one OAuth client can only be refreshed by that
+    /// client, and an OAuth-issued agent cannot be refreshed through the CLI route.
+    /// </summary>
+    public async Task<ConnectorLoginResponse?> RefreshAsync(string? rawRefresh, CancellationToken cancellationToken = default, string? expectedClientIdHash = null)
     {
         if (!IsAvailable) return null;
         var tenantId = ConnectorTokenCodec.ReadRefreshTokenTenant(rawRefresh);
@@ -257,6 +333,7 @@ public sealed class ConnectorSessionService
             return null;
         }
         if (current.ExpiresAtUtc <= now) return null;
+        if (!string.Equals(current.ClientIdHash, expectedClientIdHash, StringComparison.Ordinal)) return null;
 
         var principal = await LoadValidPrincipalAsync(current.UserId, current.TenantId, current.PasswordLastChangedAtTicks, now, cancellationToken);
         if (principal is null)
@@ -289,6 +366,7 @@ public sealed class ConnectorSessionService
             MfaMethod = current.MfaMethod,
             DeviceLabel = current.DeviceLabel,
             ClientVersion = current.ClientVersion,
+            ClientIdHash = current.ClientIdHash,
             CreatedAtUtc = now,
             LastUsedAtUtc = now,
             ExpiresAtUtc = RefreshExpiry(now, current.FamilyCreatedAtUtc),

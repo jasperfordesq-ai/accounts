@@ -1,7 +1,6 @@
 # MCP connector
 
-FilingBridge exposes its whole API to AI agents (Claude Code, Codex, Claude Desktop, and from phase 2
-Claude.ai) through a Model Context Protocol server. An agent acts **as the person who connected it**,
+FilingBridge exposes its whole API to AI agents (Claude Code, Codex, Claude Desktop and Claude.ai) through a Model Context Protocol server. An agent acts **as the person who connected it**,
 inside that person's tenant, role and company assignments, with an access level and a personal-data
 scope chosen at connection time. It can never do more than the person could do in the web app, and
 every irreversible step still needs that person to approve it.
@@ -38,6 +37,34 @@ cookie is ever set.
 Refresh tokens rotate on every use. Presenting a spent refresh token revokes the whole agent (theft
 signal). The family ends after 30 idle days or 90 days in total.
 
+## Remote connection (OAuth 2.1)
+
+Remote MCP clients (Claude.ai custom connectors, Claude Code `--transport http`, Codex) connect to
+`{issuer}/mcp`, where the issuer is the origin in `Connector:PublicBaseUrl`. They discover
+`{issuer}/.well-known/oauth-protected-resource/mcp` from the 401 `WWW-Authenticate` header, then
+`{issuer}/.well-known/oauth-authorization-server`, register themselves, and send the person to the
+consent page `{issuer}/oauth/authorize`.
+
+| Step | Where | Notes |
+|---|---|---|
+| Registration | `POST /api/oauth/register` | Stateless: the `fbcl1.` client id is the signed registration (name + redirect URIs). Public clients only |
+| Redirect policy | `OAuthService.IsAllowedRedirect` | Exact match; loopback `http` always; `https` only to `Connector:OAuthRedirectHosts` (default `claude.ai`, `claude.com`) |
+| Consent | `/oauth/authorize` page → `GET /api/oauth/authorize/describe`, `POST /api/oauth/authorize` | The person signs in (workspace, email, password, authenticator) and picks level and data scope; the page shows the client name and redirect host. Cross-site POSTs are refused |
+| Code | `oauth_authorization_codes` | `fbac1.` codes, 60 seconds, single use, PKCE S256, bound to client, redirect URI and resource |
+| Token | `POST /api/oauth/token` | Issues an ordinary connector session (`fbc1.` + `fbr1.`); `refresh_token` grant rotates it |
+| Revocation | `POST /api/oauth/revoke`, `/settings/agents` | Ends that agent |
+
+Scopes map onto the connector posture: `fb:read`, `fb:write`, `fb:admin` (highest wins, default
+`fb:write`) and `fb:data-full` (Owner only). Because every grant is a connector session, everything in
+the rest of this document — approvals, the data gate, the write budget, revocation — applies unchanged.
+
+The in-stack `mcp` service (`Dockerfile.mcp`, compose service `mcp`, reached through the frontend at
+`/mcp`) serves Streamable HTTP. It forwards the caller's bearer to the API together with its own
+service API key (`ApiAccess:Keys:1`, "MCP service") and never forwards browser headers.
+
+People approve agent actions and disconnect agents in the web app at `/settings/approvals` and
+`/settings/agents`; 428 responses link straight to the pending approval.
+
 ## What ends an agent session
 
 | Event | Effect |
@@ -73,11 +100,11 @@ administration, privacy, chart adoption, historic anchors, …) answers:
 
 ```json
 { "code": "APPROVAL_REQUIRED", "approvalId": "…", "summary": "Delete officers, company Example Limited (CRO 123456), officer A Director (Director)",
-  "expiresAt": "…", "command": "filingbridge-mcp approve …" }
+  "expiresAt": "…", "command": "filingbridge-mcp approve …", "approvalsUrl": "https://…/settings/approvals?id=…" }
 ```
 
 The approval is bound to SHA-256 of (agent family, method, path, canonical JSON body). The person runs
-the command in their own terminal (from phase 2 also a web approvals page, linked from the 428), sees the server's
+the command in their own terminal or opens the web approvals page linked from the 428, sees the server's
 summary and enters password + authenticator code. The agent then repeats the identical call with
 `X-FilingBridge-Approval`; one conditional update spends it. Any mismatch, expiry (5 minutes) or
 second use gets a fresh 428. The browser's 10-minute recent-TOTP window is never consulted for
@@ -103,7 +130,8 @@ agents, so nothing elevates an agent for a period of time.
 | `Connector:RefreshIdleDays` / `FamilyAbsoluteDays` | 30 / 90 | |
 | `Connector:ApprovalMinutes` | 5 | 2–10 |
 | `Connector:WriteBudgetPerMinute` | 30 | 5–120 |
-| `Connector:PublicBaseUrl` | — | Public origin; used from phase 2 for the web approvals link and OAuth metadata |
+| `Connector:PublicBaseUrl` | — | Public origin: OAuth issuer, MCP resource and web approvals link |
+| `Connector:OAuthRedirectHosts` | `claude.ai`, `claude.com` | Extra HTTPS redirect hosts for OAuth clients (configuration adds to the defaults) |
 
 Compose: secret `connector_signing_key` (`CONNECTOR_SIGNING_KEY_FILE`) mounted into the API only.
 Private Server generates it at setup and on the first environment write after an update, and

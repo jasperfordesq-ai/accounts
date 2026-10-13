@@ -1,4 +1,4 @@
-import { Entry } from '@napi-rs/keyring';
+import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, rmSync, existsSync, chmodSync } from 'node:fs';
 import { profileAllowsCredentialFile, type ConnectorProfile } from './config.js';
 
@@ -11,7 +11,29 @@ export interface CredentialStore {
   clear(): void;
 }
 
+type KeyringModule = typeof import('@napi-rs/keyring');
+
+/**
+ * The native keychain binding, loaded only when a keychain store is made.
+ *
+ * `serve --http` never touches a keychain (the AI client owns its tokens), so
+ * the container image runs without the native module ever being loaded; a
+ * platform without a prebuilt binding fails here, with this message, rather
+ * than at start-up.
+ */
+function loadKeyring(): KeyringModule {
+  try {
+    return createRequire(import.meta.url)('@napi-rs/keyring') as KeyringModule;
+  } catch (cause) {
+    throw new Error(
+      'The operating system credential store binding (@napi-rs/keyring) could not be loaded on this '
+        + `platform, so the connector cannot keep a credential here. (${(cause as Error).message})`,
+    );
+  }
+}
+
 export function createKeyringStore(account: string): CredentialStore {
+  const { Entry } = loadKeyring();
   const entry = new Entry(KEYCHAIN_SERVICE, account);
   return {
     read() {

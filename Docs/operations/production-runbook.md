@@ -90,6 +90,11 @@ Codex, Claude Desktop) that acts as them. Architecture and guarantees:
 
 ## Required Production Environment
 
+> **Upgrading an existing deployment to a release with the MCP connector:** before `docker compose up`,
+> add the four MCP connector values in the table below (`CONNECTOR_SIGNING_KEY_FILE`,
+> `ACCOUNTS_MCP_IMAGE`, `ACCOUNTS_MCP_API_KEY_FILE`, `ACCOUNTS_MCP_API_KEY_HASH`). Compose refuses to
+> render without them, by design, even though the connector stays off until `CONNECTOR_ENABLED=true`.
+
 Set every required variable before running `docker compose -f compose.production.yml config --quiet`, the migration job, or the production stack. CI sample values are not production secrets.
 
 `deploy/production-images.env.example` documents the only accepted image-reference shape. Its
@@ -121,6 +126,9 @@ Do not run plain `docker compose -f compose.production.yml config` with producti
 | `ACCOUNTS_ALLOWED_HOSTS` | Public API hostnames; Compose appends internal `api` for the private frontend-to-API hop. |
 | `ACCOUNTS_ALLOWED_ORIGIN` | Public HTTPS origin used by the browser, for example `https://accounts.example.ie`. |
 | `ACCOUNTS_API_KEY_FILE`, `ACCOUNTS_API_KEY_HASH` | Docker secret file path for the frontend service API key and matching lowercase SHA-256 hash. |
+| `CONNECTOR_SIGNING_KEY_FILE` | Docker secret file with the MCP connector signing key (strong, distinct from the session and identity keys). Required even while `CONNECTOR_ENABLED` is false. |
+| `ACCOUNTS_MCP_IMAGE` | Immutable digest of the `accounts-mcp` image from the same promoted CI run as the API and frontend images. |
+| `ACCOUNTS_MCP_API_KEY_FILE`, `ACCOUNTS_MCP_API_KEY_HASH` | Docker secret file with the MCP service's API key and its lowercase SHA-256 hash (generate exactly like the frontend key above). Required even while `CONNECTOR_ENABLED` is false. |
 | `TRUST_PROXY_HEADERS` | Set to `true` only when the trusted ingress overwrites forwarded headers and clients cannot bypass it; required by the API when `RateLimits__TrustForwardedFor=true`. |
 | `MONITORING_ERROR_TRACKING_DSN` | Required HTTPS DSN for the production error-tracking provider. Startup fails outside development when this is missing or not HTTPS. |
 | `MONITORING_ERROR_TRACKING_PROVIDER` | Optional; defaults to `Sentry-compatible`. Use a short provider label for the readiness report and operational records. |

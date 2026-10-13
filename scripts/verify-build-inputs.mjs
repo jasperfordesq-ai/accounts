@@ -101,11 +101,17 @@ export function evaluateBuildInputs(inputs) {
   for (const [tag, digest] of Object.entries(policy.baseImages)) {
     const expected = `${tag}@${digest}`;
     const occurrences = allImages.filter((image) => image === expected).length;
-    const expectedOccurrences = tag === "node:24-alpine" ? 3 : 1;
+    // node:24-alpine: three stages each in Dockerfile.frontend and Dockerfile.mcp.
+    const expectedOccurrences = policy.baseImageReferences?.[tag] ?? 1;
     if (occurrences !== expectedOccurrences) {
       failures.push(
         `Expected ${expectedOccurrences} exact FROM reference(s) for ${expected}; found ${occurrences}.`,
       );
+    }
+  }
+  if (dockerfiles.mcp !== undefined) {
+    for (const required of ["npm ci --omit=dev", "USER 1002:1002", "EXPOSE 3100", "/usr/local/bin/npm"]) {
+      if (!dockerfiles.mcp.includes(required)) failures.push(`Dockerfile.mcp is missing: ${required}`);
     }
   }
   if (!dockerfiles.backend.includes("dotnet restore backend/Accounts.Api/Accounts.Api.csproj --locked-mode")) {
@@ -173,6 +179,7 @@ export function collectRepoInputs(repoRoot) {
     dockerfiles: {
       backend: read("Dockerfile.backend"),
       frontend: read("Dockerfile.frontend"),
+      mcp: read("Dockerfile.mcp"),
     },
     nugetLocks: {
       "Accounts.Api/packages.lock.json": readJson("backend/Accounts.Api/packages.lock.json"),
