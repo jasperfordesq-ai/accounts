@@ -59,14 +59,14 @@ describe("OAuth consent page", () => {
     expect(fetchMock.byMethod("POST")).toHaveLength(0);
   });
 
-  it("refuses a link without client details without calling the API", async () => {
+  it("lets the server refuse a link without client details and explains it plainly", async () => {
     window.history.replaceState({}, "", "/oauth/authorize");
-    const fetchMock = installFetchMock(routes());
+    const fetchMock = installFetchMock(routes({ describe: { status: 400, body: { error: "invalid_request", error_description: "client_id is required." } } }));
     const navigate = vi.fn();
     render(<OAuthAuthorizeWorkbench navigate={navigate} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/missing the application details/);
-    expect(fetchMock.requests).toHaveLength(0);
+    expect(fetchMock.requests.some((request) => request.url.includes("/api/oauth/authorize/describe"))).toBe(true);
     expect(navigate).not.toHaveBeenCalled();
   });
 

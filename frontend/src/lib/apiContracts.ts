@@ -2369,6 +2369,13 @@ export function parseUserProvisioningResult(payload: unknown) {
 const connectorIntegerSchema = z.number().int();
 export const connectorAccessLevelSchema = z.enum(["Read", "Write", "Admin"]);
 export const connectorDataScopeSchema = z.enum(["Withheld", "Full"]);
+/**
+ * The API omits null properties (System.Text.Json WhenWritingNull), so an absent value and an
+ * explicit null both mean "no value"; both are normalised to null.
+ */
+function absentAsNull<T extends z.ZodTypeAny>(schema: T) {
+  return schema.nullish().transform((value) => value ?? null);
+}
 const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "Expected a UUID");
 
 export const connectorApprovalViewSchema = z.object({
@@ -2376,11 +2383,11 @@ export const connectorApprovalViewSchema = z.object({
   summary: z.string(),
   method: z.string().min(1),
   routePattern: z.string().min(1),
-  resourceId: z.string().nullable(),
+  resourceId: absentAsNull(z.string()),
   createdAtUtc: isoDateTimeSchema,
   expiresAtUtc: isoDateTimeSchema,
-  approvedAtUtc: isoDateTimeSchema.nullable(),
-  consumedAtUtc: isoDateTimeSchema.nullable(),
+  approvedAtUtc: absentAsNull(isoDateTimeSchema),
+  consumedAtUtc: absentAsNull(isoDateTimeSchema),
 });
 
 export const connectorApprovalGrantSchema = z.object({
@@ -2395,10 +2402,10 @@ export const connectorSessionSummarySchema = z.object({
   userId: positiveIdSchema,
   accessLevel: connectorAccessLevelSchema,
   dataScope: connectorDataScopeSchema,
-  deviceLabel: z.string().nullable(),
-  clientVersion: z.string().nullable(),
+  deviceLabel: absentAsNull(z.string()),
+  clientVersion: absentAsNull(z.string()),
   connectedAtUtc: isoDateTimeSchema,
-  lastUsedAtUtc: isoDateTimeSchema.nullable(),
+  lastUsedAtUtc: absentAsNull(isoDateTimeSchema),
   expiresAtUtc: isoDateTimeSchema,
 });
 
@@ -2409,10 +2416,10 @@ export const connectorActivityRowSchema = z.object({
   dataScope: z.string(),
   method: z.string(),
   routePattern: z.string(),
-  resourceId: z.string().nullable(),
-  companyId: positiveIdSchema.nullable(),
+  resourceId: absentAsNull(z.string()),
+  companyId: absentAsNull(positiveIdSchema),
   statusCode: connectorIntegerSchema,
-  reason: z.string().nullable(),
+  reason: absentAsNull(z.string()),
   occurredAtUtc: isoDateTimeSchema,
 });
 
