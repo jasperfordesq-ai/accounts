@@ -36,6 +36,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
+// A binding failure (an unknown enum value, a malformed body, a wrong field type) surfaces as a
+// named 400 through ExceptionMiddleware rather than an empty response. Development defaults to
+// this already; the Private Server and Public Production hosts must not behave differently.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+
 // QuestPDF Community License
 QuestPDF.Settings.License = LicenseType.Community;
 

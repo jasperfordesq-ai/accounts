@@ -201,16 +201,19 @@ public sealed class AccountCategoryEngineSwitchTests
         var auto = await db.Adjustments.Where(adjustment => adjustment.PeriodId == fixture.Period.Id && adjustment.IsAuto).ToListAsync();
         var depreciation = Assert.Single(auto, adjustment => adjustment.Description.StartsWith("Depreciation —", StringComparison.Ordinal));
         Assert.Equal(fixture.Ids["8000"], depreciation.DebitCategoryId);
-        Assert.Equal(fixture.Ids["0020"], depreciation.CreditCategoryId);
+        // The charity chart credits accumulated depreciation (0021), not the 0020 cost account; this
+        // attribute chart lacks 0021, so the generator creates it from the chart definition.
+        var accumulated = await db.AccountCategories.SingleAsync(category => category.CompanyId == fixture.Company.Id && category.Code == "0021");
+        Assert.Equal(accumulated.Id, depreciation.CreditCategoryId);
         var prepayment = Assert.Single(auto, adjustment => adjustment.Description.StartsWith("Prepayment —", StringComparison.Ordinal));
         Assert.Equal(fixture.Ids["1120"], prepayment.DebitCategoryId);
 
-        // Only the expense head the prepayment needed was created (the charity chart's 7700 sundry
-        // expenses); no generic role account (1400, 7000, 3200, 2400, 8000 CT ...) was added to the chart.
-        var created = await db.AccountCategories.Where(category => !before.Contains(category.Id)).ToListAsync();
-        var added = Assert.Single(created);
-        Assert.Equal("7700", added.Code);
-        Assert.Equal(prepayment.CreditCategoryId, added.Id);
+        // Only the accounts the postings needed were created (the charity chart's 0021 accumulated
+        // depreciation and 7700 sundry expenses); no generic role account (1400, 7000, 3200, 2400,
+        // 8000 CT ...) was added to the chart.
+        var created = await db.AccountCategories.Where(category => !before.Contains(category.Id)).OrderBy(category => category.Code).ToListAsync();
+        Assert.Equal(["0021", "7700"], created.Select(category => category.Code).ToArray());
+        Assert.Equal(prepayment.CreditCategoryId, created.Single(category => category.Code == "7700").Id);
     }
 
     [Fact]

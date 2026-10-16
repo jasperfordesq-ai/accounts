@@ -145,3 +145,19 @@ dry-run/execute on Postgres (ids preserved, transactions untouched, permutation,
 refusal, plan-hash mismatch refusal, audit); a fixture mirroring the live company's shape: six
 categorised accounts and their transactions; counts, uncategorised and net movement unchanged after
 adoption.
+
+## Revision: 16 October 2026 (hOUR Timebank FY2026 handoff)
+
+- **Depreciation credits accumulated depreciation.** The automatic depreciation journal credits the
+  class's accumulated-depreciation account (leased equipment 0011, office and IT 0021, fixtures and
+  fittings 0031) and never the cost account. Crediting cost (the behaviour up to preview.13) reduced
+  cost each year and left accumulated depreciation at nil, so the tangible fixed assets note could not
+  show cost and accumulated depreciation separately (FRS 102 s.17.31, FRS 105 s.12). hOUR Timebank's
+  FY2026 period carries two approved manual reclass journals (#21, #22) that corrected this before the
+  generator was fixed; they stand, and the FY2026 depreciation journals were not regenerated. The
+  generic trading chart has one net account per class and still credits that account.
+- **Opening stock from opening balances is released.** When a period's opening stock comes from
+  explicit opening balances (a take-on from filed accounts) rather than from the prior period's own
+  closing-stock journal, the generator now posts "Opening stock released to cost of sales"
+  (Dr 5010 Cr 1000) before recognising closing stock. Previously only closing stock was posted, so
+  the opening figure stayed on the balance sheet and cost of sales was understated.

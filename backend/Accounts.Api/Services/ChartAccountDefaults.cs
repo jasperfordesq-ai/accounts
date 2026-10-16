@@ -65,6 +65,9 @@ public static class ChartAccountDefaults
     public static DefaultAccount? DepreciationAccount(ChartOfAccountsVariant variant, string assetClass) =>
         ChartDefinitions.For(variant).DepreciationAccount(assetClass);
 
+    public static DefaultAccount? AccumulatedDepreciationAccount(ChartOfAccountsVariant variant, string assetClass) =>
+        ChartDefinitions.For(variant).AccumulatedDepreciationAccount(assetClass);
+
     // Accrual / prepayment / trade-creditor description -> the expense account it adjusts.
     public static DefaultAccount ExpenseAccountForDescription(ChartOfAccountsVariant variant, string description) =>
         ChartDefinitions.For(variant).ExpenseAccountForDescription(description);

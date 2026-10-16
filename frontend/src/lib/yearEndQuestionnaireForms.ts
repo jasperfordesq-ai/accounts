@@ -50,7 +50,7 @@ export function createFixedAssetDraft(): FixedAsset {
 }
 
 export function createInventoryDraft(): InventoryItem {
-  return { description: "", value: 0, valuationMethod: "FIFO" };
+  return { description: "", value: 0, valuationMethod: "LowerOfCostAndNrv" };
 }
 
 export function createPayrollDraft(): PayrollSummary {
@@ -64,8 +64,8 @@ export function createDividendDraft(): Dividend {
 export function createInitialTaxForms(): Record<string, TaxBalance> {
   return {
     CorporationTax: { taxType: "CorporationTax", liability: 0, paid: 0, balance: 0 },
-    VAT: { taxType: "VAT", liability: 0, paid: 0, balance: 0 },
-    PAYE_PRSI: { taxType: "PAYE_PRSI", liability: 0, paid: 0, balance: 0 },
+    Vat: { taxType: "Vat", liability: 0, paid: 0, balance: 0 },
+    Paye: { taxType: "Paye", liability: 0, paid: 0, balance: 0 },
   };
 }
 

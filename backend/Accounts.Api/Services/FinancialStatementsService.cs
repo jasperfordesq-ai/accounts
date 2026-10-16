@@ -499,6 +499,22 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         static bool Cash(AccountCategory category) => AccountingLedgerService.IsCash(category);
         static decimal AssetBalance(AccountingLedgerService.LedgerLine line) => line.NetDebit;
         static decimal LiabilityBalance(AccountingLedgerService.LedgerLine line) => -line.NetDebit;
+        static bool IsAccumulatedDepreciationAccount(AccountCategory category) =>
+            category.Name.Contains("accumulated depreciation", StringComparison.OrdinalIgnoreCase);
+        // The cost account an accumulated-depreciation account belongs to: the same code with a final 0
+        // (0011 → 0010), the charity chart's convention.
+        static string? AccumulatedDepreciationPartnerCode(AccountCategory category) =>
+            category.Code.Length > 1 && category.Code[^1] == '1' ? category.Code[..^1] + "0" : null;
+        // "Equipment held under finance lease — cost" is one class: drop the cost suffix for the note.
+        static string AssetClassName(string name)
+        {
+            foreach (var suffix in new[] { " — cost", " - cost" })
+            {
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    return name[..^suffix.Length];
+            }
+            return name;
+        }
 
         var activeAssets = await db.FixedAssets
             .AsNoTracking()
@@ -514,16 +530,36 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         // company keeps the presentation below unchanged.
         var charityPresentation = companyVariant == ChartOfAccountsVariant.CharityClg;
         var fixedAssetLines = lines.Where(line => FixedAsset(line.Category)).ToList();
-        var assetCategories = fixedAssetLines
-            .Select(line =>
-            {
-                var netBookValue = AssetBalance(line);
-                var registerCost = activeAssets
-                    .Where(asset => FixedAssetCode(variant, asset.Category) == line.Category.Code)
-                    .Sum(asset => asset.Cost);
-                var cost = registerCost == 0m ? Math.Max(0m, netBookValue) : registerCost;
-                return new AssetCategoryLine(line.Category.Name, cost, cost - netBookValue, netBookValue);
-            })
+        // A class is its cost account plus its accumulated-depreciation account (charity chart 0010 +
+        // 0011, 0020 + 0021, 0030 + 0031): the accumulated account's credit is folded into the cost
+        // account's line, so the note shows cost, accumulated depreciation and net book value per class
+        // instead of a cost line at full value beside a negative "accumulated depreciation" line.
+        var accumulatedLines = fixedAssetLines.Where(line => IsAccumulatedDepreciationAccount(line.Category)).ToList();
+        var pairedAccumulated = new HashSet<int>();
+        var assetCategories = new List<AssetCategoryLine>();
+        foreach (var line in fixedAssetLines.Where(line => !IsAccumulatedDepreciationAccount(line.Category)))
+        {
+            var partners = accumulatedLines
+                .Where(accumulated => AccumulatedDepreciationPartnerCode(accumulated.Category) == line.Category.Code)
+                .ToList();
+            foreach (var partner in partners)
+                pairedAccumulated.Add(partner.Category.Id);
+            var netBookValue = AssetBalance(line) + partners.Sum(AssetBalance);
+            var registerCost = activeAssets
+                .Where(asset => FixedAssetCode(variant, asset.Category) == line.Category.Code)
+                .Sum(asset => asset.Cost);
+            var cost = registerCost != 0m
+                ? registerCost
+                : Math.Max(0m, partners.Count > 0 ? AssetBalance(line) : netBookValue);
+            assetCategories.Add(new AssetCategoryLine(AssetClassName(line.Category.Name), cost, cost - netBookValue, netBookValue));
+        }
+        foreach (var line in accumulatedLines.Where(accumulated => !pairedAccumulated.Contains(accumulated.Category.Id)))
+        {
+            var netBookValue = AssetBalance(line);
+            var cost = Math.Max(0m, netBookValue);
+            assetCategories.Add(new AssetCategoryLine(line.Category.Name, cost, cost - netBookValue, netBookValue));
+        }
+        assetCategories = assetCategories
             .Where(line => line.Cost != 0 || line.Depreciation != 0 || line.Nbv != 0)
             .ToList();
         var fixedAssetsTotal = fixedAssetLines.Sum(AssetBalance);
@@ -883,6 +919,47 @@ public partial class FinancialStatementsService(AccountsDbContext db)
             }
         }
 
+        // Prior-period comparatives. The accounts package prints the preceding period's ledger as the
+        // comparative column; when that period exists but holds nothing (a history-only period, or one
+        // whose filed figures were never entered) every comparative printed as zero with no warning.
+        // Judged only for a take-on period: explicit opening balances prove the prior year closed with
+        // balances, so an empty prior ledger is certainly wrong. A period that carries the prior ledger
+        // forward starts from that ledger, empty or not, and its comparatives are consistent with it.
+        // The company's first period is not judged as a prior period: a company may adopt FilingBridge
+        // from its second year with the first year's take-on only (the golden corpus does); a prior
+        // period that itself follows recorded history should have been entered. Not counted in
+        // totalChecks, so a first period's score is unchanged.
+        var hasExplicitOpeningBalances = await db.OpeningBalances
+            .AnyAsync(o => o.PeriodId == periodId && (o.Debit != 0m || o.Credit != 0m));
+        var priorPeriodForComparatives = hasExplicitOpeningBalances
+            ? await PeriodChronologyService
+                .PriorPeriodQuery(db, companyId, period.PeriodStart)
+                .AsNoTracking()
+                .FirstOrDefaultAsync()
+            : null;
+        if (priorPeriodForComparatives is not null
+            && !await PeriodChronologyService.PriorPeriodQuery(db, companyId, priorPeriodForComparatives.PeriodStart).AnyAsync())
+            priorPeriodForComparatives = null;
+        if (priorPeriodForComparatives is not null)
+        {
+            bool priorLedgerEmpty;
+            try
+            {
+                var priorLedger = await new AccountingLedgerService(db).BuildAsync(companyId, priorPeriodForComparatives.Id);
+                priorLedgerEmpty = priorLedger.Lines.Values.All(line => line.Debit == 0m && line.Credit == 0m);
+            }
+            catch (BusinessRuleException)
+            {
+                // The prior ledger cannot be built at all; its own readiness reports that.
+                priorLedgerEmpty = false;
+            }
+            if (priorLedgerEmpty)
+            {
+                missing.Add(
+                    $"Prior-period comparatives missing: the preceding period ({priorPeriodForComparatives.PeriodStart.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)} to {priorPeriodForComparatives.PeriodEnd.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)}) has no opening balances, transactions or adjustments, yet this period opens with balances, so every comparative figure would print as zero. Enter that period's figures from its filed accounts (opening balances and closing journals) before generating the accounts.");
+            }
+        }
+
         // Candidate rows remain provisionally included. Final outputs fail closed until a reviewer
         // explicitly keeps or discards each one, so a re-import can never be silently lost.
         var pendingDuplicateReviews = await db.ImportedTransactions.CountAsync(t =>
@@ -955,7 +1032,11 @@ public partial class FinancialStatementsService(AccountsDbContext db)
             .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax)
             .Select(t => (decimal?)t.Liability)
             .FirstOrDefaultAsync();
-        if (enteredCorporationTax is { } enteredCt)
+        // A charitable tax exemption with no corporation tax confirmed as due means no CT1 is prepared
+        // here, so neither the scope questionnaire nor the charge reconciliation is asked for.
+        var exemptWithoutConfirmedDue = period.Company.HoldsCharitableTaxExemption
+            && !await CorporationTaxObligation.IsConfirmedDueAsync(db, periodId);
+        if (enteredCorporationTax is { } enteredCt && !exemptWithoutConfirmedDue)
         {
             try
             {
@@ -976,9 +1057,7 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         // A company holding a charitable tax exemption gets no automatic CT provision; an entered CT
         // liability must be confirmed or removed before final outputs (a blocking warning, not counted).
         // Once an Owner or Reviewer confirms it is due, it is provided for like a non-exempt company's.
-        if (period.Company.HoldsCharitableTaxExemption
-            && enteredCorporationTax is > 0m
-            && !await CorporationTaxObligation.IsConfirmedDueAsync(db, periodId))
+        if (exemptWithoutConfirmedDue && enteredCorporationTax is > 0m)
             warnings.Add(
                 $"This company holds a charitable tax exemption, but a corporation tax liability of €{enteredCorporationTax.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)} is entered; confirm it is due (for example on income outside the exemption) or remove it.");
 
@@ -1229,7 +1308,9 @@ public partial class FinancialStatementsService(AccountsDbContext db)
             .Where(t => t.PeriodId == periodId && t.TaxType == TaxType.CorporationTax)
             .Select(t => (decimal?)t.Liability)
             .FirstOrDefaultAsync();
-        if (enteredCorporationTax is { } enteredCt)
+        // No Revenue obligation (a charitable tax exemption with nothing confirmed as due): no CT1 to reconcile.
+        var exemptWithoutConfirmedDue = !await CorporationTaxObligation.RevenueAppliesAsync(db, periodId);
+        if (enteredCorporationTax is { } enteredCt && !exemptWithoutConfirmedDue)
         {
             try
             {

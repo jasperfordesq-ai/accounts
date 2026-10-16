@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as apiContracts from "./apiContracts.ts";
 import { assertEvidenceUploadFits, readEvidenceFile } from "./evidenceUpload.ts";
+import type { ContingentLiability, PostBalanceSheetEvent, RelatedPartyTransaction } from "./yearEndDisclosureTypes.ts";
 import {
   reportClientMonitoringEvent,
   type ClientMonitoringEventCode,
@@ -32,6 +33,7 @@ import {
 
 export * from "./productionReadinessContract.ts";
 export * from "./evidenceUpload.ts";
+export * from "./yearEndDisclosureTypes.ts";
 
 export { ApiContractError } from "./apiContracts.ts";
 
@@ -2460,40 +2462,12 @@ export const getSignaturePageUrl = (companyId: number, periodId: number) =>
 
 // === Phase 2: Interrogation Engine ===
 
-export interface PostBalanceSheetEvent {
-  id?: number;
-  periodId?: number;
-  description: string;
-  eventDate: string;
-  isAdjusting: boolean;
-  financialImpact?: number;
-  actionRequired?: string;
-}
-
-export interface RelatedPartyTransaction {
-  id?: number;
-  periodId?: number;
-  partyName: string;
-  relationship: string;
-  transactionType: string;
-  amount: number;
-  balanceOwed?: number;
-  terms?: string;
-}
-
-export interface ContingentLiability {
-  id?: number;
-  periodId?: number;
-  description: string;
-  nature: string;
-  estimatedAmount?: number;
-  likelihood: string;
-}
-
 export const getPostBalanceSheetEvents = (companyId: number, periodId: number) =>
   apiFetch<PostBalanceSheetEvent[]>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events`);
 export const createPostBalanceSheetEvent = (companyId: number, periodId: number, data: PostBalanceSheetEvent) =>
   apiFetch<PostBalanceSheetEvent>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events`, { method: "POST", body: JSON.stringify(data) });
+export const updatePostBalanceSheetEvent = (companyId: number, periodId: number, id: number, data: PostBalanceSheetEvent) =>
+  apiFetch<PostBalanceSheetEvent>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const deletePostBalanceSheetEvent = (companyId: number, periodId: number, id: number) =>
   apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/post-balance-sheet-events/${id}`, { method: "DELETE" });
 
@@ -2508,6 +2482,8 @@ export const getContingentLiabilities = (companyId: number, periodId: number) =>
   apiFetch<ContingentLiability[]>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities`);
 export const createContingentLiability = (companyId: number, periodId: number, data: ContingentLiability) =>
   apiFetch<ContingentLiability>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities`, { method: "POST", body: JSON.stringify(data) });
+export const updateContingentLiability = (companyId: number, periodId: number, id: number, data: ContingentLiability) =>
+  apiFetch<ContingentLiability>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities/${id}`, { method: "PUT", body: JSON.stringify(data) });
 export const deleteContingentLiability = (companyId: number, periodId: number, id: number) =>
   apiFetch<void>(`/api/companies/${companyId}/periods/${periodId}/contingent-liabilities/${id}`, { method: "DELETE" });
 

@@ -192,7 +192,7 @@ Auth, security & platform services:
 ## API endpoints
 
 The committed OpenAPI 3.1 contract is the canonical route and transport-schema inventory:
-`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 204 paths and 241
+`backend/Accounts.Api/OpenApi/accounts-api-v1.json`. It currently contains 211 paths and 247
 schemas. `Docs/architecture/generated-api-contracts.md` documents regeneration and frontend drift
 checks; avoid maintaining a second exhaustive hand-written route count here.
 
@@ -375,15 +375,21 @@ Public Production retains the following contract:
 
 - Windows WDAC blocks running DLLs (incl. QuestPDF.dll) from the repo path — build output is routed to `.dotnet-artifacts/` via `backend/Directory.Build.props`; use DesignTimeDbContextFactory for migrations
 - NuGet SSL intermittent failures — add packages to .csproj directly and restore
+- On a Windows checkout with `core.autocrlf=true`, three byte-pinned fixture/template tests fail
+  before any change (`CorporationTaxFilingSupportFixtureTests.IndependentFixture_IsBytePinned…`,
+  `ReconciledGoldenFixtureIntegrityTests.ImmutableReconciledFixture…`,
+  `ReleaseEvidenceTemplates_CoverHumanVisualAccountantAndProviderSignoffs`): the pinned SHA-256s
+  and `
+` substrings are computed over LF files. CI (Linux) is the gate for them.
 - PostgreSQL-required integration suites are release gates, not optional evidence. Set
   `ACCOUNTS_POSTGRES_TEST_CONNECTION` for the direct test-project command; CI supplies it and also
   sets the golden-corpus requirement so an environment skip cannot masquerade as a release pass.
 
 ## Generated/current inventory
 
-- Transport inventory: committed OpenAPI 3.1 contract (204 paths, 241 schemas at this revision).
+- Transport inventory: committed OpenAPI 3.1 contract (211 paths, 247 schemas at this revision).
 - MCP connector inventory: `mcp/src/route-coverage.ts` maps every contract operation to a tool or a
-  written exclusion (237 tools at this revision); see `Docs/architecture/mcp-connector.md`.
+  written exclusion (239 tools at this revision); see `Docs/architecture/mcp-connector.md`.
 - Database inventory: EF model plus append-only migrations; migration/model drift is tested rather
   than represented by a manually maintained count.
 - Test inventory: use test-run output and retained CI evidence for the exact candidate; historical

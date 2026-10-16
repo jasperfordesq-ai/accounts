@@ -525,6 +525,16 @@ public sealed class PostBalanceSheetEventInput
         CreatedAt = DateTime.UtcNow
     };
 
+    // Replaces every editable field of an existing event (PUT semantics); identity and CreatedAt stay.
+    internal void Apply(PostBalanceSheetEvent target)
+    {
+        target.Description = Description;
+        target.EventDate = EventDate;
+        target.IsAdjusting = IsAdjusting;
+        target.FinancialImpact = FinancialImpact;
+        target.ActionRequired = ActionRequired;
+    }
+
     public static implicit operator PostBalanceSheetEventInput(PostBalanceSheetEvent value) => new()
     {
         Description = value.Description,
@@ -583,6 +593,15 @@ public sealed class ContingentLiabilityInput
         Likelihood = Likelihood,
         CreatedAt = DateTime.UtcNow
     };
+
+    // Replaces every editable field of an existing contingency (PUT semantics); identity and CreatedAt stay.
+    internal void Apply(ContingentLiability target)
+    {
+        target.Description = Description;
+        target.Nature = Nature;
+        target.EstimatedAmount = EstimatedAmount;
+        target.Likelihood = Likelihood;
+    }
 
     public static implicit operator ContingentLiabilityInput(ContingentLiability value) => new()
     {

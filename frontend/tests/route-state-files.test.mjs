@@ -339,7 +339,8 @@ test("year-end questionnaire route delegates inventory working-paper section", (
   assert.doesNotMatch(routeSource, /aria-label="Inventory item description"/, "year-end questionnaire route should not own inventory description fields");
   assert.doesNotMatch(routeSource, /aria-label="Inventory item value"/, "year-end questionnaire route should not own inventory value fields");
   assert.doesNotMatch(routeSource, /Delete inventory item/, "year-end questionnaire route should not own inventory delete copy");
-  assert.match(componentSource, /Weighted Average/, "inventory shell should preserve valuation method options");
+  assert.match(componentSource, /Lower of cost and NRV/, "inventory shell should offer the API's valuation methods (FRS 102 s.13 / FRS 105 s.10)");
+  assert.doesNotMatch(componentSource, /"FIFO"|"LIFO"|"WeightedAverage"/, "inventory shell must not send cost formulas the server refuses");
   assert.match(componentSource, /work in progress/i, "inventory shell should stay explicit about stock and work in progress");
 });
 

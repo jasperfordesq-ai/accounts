@@ -21,6 +21,19 @@ const inputClass =
 const selectClass =
   "w-full rounded-lg border border-[var(--control-border)] bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-gray-100";
 
+// The API's ValuationMethod: stock is measured at cost, net realisable value, or the lower of the two
+// (FRS 102 s.13 / FRS 105 s.10). FIFO / weighted average are cost formulas, not measurement bases, and
+// LIFO is not permitted; the server refused all three.
+export const VALUATION_METHOD_OPTIONS = [
+  { value: "LowerOfCostAndNrv", label: "Lower of cost and NRV" },
+  { value: "Cost", label: "Cost" },
+  { value: "NetRealisableValue", label: "Net realisable value" },
+] as const;
+
+export function valuationMethodLabel(value: string): string {
+  return VALUATION_METHOD_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
 export function YearEndInventorySection({
   canWrite = true,
   items,
@@ -43,7 +56,7 @@ export function YearEndInventorySection({
             >
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.description}</p>
-                <Chip variant="soft" size="sm" color="default">{item.valuationMethod}</Chip>
+                <Chip variant="soft" size="sm" color="default">{valuationMethodLabel(item.valuationMethod)}</Chip>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -53,7 +66,7 @@ export function YearEndInventorySection({
                   type="button"
                   onClick={() => item.id && requestDestructiveAction({
                     recordLabel: `inventory item ${item.description}`,
-                    consequence: `This permanently removes the ${formatCurrency(item.value)} inventory valuation and ${item.valuationMethod} evidence from the year-end record. The removal cannot be undone.`,
+                    consequence: `This permanently removes the ${formatCurrency(item.value)} inventory valuation and ${valuationMethodLabel(item.valuationMethod)} evidence from the year-end record. The removal cannot be undone.`,
                     onConfirm: () => onDelete(item.id!),
                     successAnnouncement: `Inventory item ${item.description} was removed.`,
                   })}
@@ -103,9 +116,9 @@ export function YearEndInventorySection({
             title="Valuation method"
             aria-label="Valuation method"
           >
-            <option value="FIFO">FIFO</option>
-            <option value="WeightedAverage">Weighted Average</option>
-            <option value="LIFO">LIFO</option>
+            {VALUATION_METHOD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
         </div>
         <div className="col-span-2">

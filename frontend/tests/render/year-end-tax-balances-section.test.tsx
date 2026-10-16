@@ -42,8 +42,8 @@ function TaxBalancesHarness({
 }) {
   const [forms, setForms] = useState<Record<string, TaxBalance>>({
     CorporationTax: { taxType: "CorporationTax", liability: 100, paid: 10, balance: 90 },
-    VAT: { taxType: "VAT", liability: 0, paid: 0, balance: 0 },
-    PAYE_PRSI: { taxType: "PAYE_PRSI", liability: 0, paid: 0, balance: 0 },
+    Vat: { taxType: "Vat", liability: 0, paid: 0, balance: 0 },
+    Paye: { taxType: "Paye", liability: 0, paid: 0, balance: 0 },
   });
 
   function handleChange(taxType: string, balance: TaxBalance) {

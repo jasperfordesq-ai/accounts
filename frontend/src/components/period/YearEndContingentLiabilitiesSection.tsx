@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Chip, Spinner } from "@heroui/react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
 import type { ContingentLiability } from "@/lib/api";
 import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
@@ -14,6 +14,10 @@ interface YearEndContingentLiabilitiesSectionProps {
   onDraftChange: (draft: ContingentLiability) => void;
   onAdd: () => void;
   onDelete: (id: number) => void | Promise<void>;
+  /** The row currently loaded into the form for editing (PUT), or null when adding. */
+  editingId?: number | null;
+  onEdit?: (item: ContingentLiability) => void;
+  onCancelEdit?: () => void;
 }
 
 const inputClass =
@@ -29,6 +33,9 @@ export function YearEndContingentLiabilitiesSection({
   onDraftChange,
   onAdd,
   onDelete,
+  editingId = null,
+  onEdit,
+  onCancelEdit,
 }: YearEndContingentLiabilitiesSectionProps) {
   const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
 
@@ -39,7 +46,7 @@ export function YearEndContingentLiabilitiesSection({
           {contingencies.map((contingency) => (
             <div
               key={contingency.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
+              className={`flex items-center justify-between rounded-lg border px-4 py-3 dark:bg-neutral-800/50 ${editingId !== null && editingId === contingency.id ? "border-emerald-500 ring-1 ring-emerald-500" : "border-gray-200 dark:border-neutral-700"}`}
             >
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{contingency.description}</p>
@@ -60,6 +67,14 @@ export function YearEndContingentLiabilitiesSection({
                     {formatCurrency(contingency.estimatedAmount)}
                   </span>
                 )}
+                {canWrite && onEdit && <button
+                  type="button"
+                  onClick={() => contingency.id && onEdit(contingency)}
+                  className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  aria-label={`Edit contingency ${contingency.description}`}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>}
                 {canWrite && <button
                   type="button"
                   onClick={() => contingency.id && requestDestructiveAction({
@@ -136,17 +151,22 @@ export function YearEndContingentLiabilitiesSection({
             <option value="Remote">Remote</option>
           </select>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 flex gap-2">
           <Button
             variant="primary"
             size="sm"
             onPress={onAdd}
             isDisabled={saving}
             className="w-full"
-            aria-label="Add contingent liability"
+            aria-label={editingId !== null ? "Save contingent liability" : "Add contingent liability"}
           >
-            {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
+            {saving ? <Spinner size="sm" /> : editingId !== null ? <><Save className="w-4 h-4 mr-1" /> Save</> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
           </Button>
+          {editingId !== null && onCancelEdit && (
+            <Button variant="ghost" size="sm" onPress={onCancelEdit} isDisabled={saving} aria-label="Cancel contingent liability edit">
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>}
       {destructiveActionConfirmation}

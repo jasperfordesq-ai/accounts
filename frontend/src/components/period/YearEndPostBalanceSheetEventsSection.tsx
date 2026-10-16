@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Chip, Spinner } from "@heroui/react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
 import type { PostBalanceSheetEvent } from "@/lib/api";
 import { useDestructiveActionConfirmation } from "@/lib/useDestructiveAction";
@@ -14,6 +14,10 @@ interface YearEndPostBalanceSheetEventsSectionProps {
   onDraftChange: (draft: PostBalanceSheetEvent) => void;
   onAdd: () => void;
   onDelete: (id: number) => void | Promise<void>;
+  /** The row currently loaded into the form for editing (PUT), or null when adding. */
+  editingId?: number | null;
+  onEdit?: (item: PostBalanceSheetEvent) => void;
+  onCancelEdit?: () => void;
 }
 
 const inputClass =
@@ -27,6 +31,9 @@ export function YearEndPostBalanceSheetEventsSection({
   onDraftChange,
   onAdd,
   onDelete,
+  editingId = null,
+  onEdit,
+  onCancelEdit,
 }: YearEndPostBalanceSheetEventsSectionProps) {
   const { requestDestructiveAction, destructiveActionConfirmation } = useDestructiveActionConfirmation();
 
@@ -37,7 +44,7 @@ export function YearEndPostBalanceSheetEventsSection({
           {events.map((event) => (
             <div
               key={event.id}
-              className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 px-4 py-3 dark:bg-neutral-800/50"
+              className={`flex items-center justify-between rounded-lg border px-4 py-3 dark:bg-neutral-800/50 ${editingId !== null && editingId === event.id ? "border-emerald-500 ring-1 ring-emerald-500" : "border-gray-200 dark:border-neutral-700"}`}
             >
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{event.description}</p>
@@ -55,6 +62,14 @@ export function YearEndPostBalanceSheetEventsSection({
                   )}
                 </div>
               </div>
+              {canWrite && onEdit && <button
+                type="button"
+                onClick={() => event.id && onEdit(event)}
+                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                aria-label={`Edit event ${event.description}`}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>}
               {canWrite && <button
                 type="button"
                 onClick={() => event.id && requestDestructiveAction({
@@ -121,17 +136,22 @@ export function YearEndPostBalanceSheetEventsSection({
             Adjusting
           </label>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 flex gap-2">
           <Button
             variant="primary"
             size="sm"
             onPress={onAdd}
             isDisabled={saving}
             className="w-full"
-            aria-label="Add post-balance sheet event"
+            aria-label={editingId !== null ? "Save post-balance sheet event" : "Add post-balance sheet event"}
           >
-            {saving ? <Spinner size="sm" /> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
+            {saving ? <Spinner size="sm" /> : editingId !== null ? <><Save className="w-4 h-4 mr-1" /> Save</> : <><Plus className="w-4 h-4 mr-1" /> Add</>}
           </Button>
+          {editingId !== null && onCancelEdit && (
+            <Button variant="ghost" size="sm" onPress={onCancelEdit} isDisabled={saving} aria-label="Cancel post-balance sheet event edit">
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>}
       {destructiveActionConfirmation}

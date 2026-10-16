@@ -137,9 +137,9 @@ test('tool counts per group match the catalogue design', () => {
   for (const tool of TOOLS) counts[tool.group] = (counts[tool.group] ?? 0) + 1;
   assert.deepEqual(counts, {
     companies: 10, officers: 4, periods: 4, banking: 5, transactions: 6, categories: 8, classification: 11,
-    year_end: 45, disclosures: 20, adjustments: 7, audit: 4, statements: 7, working_papers: 7, documents: 9,
+    year_end: 45, disclosures: 22, adjustments: 7, audit: 4, statements: 7, working_papers: 7, documents: 9,
     revenue: 12, deadlines: 7, charity: 16, filing: 19, handoff: 7, admin_users: 10, privacy: 5, operations: 3,
     system: 2, connector: 5,
   });
-  assert.equal(TOOLS.length, 233);
+  assert.equal(TOOLS.length, 235);
 });

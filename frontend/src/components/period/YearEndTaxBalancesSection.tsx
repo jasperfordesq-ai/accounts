@@ -12,10 +12,11 @@ interface YearEndTaxBalancesSectionProps {
   onSave: (taxType: string) => void;
 }
 
+// Keys are the API's TaxType values (the PUT route segment); "VAT" / "PAYE_PRSI" were refused by the server.
 const TAX_ROWS = [
   { key: "CorporationTax", label: "Corporation Tax" },
-  { key: "VAT", label: "VAT" },
-  { key: "PAYE_PRSI", label: "PAYE / PRSI" },
+  { key: "Vat", label: "VAT" },
+  { key: "Paye", label: "PAYE / PRSI" },
 ] as const;
 
 const inputClass =

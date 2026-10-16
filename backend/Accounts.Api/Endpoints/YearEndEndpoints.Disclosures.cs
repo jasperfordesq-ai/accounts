@@ -255,6 +255,38 @@ public static partial class YearEndEndpoints
         return Results.NoContent();
     }
 
+    public static async Task<IResult> UpdatePostBalanceSheetEventEndpointAsync(
+        int companyId,
+        int periodId,
+        int id,
+        PostBalanceSheetEventInput input,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context)
+    {
+        if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
+            return denied;
+        if (string.IsNullOrWhiteSpace(input.Description))
+            return Results.BadRequest(new { error = "Event description is required." });
+
+        var item = await db.PostBalanceSheetEvents.FirstOrDefaultAsync(x => x.Id == id && x.PeriodId == periodId);
+        if (item == null) return Results.NotFound();
+
+        var oldValue = PostBalanceSheetEventSnapshot(item);
+        input.Apply(item);
+        await db.SaveChangesAsync();
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "PostBalanceSheetEvent",
+            item.Id,
+            AuditEventCodes.PostBalanceSheetEventUpdated,
+            oldValue,
+            PostBalanceSheetEventSnapshot(item),
+            AuditUserId(context));
+        return Results.Ok(item);
+    }
+
     public static async Task<IResult> CreateRelatedPartyTransactionEndpointAsync(
         int companyId,
         int periodId,
@@ -363,6 +395,58 @@ public static partial class YearEndEndpoints
             new { Deleted = true },
             AuditUserId(context));
         return Results.NoContent();
+    }
+
+    public static async Task<IResult> UpdateContingentLiabilityEndpointAsync(
+        int companyId,
+        int periodId,
+        int id,
+        ContingentLiabilityInput input,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context)
+    {
+        if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
+            return denied;
+        if (string.IsNullOrWhiteSpace(input.Description))
+            return Results.BadRequest(new { error = "Contingent liability description is required." });
+
+        var item = await db.ContingentLiabilities.FirstOrDefaultAsync(x => x.Id == id && x.PeriodId == periodId);
+        if (item == null) return Results.NotFound();
+
+        var oldValue = ContingentLiabilitySnapshot(item);
+        input.Apply(item);
+        await db.SaveChangesAsync();
+        await audit.LogAsync(
+            companyId,
+            periodId,
+            "ContingentLiability",
+            item.Id,
+            AuditEventCodes.ContingentLiabilityUpdated,
+            oldValue,
+            ContingentLiabilitySnapshot(item),
+            AuditUserId(context));
+        return Results.Ok(item);
+    }
+
+    // The HTTP handler reads the body strictly: the typed GoingConcernInput bound any JSON object, so a
+    // body such as {goingConcernConfirmed, goingConcernNote} silently became confirmed=false, note=null
+    // and wiped the record with a 200. An unknown, missing or mistyped field is now a 400 naming the
+    // fields. The typed overload below is the shared core (and what in-process callers use).
+    public static async Task<IResult> UpdateGoingConcernStrictEndpointAsync(
+        int companyId,
+        int periodId,
+        AccountsDbContext db,
+        AuditService audit,
+        HttpContext context)
+    {
+        if (await RequirePeriodWriteAccessAsync(db, companyId, periodId, context) is { } denied)
+            return denied;
+
+        var (input, invalid) = await GoingConcernBody.ReadAsync(context.Request, context.RequestAborted);
+        if (invalid is not null) return invalid;
+
+        return await UpdateGoingConcernEndpointAsync(companyId, periodId, input!, db, audit, context);
     }
 
     public static async Task<IResult> UpdateGoingConcernEndpointAsync(

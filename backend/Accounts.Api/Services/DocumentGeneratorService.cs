@@ -355,7 +355,10 @@ public class DocumentGeneratorService(
 
             // Current Assets
             AddBsSection(table, ref row, "CURRENT ASSETS", true);
-            if (bs.CurrentAssets.Stock > 0) AddBsLine(table, ref row, "Stock", bs.CurrentAssets.Stock, priorBs?.CurrentAssets.Stock);
+            // A row is printed when either year has a figure: the comparative column must not lose a
+            // prior-year balance because the current year's is nil.
+            if (bs.CurrentAssets.Stock > 0 || (priorBs?.CurrentAssets.Stock ?? 0) > 0)
+                AddBsLine(table, ref row, "Stock", bs.CurrentAssets.Stock, priorBs?.CurrentAssets.Stock);
             AddBsLine(table, ref row, "Debtors", bs.CurrentAssets.Debtors + bs.CurrentAssets.Prepayments, priorBs != null ? priorBs.CurrentAssets.Debtors + priorBs.CurrentAssets.Prepayments : null);
             AddBsLine(table, ref row, "Cash at bank and in hand", bs.CurrentAssets.Cash, priorBs?.CurrentAssets.Cash);
             AddBsTotal(table, ref row, "", bs.CurrentAssets.Total, priorBs?.CurrentAssets.Total);
@@ -379,7 +382,7 @@ public class DocumentGeneratorService(
             AddBsTotal(table, ref row, "NET CURRENT ASSETS", bs.NetCurrentAssets, priorBs?.NetCurrentAssets);
             AddBsDoubleTotal(table, ref row, "TOTAL ASSETS LESS CURRENT LIABILITIES", bs.TotalAssetsLessCurrentLiabilities, priorBs?.TotalAssetsLessCurrentLiabilities);
 
-            if (bs.CreditorsAfterYear.Total > 0)
+            if (bs.CreditorsAfterYear.Total > 0 || (priorBs?.CreditorsAfterYear.Total ?? 0) > 0)
             {
                 AddBsSection(table, ref row, "CREDITORS: amounts falling due after more than one year", false);
                 AddBsLine(table, ref row, "", -bs.CreditorsAfterYear.Total, priorBs != null ? -priorBs.CreditorsAfterYear.Total : null);
