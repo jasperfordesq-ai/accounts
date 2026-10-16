@@ -251,9 +251,10 @@ export const DISCLOSURE_TOOLS: readonly ToolDefinition[] = [
   ...crud({
     entity: 'post_balance_sheet_event', noun: 'post balance sheet event', group: 'disclosures',
     collection: `${PER}/post-balance-sheet-events`,
-    body: POST_BALANCE_SHEET_EVENT_INPUT_FIELDS, bodySchema: 'PostBalanceSheetEventInput', noUpdate: true,
+    body: POST_BALANCE_SHEET_EVENT_INPUT_FIELDS, bodySchema: 'PostBalanceSheetEventInput',
     listDescription: 'Events after the balance sheet date, adjusting and non-adjusting (FRS 102 section 32).',
     createDescription: `Record an event after the balance sheet date.${LOCKED}`,
+    updateDescription: `Correct a post balance sheet event in place (description, date, adjusting flag, impact) instead of deleting and re-adding it.${LOCKED}`,
     deleteDescription: 'Remove a post balance sheet event recorded in error.',
   }),
   ...crud({
@@ -272,9 +273,10 @@ export const DISCLOSURE_TOOLS: readonly ToolDefinition[] = [
   ...crud({
     entity: 'contingent_liability', noun: 'contingent liability', group: 'disclosures',
     collection: `${PER}/contingent-liabilities`,
-    body: CONTINGENT_LIABILITY_INPUT_FIELDS, bodySchema: 'ContingentLiabilityInput', noUpdate: true,
+    body: CONTINGENT_LIABILITY_INPUT_FIELDS, bodySchema: 'ContingentLiabilityInput',
     listDescription: 'Contingent liabilities (guarantees, litigation, warranties) and their likelihood.',
     createDescription: `Record a contingent liability.${LOCKED}`,
+    updateDescription: `Correct a contingent liability in place (description, nature, amount, likelihood) instead of deleting and re-adding it.${LOCKED}`,
     deleteDescription: 'Remove a contingent liability recorded in error.',
   }),
   {

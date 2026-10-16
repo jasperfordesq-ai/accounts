@@ -497,6 +497,10 @@
       "description": "Record an event after the balance sheet date."
     },
     {
+      "name": "post_balance_sheet_event_update",
+      "description": "Correct a post balance sheet event in place (description, date, adjusting flag, impact) instead of deleting and re-adding it."
+    },
+    {
       "name": "post_balance_sheet_event_delete",
       "description": "Remove a post balance sheet event recorded in error."
     },
@@ -519,6 +523,10 @@
     {
       "name": "contingent_liability_create",
       "description": "Record a contingent liability."
+    },
+    {
+      "name": "contingent_liability_update",
+      "description": "Correct a contingent liability in place (description, nature, amount, likelihood) instead of deleting and re-adding it."
     },
     {
       "name": "contingent_liability_delete",

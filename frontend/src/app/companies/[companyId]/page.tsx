@@ -61,6 +61,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
     companyType: "Private",
     isTrading: true,
     isDormant: false,
+    holdsCharitableTaxExemption: false,
+    charitableTaxExemptionReference: "",
+    charitableTaxExemptionConfirmedDate: "",
   });
   const [savingCompany, setSavingCompany] = useState(false);
 
@@ -91,6 +94,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       || editForm.companyType !== (company.companyType ?? "Private")
       || editForm.isTrading !== (company.isTrading ?? true)
       || editForm.isDormant !== (company.isDormant ?? false)
+      || editForm.holdsCharitableTaxExemption !== (company.holdsCharitableTaxExemption ?? false)
+      || editForm.charitableTaxExemptionReference !== (company.charitableTaxExemptionReference ?? "")
+      || editForm.charitableTaxExemptionConfirmedDate !== (company.charitableTaxExemptionConfirmedDate ?? "")
     ));
     const charityEditDirty = Boolean(editingCharity && (
       charityForm.charityNumber !== (charityInfo?.charityNumber ?? "")
@@ -195,6 +201,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
       companyType: company.companyType || "Private",
       isTrading: company.isTrading ?? true,
       isDormant: company.isDormant ?? false,
+      holdsCharitableTaxExemption: company.holdsCharitableTaxExemption ?? false,
+      charitableTaxExemptionReference: company.charitableTaxExemptionReference ?? "",
+      charitableTaxExemptionConfirmedDate: company.charitableTaxExemptionConfirmedDate ?? "",
     });
     setEditing(true);
   };
@@ -215,6 +224,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ compan
         companyType: editForm.companyType,
         isTrading: editForm.isTrading,
         isDormant: editForm.isDormant,
+        holdsCharitableTaxExemption: editForm.holdsCharitableTaxExemption,
+        charitableTaxExemptionReference: editForm.holdsCharitableTaxExemption ? editForm.charitableTaxExemptionReference.trim() || undefined : undefined,
+        charitableTaxExemptionConfirmedDate: editForm.holdsCharitableTaxExemption ? editForm.charitableTaxExemptionConfirmedDate || undefined : undefined,
       });
       toast.success("Company updated successfully");
       setEditing(false);

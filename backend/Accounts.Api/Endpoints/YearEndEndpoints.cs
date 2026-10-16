@@ -360,6 +360,7 @@ public static partial class YearEndEndpoints
         pbse.MapGet("/", async (int companyId, int periodId, AccountsDbContext db, HttpContext context) =>
             await ListPeriodOwnedRowsAsync(db, companyId, periodId, context, db.PostBalanceSheetEvents.Where(x => x.PeriodId == periodId).OrderBy(x => x.EventDate)));
         pbse.MapPost("/", CreatePostBalanceSheetEventEndpointAsync);
+        pbse.MapPut("/{id:int}", UpdatePostBalanceSheetEventEndpointAsync);
         pbse.MapDelete("/{id:int}", DeletePostBalanceSheetEventEndpointAsync);
 
         // ===== RELATED PARTY TRANSACTIONS =====
@@ -374,6 +375,7 @@ public static partial class YearEndEndpoints
         cl.MapGet("/", async (int companyId, int periodId, AccountsDbContext db, HttpContext context) =>
             await ListPeriodOwnedRowsAsync(db, companyId, periodId, context, db.ContingentLiabilities.Where(x => x.PeriodId == periodId).OrderBy(x => x.Description)));
         cl.MapPost("/", CreateContingentLiabilityEndpointAsync);
+        cl.MapPut("/{id:int}", UpdateContingentLiabilityEndpointAsync);
         cl.MapDelete("/{id:int}", DeleteContingentLiabilityEndpointAsync);
 
         // ===== GOING CONCERN =====
@@ -387,7 +389,8 @@ public static partial class YearEndEndpoints
             if (period == null) return Results.NotFound();
             return Results.Ok(new { period.GoingConcernConfirmed, period.GoingConcernNote });
         });
-        gc.MapPut("/", UpdateGoingConcernEndpointAsync);
+        // The handler reads the body strictly (GoingConcernBody); Accepts keeps the contract's schema.
+        gc.MapPut("/", UpdateGoingConcernStrictEndpointAsync).Accepts<GoingConcernInput>("application/json");
 
         // ===== DIRECTOR LOAN COMPLIANCE (s.239 / s.307) =====
         var dlCompliance = app.MapGroup($"{basePath}/director-loans").WithTags("Director Loans");

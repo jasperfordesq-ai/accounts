@@ -27,7 +27,8 @@ public sealed class ChartDefinition(
     Func<string, ChartAccountDefaults.DefaultAccount> fixedAssetAccount,
     Func<string, ChartAccountDefaults.DefaultAccount> expenseAccountForDescription,
     IReadOnlyDictionary<AccountSystemRole, string>? refusedRoles = null,
-    Func<string, ChartAccountDefaults.DefaultAccount?>? depreciationAccountForClass = null)
+    Func<string, ChartAccountDefaults.DefaultAccount?>? depreciationAccountForClass = null,
+    Func<string, ChartAccountDefaults.DefaultAccount?>? accumulatedDepreciationAccountForClass = null)
 {
     public ChartOfAccountsVariant Variant { get; } = variant;
     public IReadOnlyList<ChartAccountDefinition> Accounts { get; } = accounts;
@@ -46,6 +47,11 @@ public sealed class ChartDefinition(
     // A class-specific depreciation expense account, or null for the chart's Depreciation role account.
     public ChartAccountDefaults.DefaultAccount? DepreciationAccount(string assetClass) =>
         depreciationAccountForClass?.Invoke(assetClass);
+
+    // The class's accumulated-depreciation account the depreciation charge is credited to, or null when
+    // the chart carries each class at a single net account (the charge then credits the cost account).
+    public ChartAccountDefaults.DefaultAccount? AccumulatedDepreciationAccount(string assetClass) =>
+        accumulatedDepreciationAccountForClass?.Invoke(assetClass);
 
     public ChartAccountDefaults.DefaultAccount ExpenseAccountForDescription(string description) =>
         expenseAccountForDescription(description.ToLowerInvariant());
@@ -343,7 +349,8 @@ public static class ChartDefinitions
             [AccountSystemRole.DividendsPaid] = ClgCannotPayDividends,
             [AccountSystemRole.DividendsPayable] = ClgCannotPayDividends
         },
-        CharityDepreciationAccount);
+        CharityDepreciationAccount,
+        CharityAccumulatedDepreciationAccount);
 
     private const string ClgCannotPayDividends = "A company limited by guarantee cannot pay dividends; remove the dividend entry.";
 
@@ -358,6 +365,19 @@ public static class ChartDefinitions
     // Leased equipment is depreciated to 8010; every other class to the Depreciation role (8000).
     private static ChartAccountDefaults.DefaultAccount? CharityDepreciationAccount(string assetClass) =>
         IsLeasedClass(assetClass) ? CharityAccount("8010") : null;
+
+    // The charge is credited to the class's accumulated-depreciation account (0011 / 0021 / 0031), never
+    // to the cost account, so the tangible fixed assets note can show cost and accumulated depreciation
+    // separately (FRS 102 s.17.31, FRS 105 s.12). Crediting cost understated cost and showed nil
+    // accumulated depreciation; see the 12 Oct 2026 hOUR Timebank reclass journals.
+    private static ChartAccountDefaults.DefaultAccount? CharityAccumulatedDepreciationAccount(string assetClass) => CharityAccount(
+        assetClass switch
+        {
+            _ when IsLandClass(assetClass) => throw new BusinessRuleException(CharityChartHasNoLandAccount),
+            _ when IsLeasedClass(assetClass) => "0011",
+            "Furniture" or "Fixtures & Fittings" or "Fixtures and Fittings" => "0031",
+            _ => "0021"
+        });
 
     public const string CharityChartHasNoLandAccount =
         "The charity chart has no land and buildings account. Add one (a 00xx tangible fixed asset account) or choose another asset class.";

@@ -221,7 +221,7 @@ public class NotesDisclosureService(AccountsDbContext db)
         var hasStock = await db.Inventories.AnyAsync(inventory => inventory.PeriodId == periodId);
         Add(Required(
             StatutoryNoteCodes.AccountingPolicies,
-            AccountingPolicies(regime, activeAssets, hasStock)));
+            AccountingPolicies(regime, activeAssets, hasStock, period.Company)));
 
         Add(GoingConcernCandidate(period, reviews));
 
@@ -489,7 +489,8 @@ public class NotesDisclosureService(AccountsDbContext db)
     private static string AccountingPolicies(
         ElectedRegime regime,
         IReadOnlyCollection<FixedAsset> assets,
-        bool hasStock)
+        bool hasStock,
+        Company company)
     {
         var standard = regime == ElectedRegime.Micro
             ? "FRS 105, The Financial Reporting Standard applicable to the Micro-entities Regime"
@@ -517,8 +518,23 @@ public class NotesDisclosureService(AccountsDbContext db)
                 .Append("Inventories are measured at the lower of cost and net realisable value.");
         }
         builder.AppendLine().AppendLine()
-            .AppendLine("Current taxation")
-            .Append("Current corporation tax is recognised by reference to taxable profits and enacted tax rates.");
+            .AppendLine("Current taxation");
+        if (company.HoldsCharitableTaxExemption)
+        {
+            // The policy states the exemption rather than a tax charge: a custom "Taxation" note is not
+            // needed (and the nil-tax wording filter would refuse one).
+            var reference = string.IsNullOrWhiteSpace(company.CharitableTaxExemptionReference)
+                ? string.Empty
+                : $" (reference {company.CharitableTaxExemptionReference.Trim()}"
+                    + (company.CharitableTaxExemptionConfirmedDate is { } confirmedOn
+                        ? $", confirmed {confirmedOn.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)})"
+                        : ")");
+            builder.Append($"The company holds a charitable tax exemption from the Revenue Commissioners{reference}. No corporation tax is provided on income applied solely for its charitable purposes; corporation tax would be recognised only on taxable income arising outside the exemption, by reference to enacted tax rates.");
+        }
+        else
+        {
+            builder.Append("Current corporation tax is recognised by reference to taxable profits and enacted tax rates.");
+        }
         return builder.ToString();
     }
 

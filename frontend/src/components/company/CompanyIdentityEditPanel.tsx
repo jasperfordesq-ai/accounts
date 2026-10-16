@@ -12,11 +12,16 @@ export interface CompanyEditFormValues {
   companyType: string;
   isTrading: boolean;
   isDormant: boolean;
+  holdsCharitableTaxExemption: boolean;
+  charitableTaxExemptionReference: string;
+  charitableTaxExemptionConfirmedDate: string;
 }
 
 interface CompanyIdentityEditPanelProps {
   form: CompanyEditFormValues;
   saving: boolean;
+  /** Shows the Revenue charitable tax exemption fields (the API records them for a charity only). */
+  isCharitableOrganisation?: boolean;
   onFormChange: (value: CompanyEditFormValues) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -33,6 +38,7 @@ const companyTypeOptions = [
 export function CompanyIdentityEditPanel({
   form,
   saving,
+  isCharitableOrganisation = false,
   onFormChange,
   onSave,
   onCancel,
@@ -112,6 +118,45 @@ export function CompanyIdentityEditPanel({
             />
           </div>
         </div>
+
+        {isCharitableOrganisation && (
+          <div className="grid gap-3 rounded-md border border-[var(--border)] bg-[var(--surface-subtle)] p-3">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">Revenue charitable tax exemption</div>
+              <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">
+                While the exemption is recorded, no corporation tax deadline or CT scope questionnaire is raised unless a liability is
+                confirmed as due, and the accounting policies note states the exemption. Record the Revenue reference and the date Revenue
+                confirmed it.
+              </p>
+            </div>
+            <CheckboxField
+              label="Charitable tax exemption held"
+              ariaLabel="Holds charitable tax exemption"
+              checked={form.holdsCharitableTaxExemption}
+              onChange={(checked) => onFormChange({ ...form, holdsCharitableTaxExemption: checked })}
+            />
+            {form.holdsCharitableTaxExemption && (
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem]">
+                <TextField
+                  label="Revenue exemption reference"
+                  value={form.charitableTaxExemptionReference}
+                  placeholder="e.g. CHY number or ROS enquiry reference"
+                  onChange={(value) => onFormChange({ ...form, charitableTaxExemptionReference: value })}
+                />
+                <label className="block text-xs font-semibold uppercase text-[var(--muted-foreground)]">
+                  Confirmed by Revenue on
+                  <input
+                    type="date"
+                    value={form.charitableTaxExemptionConfirmedDate}
+                    onChange={(event) => onFormChange({ ...form, charitableTaxExemptionConfirmedDate: event.target.value })}
+                    aria-label="Charitable tax exemption confirmed date"
+                    className="mt-1 min-h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--surface)] px-3 text-sm normal-case text-[var(--foreground)] outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] pt-3">
           <Button variant="ghost" size="sm" onPress={onCancel} isDisabled={saving} aria-label="Cancel company editing">

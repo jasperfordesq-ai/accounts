@@ -324,21 +324,30 @@ public class FilingReadinessProfileService(AccountsDbContext db)
 
         TaxComputationService.TaxComputation? taxSupport = null;
         string? taxSupportFailure = null;
-        try
+        // A company holding a charitable tax exemption with no corporation tax confirmed as due has no
+        // CT1 to support, so the scope questionnaire is not required of it; the exemption evidence is
+        // the record instead. Once a liability is confirmed as due the full scope review applies.
+        var exemptWithoutConfirmedDue = !await CorporationTaxObligation.RevenueAppliesAsync(db, periodId);
+        if (!exemptWithoutConfirmedDue)
         {
-            taxSupport = await new TaxComputationService(db, new FinancialStatementsService(db))
-                .ComputeAsync(companyId, periodId);
+            try
+            {
+                taxSupport = await new TaxComputationService(db, new FinancialStatementsService(db))
+                    .ComputeAsync(companyId, periodId);
+            }
+            catch (BusinessRuleException exception)
+            {
+                taxSupportFailure = exception.Message;
+            }
         }
-        catch (BusinessRuleException exception)
-        {
-            taxSupportFailure = exception.Message;
-        }
-        var taxSupportSatisfied = taxSupport?.FinalTaxChargeSupported == true;
-        var taxSupportDetail = taxSupport is not null
-            ? taxSupportSatisfied
-                ? $"Simple-scope support calculation {taxSupport.CalculationSha256}; this is still not a complete CT1 return."
-                : string.Join("; ", taxSupport.BlockingReasons)
-            : $"Corporation-tax support calculation could not be produced: {taxSupportFailure}";
+        var taxSupportSatisfied = exemptWithoutConfirmedDue || taxSupport?.FinalTaxChargeSupported == true;
+        var taxSupportDetail = exemptWithoutConfirmedDue
+            ? $"Charitable tax exemption held (Revenue reference {period.Company.CharitableTaxExemptionReference}{(period.Company.CharitableTaxExemptionConfirmedDate is { } confirmedOn ? $", confirmed {confirmedOn:yyyy-MM-dd}" : string.Empty)}); no corporation-tax return is due unless a liability is confirmed as due, so the scope questionnaire is not required."
+            : taxSupport is not null
+                ? taxSupportSatisfied
+                    ? $"Simple-scope support calculation {taxSupport.CalculationSha256}; this is still not a complete CT1 return."
+                    : string.Join("; ", taxSupport.BlockingReasons)
+                : $"Corporation-tax support calculation could not be produced: {taxSupportFailure}";
         RequireEvidence(
             "corporation-tax-scope",
             "Corporation-tax support scope and retained loss movement are current",

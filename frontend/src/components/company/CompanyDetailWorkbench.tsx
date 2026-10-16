@@ -190,6 +190,7 @@ export function CompanyDetailWorkbench({
           <CompanyIdentityEditPanel
             form={editForm}
             saving={savingCompany}
+            isCharitableOrganisation={company.isCharitableOrganisation === true}
             onFormChange={onEditFormChange}
             onSave={onSaveCompany}
             onCancel={onCancelEditCompany}

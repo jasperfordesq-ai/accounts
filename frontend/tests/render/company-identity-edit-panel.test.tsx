@@ -42,6 +42,26 @@ describe("CompanyIdentityEditPanel", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it("records the Revenue charitable tax exemption for a charity only", () => {
+    const onFormChange = vi.fn();
+    const form = { ...sampleForm(), holdsCharitableTaxExemption: true, charitableTaxExemptionReference: "ROS enquiry 2109-57763", charitableTaxExemptionConfirmedDate: "2022-12-16" };
+
+    const { rerender } = render(
+      <CompanyIdentityEditPanel form={form} saving={false} onFormChange={onFormChange} onSave={vi.fn()} onCancel={vi.fn()} />,
+    );
+    expect(screen.queryByLabelText("Holds charitable tax exemption")).not.toBeInTheDocument();
+
+    rerender(
+      <CompanyIdentityEditPanel form={form} saving={false} isCharitableOrganisation onFormChange={onFormChange} onSave={vi.fn()} onCancel={vi.fn()} />,
+    );
+    expect(screen.getByLabelText("Holds charitable tax exemption")).toBeChecked();
+    expect(screen.getByLabelText("Revenue exemption reference")).toHaveValue("ROS enquiry 2109-57763");
+    expect(screen.getByLabelText("Charitable tax exemption confirmed date")).toHaveValue("2022-12-16");
+
+    fireEvent.click(screen.getByLabelText("Holds charitable tax exemption"));
+    expect(onFormChange).toHaveBeenCalledWith({ ...form, holdsCharitableTaxExemption: false });
+  });
+
   it("surfaces the saving state without losing field context", () => {
     render(
       <CompanyIdentityEditPanel
@@ -68,5 +88,8 @@ function sampleForm(): CompanyEditFormValues {
     companyType: "Private",
     isTrading: true,
     isDormant: false,
+    holdsCharitableTaxExemption: false,
+    charitableTaxExemptionReference: "",
+    charitableTaxExemptionConfirmedDate: "",
   };
 }

@@ -15,13 +15,13 @@ describe("YearEndInventorySection", () => {
     render(<InventoryHarness onChange={onChange} onAdd={onAdd} onDelete={onDelete} />);
 
     expect(screen.getByText("Finished goods")).toBeInTheDocument();
-    expect(screen.getAllByText("FIFO").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Lower of cost and NRV").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("\u20ac8,400.00")).toBeInTheDocument();
 
     await user.type(screen.getByRole("textbox", { name: "Inventory item description" }), "Work in progress");
     await user.clear(screen.getByRole("spinbutton", { name: "Inventory item value" }));
     await user.type(screen.getByRole("spinbutton", { name: "Inventory item value" }), "2150");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Valuation method" }), "WeightedAverage");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Valuation method" }), "Cost");
     await user.click(screen.getByRole("button", { name: "Add inventory item" }));
     await user.click(screen.getByRole("button", { name: "Delete inventory item Finished goods" }));
     expect(onDelete).not.toHaveBeenCalled();
@@ -30,7 +30,7 @@ describe("YearEndInventorySection", () => {
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ description: "Work in progress" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ value: 2150 }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ valuationMethod: "WeightedAverage" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ valuationMethod: "Cost" }));
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledWith(11);
   });
@@ -48,7 +48,7 @@ function InventoryHarness({
   const [draft, setDraft] = useState<InventoryItem>({
     description: "",
     value: 0,
-    valuationMethod: "FIFO",
+    valuationMethod: "LowerOfCostAndNrv",
   });
 
   function handleChange(nextDraft: InventoryItem) {
@@ -58,7 +58,7 @@ function InventoryHarness({
 
   return (
     <YearEndInventorySection
-      items={[{ id: 11, description: "Finished goods", value: 8400, valuationMethod: "FIFO" }]}
+      items={[{ id: 11, description: "Finished goods", value: 8400, valuationMethod: "LowerOfCostAndNrv" }]}
       draft={draft}
       saving={false}
       onDraftChange={handleChange}

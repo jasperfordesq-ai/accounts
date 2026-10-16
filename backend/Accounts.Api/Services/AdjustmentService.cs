@@ -123,6 +123,9 @@ public class AdjustmentService(AccountsDbContext db)
         // Period-end working-capital journals are closing snapshots. Reverse the exact prior-period
         // postings before recognising this period's closing facts, so opening stock reaches cost of
         // sales and debtors/creditors/prepayments do not accumulate across periods.
+        // Set when the prior period's closing-stock journal is reversed below: opening stock then
+        // reaches cost of sales through that reversal and must not be released a second time.
+        var openingStockReleasedByReversal = false;
         if (priorPeriod is not null)
         {
             var priorClosingJournals = await db.Adjustments
@@ -135,6 +138,8 @@ public class AdjustmentService(AccountsDbContext db)
                 .ToListAsync();
             foreach (var prior in priorClosingJournals.Where(IsReversingBalanceJournal))
             {
+                if (prior.Description.Equals(ClosingStockDescription, StringComparison.Ordinal))
+                    openingStockReleasedByReversal = true;
                 adjustments.Add(new Adjustment
                 {
                     PeriodId = periodId,
@@ -206,6 +211,13 @@ public class AdjustmentService(AccountsDbContext db)
             depEntry.ClosingNbv = openingNbv - charge;
 
             var assetCategoryId = await GetAssetCategoryIdAsync(companyId, variant, asset.Category, companyRows);
+            // The charge is credited to the class's accumulated-depreciation account where the chart has
+            // one (charity chart 0011 / 0021 / 0031); a chart carrying each class at a single net account
+            // (the generic chart) credits the cost account as before. Disposal journals still clear the
+            // asset account, so a disposed asset's cost and accumulated depreciation offset to nil.
+            var depreciationCreditId = ChartAccountDefaults.AccumulatedDepreciationAccount(variant, asset.Category) is { } accumulated
+                ? await GetOrCreateCodedCategoryIdAsync(companyId, accumulated, companyRows)
+                : assetCategoryId;
             if (charge > 0)
                 adjustments.Add(new Adjustment
             {
@@ -214,7 +226,7 @@ public class AdjustmentService(AccountsDbContext db)
                 DebitCategoryId = ChartAccountDefaults.DepreciationAccount(variant, asset.Category) is { } classDepreciation
                     ? await GetOrCreateCodedCategoryIdAsync(companyId, classDepreciation, companyRows)
                     : await RoleId(AccountSystemRole.Depreciation),
-                CreditCategoryId = assetCategoryId,
+                CreditCategoryId = depreciationCreditId,
                 Amount = charge,
                 Source = AdjustmentSource.Auto,
                 Reason = $"{asset.DepreciationMethod} over {asset.UsefulLifeYears} years; actual/actual active-period fraction {activeFraction:0.######}; residual value €{residualValue:N2}; fixed-asset source #{asset.Id}",
@@ -433,6 +445,41 @@ public class AdjustmentService(AccountsDbContext db)
             });
         }
 
+        // 5a. Opening stock entered as an explicit opening balance (a take-on from filed accounts, not a
+        // reversed prior-period journal) is released to cost of sales here. Without this the opening
+        // figure stayed on the balance sheet beside the closing stock journal, double-counting stock and
+        // understating cost of sales.
+        if (!openingStockReleasedByReversal)
+        {
+            var stockAccountIds = companyRows
+                .Where(c => CategoryClassification.Role(c) == AccountSystemRole.Stock)
+                .Select(c => c.Id)
+                .ToList();
+            var openingStock = stockAccountIds.Count == 0
+                ? 0m
+                : await db.OpeningBalances
+                    .Where(o => o.PeriodId == periodId && stockAccountIds.Contains(o.AccountCategoryId))
+                    .SumAsync(o => o.Debit - o.Credit);
+            if (openingStock > 0)
+            {
+                adjustments.Add(new Adjustment
+                {
+                    PeriodId = periodId,
+                    Description = OpeningStockReleaseDescription,
+                    DebitCategoryId = await RoleId(AccountSystemRole.CostOfSalesStockMovement),
+                    CreditCategoryId = await RoleId(AccountSystemRole.Stock),
+                    Amount = openingStock,
+                    Source = AdjustmentSource.Auto,
+                    Reason = $"Opening stock of €{openingStock:N2} from the period's opening balances is expensed to cost of sales; the closing stock journal recognises the closing figure separately",
+                    LegalBasis = "FRS 102 Section 13 / FRS 105 Section 10",
+                    ImpactOnProfit = -openingStock,
+                    ImpactOnAssets = -openingStock,
+                    IsAuto = true,
+                    CreatedBy = "System"
+                });
+            }
+        }
+
         // 5. Stock/Inventory adjustment (if closing stock entered)
         var inventories = await db.Inventories
             .Where(i => i.PeriodId == periodId)
@@ -444,7 +491,7 @@ public class AdjustmentService(AccountsDbContext db)
             adjustments.Add(new Adjustment
             {
                 PeriodId = periodId,
-                Description = "Closing stock / inventory recognition",
+                Description = ClosingStockDescription,
                 DebitCategoryId = await RoleId(AccountSystemRole.Stock),
                 CreditCategoryId = await RoleId(AccountSystemRole.CostOfSalesStockMovement),
                 Amount = closingStockValue,
@@ -545,7 +592,10 @@ public class AdjustmentService(AccountsDbContext db)
         || adjustment.Description.StartsWith("Accrual —", StringComparison.Ordinal)
         || adjustment.Description.StartsWith("Trade creditor —", StringComparison.Ordinal)
         || adjustment.Description.StartsWith("Director loan reclassification —", StringComparison.Ordinal)
-        || adjustment.Description.Equals("Closing stock / inventory recognition", StringComparison.Ordinal);
+        || adjustment.Description.Equals(ClosingStockDescription, StringComparison.Ordinal);
+
+    public const string ClosingStockDescription = "Closing stock / inventory recognition";
+    public const string OpeningStockReleaseDescription = "Opening stock released to cost of sales";
 
     private static decimal ActualActualYearFraction(DateOnly start, DateOnly end)
     {

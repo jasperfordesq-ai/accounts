@@ -73,12 +73,14 @@ import {
   type Dividend,
   getPostBalanceSheetEvents,
   createPostBalanceSheetEvent,
+  updatePostBalanceSheetEvent,
   deletePostBalanceSheetEvent,
   getRelatedPartyTransactions,
   createRelatedPartyTransaction,
   deleteRelatedPartyTransaction,
   getContingentLiabilities,
   createContingentLiability,
+  updateContingentLiability,
   deleteContingentLiability,
   getGoingConcern,
   saveGoingConcern,
@@ -216,6 +218,7 @@ export function YearEndQuestionnaireRoute({
   const [newPbseDate, setNewPbseDate] = useState("");
   const [newPbseAdjusting, setNewPbseAdjusting] = useState(false);
   const [newPbseImpact, setNewPbseImpact] = useState<number>(0);
+  const [editingPbseId, setEditingPbseId] = useState<number | null>(null);
   const [newRptName, setNewRptName] = useState("");
   const [newRptRelationship, setNewRptRelationship] = useState("Director");
   const [newRptType, setNewRptType] = useState("Sale");
@@ -224,6 +227,7 @@ export function YearEndQuestionnaireRoute({
   const [newClNature, setNewClNature] = useState("Guarantee");
   const [newClAmount, setNewClAmount] = useState<number>(0);
   const [newClLikelihood, setNewClLikelihood] = useState("Possible");
+  const [editingClId, setEditingClId] = useState<number | null>(null);
 
   const yearEndDraftDirty = useMemo(() => {
     const debtorDraft = newDebtor.name !== "" || newDebtor.amount !== 0 || newDebtor.type !== "Trade";
@@ -242,7 +246,7 @@ export function YearEndQuestionnaireRoute({
       || Boolean(newAsset.capitalAllowanceEvidence);
     const inventoryDraft = newInventoryItem.description !== ""
       || newInventoryItem.value !== 0
-      || newInventoryItem.valuationMethod !== "FIFO";
+      || newInventoryItem.valuationMethod !== "LowerOfCostAndNrv";
     const dividendDraft = newDividend.amount !== 0
       || newDividend.dateDeclared !== ""
       || newDividend.datePaid !== "";
@@ -592,7 +596,7 @@ export function YearEndQuestionnaireRoute({
         }
         return [...prev, saved];
       });
-      toast.success(`${taxType === "PAYE_PRSI" ? "PAYE/PRSI" : taxType === "CorporationTax" ? "Corporation Tax" : taxType} saved`);
+      toast.success(`${taxType === "Paye" ? "PAYE/PRSI" : taxType === "Vat" ? "VAT" : taxType === "CorporationTax" ? "Corporation Tax" : taxType} saved`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : `Failed to save ${taxType}`);
     }
@@ -691,24 +695,45 @@ export function YearEndQuestionnaireRoute({
   }
 
   /* ---- Post-Balance Sheet Event handlers ---- */
+  function resetPbseDraft() {
+    setNewPbseDesc("");
+    setNewPbseDate("");
+    setNewPbseAdjusting(false);
+    setNewPbseImpact(0);
+    setEditingPbseId(null);
+  }
+
+  function startEditPbse(event: PostBalanceSheetEvent) {
+    if (!event.id) return;
+    setEditingPbseId(event.id);
+    setNewPbseDesc(event.description);
+    setNewPbseDate(event.eventDate);
+    setNewPbseAdjusting(event.isAdjusting);
+    setNewPbseImpact(event.financialImpact ?? 0);
+  }
+
   async function handleAddPbse() {
     if (!newPbseDesc || !newPbseDate) return;
     setSavingSection("pbse");
+    const body = {
+      description: newPbseDesc,
+      eventDate: newPbseDate,
+      isAdjusting: newPbseAdjusting,
+      financialImpact: newPbseImpact || undefined,
+    };
     try {
-      const created = await createPostBalanceSheetEvent(cId, pId, {
-        description: newPbseDesc,
-        eventDate: newPbseDate,
-        isAdjusting: newPbseAdjusting,
-        financialImpact: newPbseImpact || undefined,
-      });
-      setPostBsEvents((prev) => [...prev, created]);
-      setNewPbseDesc("");
-      setNewPbseDate("");
-      setNewPbseAdjusting(false);
-      setNewPbseImpact(0);
-      toast.success("Post-balance sheet event added");
+      if (editingPbseId !== null) {
+        const updated = await updatePostBalanceSheetEvent(cId, pId, editingPbseId, body);
+        setPostBsEvents((prev) => prev.map((e) => (e.id === editingPbseId ? updated : e)));
+        toast.success("Post-balance sheet event updated");
+      } else {
+        const created = await createPostBalanceSheetEvent(cId, pId, body);
+        setPostBsEvents((prev) => [...prev, created]);
+        toast.success("Post-balance sheet event added");
+      }
+      resetPbseDraft();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add event");
+      toast.error(err instanceof Error ? err.message : editingPbseId !== null ? "Failed to update event" : "Failed to add event");
     }
     setSavingSection(null);
   }
@@ -718,6 +743,7 @@ export function YearEndQuestionnaireRoute({
     try {
       await deletePostBalanceSheetEvent(cId, pId, id);
       setPostBsEvents((prev) => prev.filter((e) => e.id !== id));
+      if (editingPbseId === id) resetPbseDraft();
       toast.success("Event removed");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete event");
@@ -765,24 +791,45 @@ export function YearEndQuestionnaireRoute({
   }
 
   /* ---- Contingent Liability handlers ---- */
+  function resetContingencyDraft() {
+    setNewClDesc("");
+    setNewClNature("Guarantee");
+    setNewClAmount(0);
+    setNewClLikelihood("Possible");
+    setEditingClId(null);
+  }
+
+  function startEditContingency(contingency: ContingentLiability) {
+    if (!contingency.id) return;
+    setEditingClId(contingency.id);
+    setNewClDesc(contingency.description);
+    setNewClNature(contingency.nature);
+    setNewClAmount(contingency.estimatedAmount ?? 0);
+    setNewClLikelihood(contingency.likelihood);
+  }
+
   async function handleAddContingency() {
     if (!newClDesc) return;
     setSavingSection("contingency");
+    const body = {
+      description: newClDesc,
+      nature: newClNature,
+      estimatedAmount: newClAmount || undefined,
+      likelihood: newClLikelihood,
+    };
     try {
-      const created = await createContingentLiability(cId, pId, {
-        description: newClDesc,
-        nature: newClNature,
-        estimatedAmount: newClAmount || undefined,
-        likelihood: newClLikelihood,
-      });
-      setContingencies((prev) => [...prev, created]);
-      setNewClDesc("");
-      setNewClNature("Guarantee");
-      setNewClAmount(0);
-      setNewClLikelihood("Possible");
-      toast.success("Contingent liability added");
+      if (editingClId !== null) {
+        const updated = await updateContingentLiability(cId, pId, editingClId, body);
+        setContingencies((prev) => prev.map((c) => (c.id === editingClId ? updated : c)));
+        toast.success("Contingent liability updated");
+      } else {
+        const created = await createContingentLiability(cId, pId, body);
+        setContingencies((prev) => [...prev, created]);
+        toast.success("Contingent liability added");
+      }
+      resetContingencyDraft();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add contingency");
+      toast.error(err instanceof Error ? err.message : editingClId !== null ? "Failed to update contingency" : "Failed to add contingency");
     }
     setSavingSection(null);
   }
@@ -792,6 +839,7 @@ export function YearEndQuestionnaireRoute({
     try {
       await deleteContingentLiability(cId, pId, id);
       setContingencies((prev) => prev.filter((c) => c.id !== id));
+      if (editingClId === id) resetContingencyDraft();
       toast.success("Contingency removed");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete contingency");
@@ -1167,6 +1215,9 @@ export function YearEndQuestionnaireRoute({
             }}
             onAdd={handleAddPbse}
             onDelete={handleDeletePbse}
+            editingId={editingPbseId}
+            onEdit={startEditPbse}
+            onCancelEdit={resetPbseDraft}
           />
         </Section>
 
@@ -1231,6 +1282,9 @@ export function YearEndQuestionnaireRoute({
             }}
             onAdd={handleAddContingency}
             onDelete={handleDeleteContingency}
+            editingId={editingClId}
+            onEdit={startEditContingency}
+            onCancelEdit={resetContingencyDraft}
           />
         </Section>
 

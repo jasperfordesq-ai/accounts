@@ -80,10 +80,12 @@ public static class AuditEventCodes
     public const string DirectorLoanUpdated = "DirectorLoanUpdated";
     public const string DirectorLoanDeleted = "DirectorLoanDeleted";
     public const string PostBalanceSheetEventCreated = "PostBalanceSheetEventCreated";
+    public const string PostBalanceSheetEventUpdated = "PostBalanceSheetEventUpdated";
     public const string PostBalanceSheetEventDeleted = "PostBalanceSheetEventDeleted";
     public const string RelatedPartyTransactionCreated = "RelatedPartyTransactionCreated";
     public const string RelatedPartyTransactionDeleted = "RelatedPartyTransactionDeleted";
     public const string ContingentLiabilityCreated = "ContingentLiabilityCreated";
+    public const string ContingentLiabilityUpdated = "ContingentLiabilityUpdated";
     public const string ContingentLiabilityDeleted = "ContingentLiabilityDeleted";
     public const string DebtorCreated = "DebtorCreated";
     public const string DebtorUpdated = "DebtorUpdated";

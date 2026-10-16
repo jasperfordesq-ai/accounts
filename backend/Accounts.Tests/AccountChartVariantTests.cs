@@ -345,7 +345,8 @@ public sealed class AccountChartVariantTests
         var auto = await db.Adjustments.Where(adjustment => adjustment.PeriodId == period.Id && adjustment.IsAuto).ToListAsync();
         Adjustment Journal(string prefix) => Assert.Single(auto, adjustment => adjustment.Description.StartsWith(prefix, StringComparison.Ordinal));
         var depreciation = Journal("Depreciation —");
-        Assert.Equal((ids["8000"], ids["0020"]), (depreciation.DebitCategoryId, depreciation.CreditCategoryId));
+        // Credited to accumulated depreciation (0021), never to the 0020 cost account.
+        Assert.Equal((ids["8000"], ids["0021"]), (depreciation.DebitCategoryId, depreciation.CreditCategoryId));
         var prepayment = Journal("Prepayment —");
         Assert.Equal((ids["1120"], ids["7000"]), (prepayment.DebitCategoryId, prepayment.CreditCategoryId));
         var stock = Journal("Closing stock");
@@ -367,6 +368,99 @@ public sealed class AccountChartVariantTests
             Assert.Contains(adjustment.DebitCategoryId!.Value, ids.Values);
             Assert.Contains(adjustment.CreditCategoryId!.Value, ids.Values);
         });
+    }
+
+    [Fact]
+    public async Task CharityDepreciation_CreditsEachClassAccumulatedDepreciationAccount()
+    {
+        // Defect: the generator credited the cost account (0010 / 0020), so cost fell each year and
+        // accumulated depreciation stayed nil; the live charity carried manual reclass journals to fix it.
+        await using var db = CreateDb();
+        var (company, period, _, ids) = await SeedCharityCompanyAsync(db);
+        db.FixedAssets.AddRange(
+            new FixedAsset
+            {
+                CompanyId = company.Id,
+                Name = "Coffee machine",
+                Category = ChartDefinitions.LeasedEquipmentClass,
+                Cost = 5_000m,
+                AcquisitionDate = period.PeriodStart,
+                UsefulLifeYears = 5,
+                DepreciationMethod = DepreciationMethod.StraightLine
+            },
+            new FixedAsset
+            {
+                CompanyId = company.Id,
+                Name = "Shop counter",
+                Category = "Furniture",
+                Cost = 1_000m,
+                AcquisitionDate = period.PeriodStart,
+                UsefulLifeYears = 5,
+                DepreciationMethod = DepreciationMethod.StraightLine
+            });
+        // The register does not post cost; the take-on opening balances carry it, as in live use.
+        db.OpeningBalances.AddRange(
+            new OpeningBalance { PeriodId = period.Id, AccountCategoryId = ids["0010"], Debit = 5_000m, Credit = 0m, SourceNote = "Take-on", Reviewed = true },
+            new OpeningBalance { PeriodId = period.Id, AccountCategoryId = ids["0030"], Debit = 1_000m, Credit = 0m, SourceNote = "Take-on", Reviewed = true });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(company.Id, period.Id);
+
+        var auto = await db.Adjustments.Where(adjustment => adjustment.PeriodId == period.Id && adjustment.IsAuto).ToListAsync();
+        var machine = Assert.Single(auto, adjustment => adjustment.Description.Contains("Coffee machine", StringComparison.Ordinal));
+        Assert.Equal((ids["8010"], ids["0011"]), (machine.DebitCategoryId, machine.CreditCategoryId));
+        var counter = Assert.Single(auto, adjustment => adjustment.Description.Contains("Shop counter", StringComparison.Ordinal));
+        Assert.Equal((ids["8000"], ids["0031"]), (counter.DebitCategoryId, counter.CreditCategoryId));
+        Assert.DoesNotContain(auto, adjustment => adjustment.CreditCategoryId == ids["0010"] || adjustment.CreditCategoryId == ids["0030"]);
+
+        // The balance sheet carries cost and accumulated depreciation separately; net book value is unchanged.
+        var balanceSheet = await new FinancialStatementsService(db).GetBalanceSheetAsync(company.Id, period.Id);
+        Assert.Equal(6_000m - 1_200m, balanceSheet.FixedAssets.Total);
+    }
+
+    [Fact]
+    public async Task OpeningStock_FromOpeningBalances_IsReleasedToCostOfSales_Once()
+    {
+        // Defect: the generator posted closing stock only and reversed only a prior FilingBridge closing
+        // journal, so stock taken on through opening balances was double-counted. A take-on opening
+        // stock is released here; one reversed through the prior period's own journal is not released twice.
+        await using var db = CreateDb();
+        var (company, period, _, ids) = await SeedCharityCompanyAsync(db);
+        db.OpeningBalances.Add(new OpeningBalance { PeriodId = period.Id, AccountCategoryId = ids["1000"], Debit = 5_000m, Credit = 0m, SourceNote = "Filed FY2025 stock", Reviewed = true });
+        db.Inventories.Add(new Inventory { PeriodId = period.Id, Description = "Goods held for resale", Value = 7_000m });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(company.Id, period.Id);
+
+        var auto = await db.Adjustments.Where(adjustment => adjustment.PeriodId == period.Id && adjustment.IsAuto).ToListAsync();
+        var release = Assert.Single(auto, adjustment => adjustment.Description == AdjustmentService.OpeningStockReleaseDescription);
+        Assert.Equal((ids["5010"], ids["1000"], 5_000m), (release.DebitCategoryId, release.CreditCategoryId, release.Amount));
+        var closing = Assert.Single(auto, adjustment => adjustment.Description == AdjustmentService.ClosingStockDescription);
+        Assert.Equal((ids["1000"], ids["5010"], 7_000m), (closing.DebitCategoryId, closing.CreditCategoryId, closing.Amount));
+        var balanceSheet = await new FinancialStatementsService(db).GetBalanceSheetAsync(company.Id, period.Id);
+        Assert.Equal(7_000m, balanceSheet.CurrentAssets.Stock);
+
+        // A following period whose opening stock is the prior period's own closing journal: the reversal
+        // releases it, and no second release is posted.
+        var next = new AccountingPeriod
+        {
+            CompanyId = company.Id,
+            PeriodStart = period.PeriodEnd.AddDays(1),
+            PeriodEnd = period.PeriodEnd.AddYears(1),
+            IsFirstYear = false
+        };
+        db.AccountingPeriods.Add(next);
+        await db.SaveChangesAsync();
+        db.OpeningBalances.Add(new OpeningBalance { PeriodId = next.Id, AccountCategoryId = ids["1000"], Debit = 7_000m, Credit = 0m, SourceNote = "Carried", Reviewed = true });
+        await db.SaveChangesAsync();
+
+        await new AdjustmentService(db).GenerateAutoAdjustmentsAsync(company.Id, next.Id);
+
+        var nextAuto = await db.Adjustments.Where(adjustment => adjustment.PeriodId == next.Id && adjustment.IsAuto).ToListAsync();
+        Assert.DoesNotContain(nextAuto, adjustment => adjustment.Description == AdjustmentService.OpeningStockReleaseDescription);
+        var reversal = Assert.Single(nextAuto, adjustment => adjustment.CreditCategoryId == ids["1000"]);
+        Assert.Equal((ids["5010"], 7_000m), (reversal.DebitCategoryId, reversal.Amount));
+        Assert.StartsWith("Opening reversal —", reversal.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -475,7 +569,7 @@ public sealed class AccountChartVariantTests
     }
 
     [Fact]
-    public async Task CharityLeasedEquipment_IsDepreciatedTo8010AgainstCost0010()
+    public async Task CharityLeasedEquipment_IsDepreciatedTo8010AgainstAccumulatedDepreciation0011()
     {
         await using var db = CreateDb();
         var (company, period, _, ids) = await SeedCharityCompanyAsync(db);
@@ -489,9 +583,10 @@ public sealed class AccountChartVariantTests
 
         var auto = await db.Adjustments.Where(adjustment => adjustment.PeriodId == period.Id && adjustment.IsAuto).ToListAsync();
         var leased = Assert.Single(auto, adjustment => adjustment.Description.StartsWith("Depreciation — Leased machine", StringComparison.Ordinal));
-        Assert.Equal((ids["8010"], ids["0010"], 1_000m), (leased.DebitCategoryId, leased.CreditCategoryId, leased.Amount));
+        // Credited to the class's accumulated-depreciation account (0011 / 0021), never to cost.
+        Assert.Equal((ids["8010"], ids["0011"], 1_000m), (leased.DebitCategoryId, leased.CreditCategoryId, leased.Amount));
         var owned = Assert.Single(auto, adjustment => adjustment.Description.StartsWith("Depreciation — Laptop", StringComparison.Ordinal));
-        Assert.Equal((ids["8000"], ids["0020"]), (owned.DebitCategoryId, owned.CreditCategoryId));
+        Assert.Equal((ids["8000"], ids["0021"]), (owned.DebitCategoryId, owned.CreditCategoryId));
         Assert.Equal(before, await db.AccountCategories.CountAsync());
     }
 

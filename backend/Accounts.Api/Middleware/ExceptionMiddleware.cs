@@ -38,6 +38,14 @@ public class ExceptionMiddleware(
             LogSafeWarning(logger, "BusinessRuleViolation", ex, context);
             await WriteErrorAsync(context, 400, ex.Message);
         }
+        catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status400BadRequest)
+        {
+            // RouteHandlerOptions.ThrowOnBadRequest routes binding failures here, so the client learns
+            // which field or parameter was wrong (and the accepted values of an enumeration) instead of
+            // receiving an empty 400.
+            LogSafeWarning(logger, "RequestBindingRejected", ex, context);
+            await WriteErrorAsync(context, 400, RequestBindingError.Describe(ex));
+        }
         catch (Exception ex)
         {
             // Exported logs must never carry free-form exception messages, request data, client

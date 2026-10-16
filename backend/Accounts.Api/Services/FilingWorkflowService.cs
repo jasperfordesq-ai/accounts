@@ -21,6 +21,11 @@ public class FilingWorkflowService(
     private CharityReportingService CharityReporting => charityReporting ??= new CharityReportingService(db);
     private CharityPdfService CharityPdf => charityPdf ??= new CharityPdfService();
 
+    public const string SofaOptionalWarning =
+        "Charity SoFA not generated — optional: SORP recommended practice for a company charity, not a filing requirement (Charities Act 2009 s.48(6)(a) and s.50(13)(a); the Charities (Amendment) Act 2024 changes are not commenced)";
+    public const string TrusteesReportOptionalWarning =
+        "Trustees' Annual Report not generated — optional: SORP recommended practice for a company charity, not a filing requirement (Charities Act 2009 s.48(6)(a) and s.50(13)(a); the Charities (Amendment) Act 2024 changes are not commenced)";
+
     public record FilingWorkflowStatus(
         CroFilingStatus Cro,
         RevenueFilingStatus Revenue,
@@ -150,10 +155,13 @@ public class FilingWorkflowService(
             var hasFundBalances = await db.FundBalances.AnyAsync(f => f.PeriodId == periodId);
             if (!hasFundBalances)
                 issues.Add("Charity fund balances must be recorded before the annual return can be approved.");
+            // A company charity files its Companies Act financial statements; the SoFA and the Trustees'
+            // Annual Report are SORP recommended practice, not a filing precondition (Charities Act 2009
+            // s.48(6)(a) and s.50(13)(a); the Charities (Amendment) Act 2024 changes are not commenced).
             if (!charityStatus.SofaGenerated)
-                issues.Add("Charity SoFA report not generated");
+                warnings.Add(SofaOptionalWarning);
             if (!charityStatus.TrusteesReportGenerated)
-                issues.Add("Trustees' Annual Report not generated");
+                warnings.Add(TrusteesReportOptionalWarning);
         }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -843,8 +851,8 @@ public class FilingWorkflowService(
     {
         if (string.IsNullOrWhiteSpace(period.Company.CharityInfo?.CharityNumber))
             throw new BusinessRuleException("Charity number is required before approving the Charity annual return pack.");
-        if (!pkg.SofaGenerated || !pkg.TrusteesReportGenerated)
-            throw new BusinessRuleException("Generate the Charity SoFA and Trustees' Annual Report before approving the annual return pack.");
+        // The SoFA and Trustees' Annual Report are optional for a company charity (see GetStatusAsync);
+        // when generated they are bound into the approved pack, when not the pack is approved without them.
 
         var hasFundBalances = await db.FundBalances.AnyAsync(f => f.PeriodId == period.Id);
         if (!hasFundBalances)
