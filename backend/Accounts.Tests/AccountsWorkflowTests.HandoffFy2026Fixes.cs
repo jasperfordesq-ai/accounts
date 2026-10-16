@@ -319,6 +319,51 @@ public partial class AccountsWorkflowTests
         Assert.DoesNotContain("Current corporation tax is recognised by reference to taxable profits", policies.Content);
     }
 
+    [Fact]
+    public async Task AccountsPackage_PrintsBalanceSheetRowsHeldOnlyInThePriorYear()
+    {
+        // Stock and creditors falling due after more than one year were printed only when the current
+        // year had a figure, so hOUR Timebank's 2025 comparative lost its 14,500 finance lease row.
+        await using var db = CreateDbContext();
+        var period = await SeedCompanyPeriodAsync(db, isFirstYear: false);
+        var prior = new AccountingPeriod
+        {
+            CompanyId = period.CompanyId,
+            PeriodStart = new DateOnly(2024, 1, 1),
+            PeriodEnd = new DateOnly(2024, 12, 31),
+            IsFirstYear = true
+        };
+        db.AccountingPeriods.Add(prior);
+        db.FilingRegimes.Add(new FilingRegime { PeriodId = period.Id, ElectedRegime = ElectedRegime.Micro, CanUseMicro = true, CanFileAbridged = true, AuditExempt = true });
+        db.NotesDisclosures.Add(new NotesDisclosure { PeriodId = period.Id, NoteNumber = 1, Title = "Approval of Financial Statements", Content = "Approved by the directors.", IsRequired = true, IsIncluded = true });
+        await db.SaveChangesAsync();
+        await MakePeriodReadyForCroDocumentsAsync(db, period);
+
+        var bank = await db.AccountCategories.SingleAsync(c => c.CompanyId == period.CompanyId && c.Code == "1400");
+        var stock = AddCategory(db, period.CompanyId, "1000", "Stock", AccountCategoryType.Asset);
+        stock.StatementLine = AccountStatementLine.Stocks;
+        var loan = AddCategory(db, period.CompanyId, "2700", "Bank Loan (> 1 year)", AccountCategoryType.Liability);
+        loan.StatementLine = AccountStatementLine.LoansAfterYear;
+        await db.SaveChangesAsync();
+        db.OpeningBalances.AddRange(
+            new OpeningBalance { PeriodId = prior.Id, AccountCategoryId = bank.Id, Debit = 13_500m, SourceNote = "Filed", Reviewed = true },
+            new OpeningBalance { PeriodId = prior.Id, AccountCategoryId = stock.Id, Debit = 1_000m, SourceNote = "Filed", Reviewed = true },
+            new OpeningBalance { PeriodId = prior.Id, AccountCategoryId = loan.Id, Credit = 14_500m, SourceNote = "Filed", Reviewed = true });
+        await db.SaveChangesAsync();
+
+        var statements = new FinancialStatementsService(db);
+        var priorBalanceSheet = await statements.GetBalanceSheetAsync(period.CompanyId, prior.Id);
+        Assert.Equal((1_000m, 14_500m), (priorBalanceSheet.CurrentAssets.Stock, priorBalanceSheet.CreditorsAfterYear.Total));
+        var currentBalanceSheet = await statements.GetBalanceSheetAsync(period.CompanyId, period.Id);
+        Assert.Equal((0m, 0m), (currentBalanceSheet.CurrentAssets.Stock, currentBalanceSheet.CreditorsAfterYear.Total));
+
+        var pdfText = ExtractPdfText(await new DocumentGeneratorService(db, statements).GenerateAgmReviewPackAsync(period.CompanyId, period.Id));
+        Assert.Contains("CREDITORS: amounts falling due after more than one year", pdfText);
+        Assert.Contains("14,500", pdfText);
+        Assert.Contains("Stock", pdfText);
+        Assert.Contains("1,000", pdfText);
+    }
+
     private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
 
     // Asserts the status and, on a mismatch, shows the response body so a 500's message is not lost.
