@@ -2341,12 +2341,16 @@ public partial class AccountsWorkflowTests
 
         // The SoFA and Trustees' Annual Report are SORP recommended practice, not a filing precondition
         // for a company charity (Charities Act 2009 s.48(6)(a) and s.50(13)(a); the 2024 amendments are
-        // not commenced): they are warnings, never blockers, and do not gate approval.
+        // not commenced): warnings in the filing status, never blockers. The charity annual-return pack
+        // is the SORP pack itself, so its approval still waits for both artifacts.
         var statusBeforeReports = await workflow.GetStatusAsync(period.CompanyId, period.Id);
         Assert.DoesNotContain(statusBeforeReports.BlockingIssues, issue => issue.Contains("SoFA", StringComparison.Ordinal));
         Assert.DoesNotContain(statusBeforeReports.BlockingIssues, issue => issue.Contains("Trustees' Annual Report", StringComparison.Ordinal));
         Assert.Contains(FilingWorkflowService.SofaOptionalWarning, statusBeforeReports.WarningIssues);
         Assert.Contains(FilingWorkflowService.TrusteesReportOptionalWarning, statusBeforeReports.WarningIssues);
+        var approveBeforeReports = await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            workflow.UpdateCharityStatusAsync(period.CompanyId, period.Id, FilingStatus.Approved, "Reviewer"));
+        Assert.Contains("Generate the Charity SoFA", approveBeforeReports.Message);
 
         var balanceSheet = await statements.GetBalanceSheetAsync(period.CompanyId, period.Id);
         var fund = await db.FundBalances.SingleAsync(f => f.PeriodId == period.Id);

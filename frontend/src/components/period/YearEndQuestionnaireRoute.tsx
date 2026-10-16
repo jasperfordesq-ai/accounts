@@ -219,6 +219,8 @@ export function YearEndQuestionnaireRoute({
   const [newPbseAdjusting, setNewPbseAdjusting] = useState(false);
   const [newPbseImpact, setNewPbseImpact] = useState<number>(0);
   const [editingPbseId, setEditingPbseId] = useState<number | null>(null);
+  // Carried through an edit unchanged: the form has no field for it, and PUT replaces the record.
+  const [editingPbseActionRequired, setEditingPbseActionRequired] = useState<string | undefined>(undefined);
   const [newRptName, setNewRptName] = useState("");
   const [newRptRelationship, setNewRptRelationship] = useState("Director");
   const [newRptType, setNewRptType] = useState("Sale");
@@ -701,11 +703,13 @@ export function YearEndQuestionnaireRoute({
     setNewPbseAdjusting(false);
     setNewPbseImpact(0);
     setEditingPbseId(null);
+    setEditingPbseActionRequired(undefined);
   }
 
   function startEditPbse(event: PostBalanceSheetEvent) {
     if (!event.id) return;
     setEditingPbseId(event.id);
+    setEditingPbseActionRequired(event.actionRequired);
     setNewPbseDesc(event.description);
     setNewPbseDate(event.eventDate);
     setNewPbseAdjusting(event.isAdjusting);
@@ -720,6 +724,7 @@ export function YearEndQuestionnaireRoute({
       eventDate: newPbseDate,
       isAdjusting: newPbseAdjusting,
       financialImpact: newPbseImpact || undefined,
+      actionRequired: editingPbseId !== null ? editingPbseActionRequired : undefined,
     };
     try {
       if (editingPbseId !== null) {

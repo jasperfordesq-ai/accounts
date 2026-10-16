@@ -413,9 +413,15 @@ public sealed class AccountChartVariantTests
         Assert.Equal((ids["8000"], ids["0031"]), (counter.DebitCategoryId, counter.CreditCategoryId));
         Assert.DoesNotContain(auto, adjustment => adjustment.CreditCategoryId == ids["0010"] || adjustment.CreditCategoryId == ids["0030"]);
 
-        // The balance sheet carries cost and accumulated depreciation separately; net book value is unchanged.
+        // The note shows each class as cost, accumulated depreciation and net book value: the
+        // accumulated account is folded into its cost account, never listed as a negative class.
         var balanceSheet = await new FinancialStatementsService(db).GetBalanceSheetAsync(company.Id, period.Id);
         Assert.Equal(6_000m - 1_200m, balanceSheet.FixedAssets.Total);
+        var leased = Assert.Single(balanceSheet.FixedAssets.Categories, line => line.Category == "Equipment held under finance lease");
+        Assert.Equal((5_000m, 1_000m, 4_000m), (leased.Cost, leased.Depreciation, leased.Nbv));
+        var fittings = Assert.Single(balanceSheet.FixedAssets.Categories, line => line.Category == "Fixtures and fittings");
+        Assert.Equal((1_000m, 200m, 800m), (fittings.Cost, fittings.Depreciation, fittings.Nbv));
+        Assert.DoesNotContain(balanceSheet.FixedAssets.Categories, line => line.Category.Contains("accumulated", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

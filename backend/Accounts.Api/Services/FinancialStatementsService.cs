@@ -499,6 +499,22 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         static bool Cash(AccountCategory category) => AccountingLedgerService.IsCash(category);
         static decimal AssetBalance(AccountingLedgerService.LedgerLine line) => line.NetDebit;
         static decimal LiabilityBalance(AccountingLedgerService.LedgerLine line) => -line.NetDebit;
+        static bool IsAccumulatedDepreciationAccount(AccountCategory category) =>
+            category.Name.Contains("accumulated depreciation", StringComparison.OrdinalIgnoreCase);
+        // The cost account an accumulated-depreciation account belongs to: the same code with a final 0
+        // (0011 → 0010), the charity chart's convention.
+        static string? AccumulatedDepreciationPartnerCode(AccountCategory category) =>
+            category.Code.Length > 1 && category.Code[^1] == '1' ? category.Code[..^1] + "0" : null;
+        // "Equipment held under finance lease — cost" is one class: drop the cost suffix for the note.
+        static string AssetClassName(string name)
+        {
+            foreach (var suffix in new[] { " — cost", " - cost" })
+            {
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    return name[..^suffix.Length];
+            }
+            return name;
+        }
 
         var activeAssets = await db.FixedAssets
             .AsNoTracking()
@@ -514,16 +530,36 @@ public partial class FinancialStatementsService(AccountsDbContext db)
         // company keeps the presentation below unchanged.
         var charityPresentation = companyVariant == ChartOfAccountsVariant.CharityClg;
         var fixedAssetLines = lines.Where(line => FixedAsset(line.Category)).ToList();
-        var assetCategories = fixedAssetLines
-            .Select(line =>
-            {
-                var netBookValue = AssetBalance(line);
-                var registerCost = activeAssets
-                    .Where(asset => FixedAssetCode(variant, asset.Category) == line.Category.Code)
-                    .Sum(asset => asset.Cost);
-                var cost = registerCost == 0m ? Math.Max(0m, netBookValue) : registerCost;
-                return new AssetCategoryLine(line.Category.Name, cost, cost - netBookValue, netBookValue);
-            })
+        // A class is its cost account plus its accumulated-depreciation account (charity chart 0010 +
+        // 0011, 0020 + 0021, 0030 + 0031): the accumulated account's credit is folded into the cost
+        // account's line, so the note shows cost, accumulated depreciation and net book value per class
+        // instead of a cost line at full value beside a negative "accumulated depreciation" line.
+        var accumulatedLines = fixedAssetLines.Where(line => IsAccumulatedDepreciationAccount(line.Category)).ToList();
+        var pairedAccumulated = new HashSet<int>();
+        var assetCategories = new List<AssetCategoryLine>();
+        foreach (var line in fixedAssetLines.Where(line => !IsAccumulatedDepreciationAccount(line.Category)))
+        {
+            var partners = accumulatedLines
+                .Where(accumulated => AccumulatedDepreciationPartnerCode(accumulated.Category) == line.Category.Code)
+                .ToList();
+            foreach (var partner in partners)
+                pairedAccumulated.Add(partner.Category.Id);
+            var netBookValue = AssetBalance(line) + partners.Sum(AssetBalance);
+            var registerCost = activeAssets
+                .Where(asset => FixedAssetCode(variant, asset.Category) == line.Category.Code)
+                .Sum(asset => asset.Cost);
+            var cost = registerCost != 0m
+                ? registerCost
+                : Math.Max(0m, partners.Count > 0 ? AssetBalance(line) : netBookValue);
+            assetCategories.Add(new AssetCategoryLine(AssetClassName(line.Category.Name), cost, cost - netBookValue, netBookValue));
+        }
+        foreach (var line in accumulatedLines.Where(accumulated => !pairedAccumulated.Contains(accumulated.Category.Id)))
+        {
+            var netBookValue = AssetBalance(line);
+            var cost = Math.Max(0m, netBookValue);
+            assetCategories.Add(new AssetCategoryLine(line.Category.Name, cost, cost - netBookValue, netBookValue));
+        }
+        assetCategories = assetCategories
             .Where(line => line.Cost != 0 || line.Depreciation != 0 || line.Nbv != 0)
             .ToList();
         var fixedAssetsTotal = fixedAssetLines.Sum(AssetBalance);

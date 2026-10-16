@@ -158,6 +158,7 @@ public class FilingWorkflowService(
             // A company charity files its Companies Act financial statements; the SoFA and the Trustees'
             // Annual Report are SORP recommended practice, not a filing precondition (Charities Act 2009
             // s.48(6)(a) and s.50(13)(a); the Charities (Amendment) Act 2024 changes are not commenced).
+            // They remain the content of the separate charity annual-return pack, whose approval binds them.
             if (!charityStatus.SofaGenerated)
                 warnings.Add(SofaOptionalWarning);
             if (!charityStatus.TrusteesReportGenerated)
@@ -851,8 +852,11 @@ public class FilingWorkflowService(
     {
         if (string.IsNullOrWhiteSpace(period.Company.CharityInfo?.CharityNumber))
             throw new BusinessRuleException("Charity number is required before approving the Charity annual return pack.");
-        // The SoFA and Trustees' Annual Report are optional for a company charity (see GetStatusAsync);
-        // when generated they are bound into the approved pack, when not the pack is approved without them.
+        // The SoFA and Trustees' Annual Report are optional for the company's statutory filing (see
+        // GetStatusAsync), but this workflow approves the charity annual-return pack, which the release
+        // gate binds to both retained artifacts and the SORP decision behind them.
+        if (!pkg.SofaGenerated || !pkg.TrusteesReportGenerated)
+            throw new BusinessRuleException("Generate the Charity SoFA and Trustees' Annual Report before approving the charity annual return pack. They are optional for the company's CRO filing, which does not wait for them.");
 
         var hasFundBalances = await db.FundBalances.AnyAsync(f => f.PeriodId == period.Id);
         if (!hasFundBalances)
