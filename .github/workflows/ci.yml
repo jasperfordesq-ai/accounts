@@ -787,7 +787,7 @@ jobs:
           exit-code: "1"
 
       - name: Generate backend SPDX SBOM
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0
         with:
           image: ${{ steps.image-refs.outputs.backend-ref }}
           format: spdx-json
@@ -795,7 +795,7 @@ jobs:
           upload-artifact: false
 
       - name: Generate frontend SPDX SBOM
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0
         with:
           image: ${{ steps.image-refs.outputs.frontend-ref }}
           format: spdx-json
@@ -803,7 +803,7 @@ jobs:
           upload-artifact: false
 
       - name: Generate MCP connector SPDX SBOM
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0
         with:
           image: ${{ steps.image-refs.outputs.mcp-ref }}
           format: spdx-json
