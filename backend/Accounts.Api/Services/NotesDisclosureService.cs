@@ -368,10 +368,14 @@ public class NotesDisclosureService(AccountsDbContext db)
         if (!reviews.TryGetValue("going-concern", out var review))
             return ExplicitReview(StatutoryNoteCodes.GoingConcern);
 
-        var content = period.GoingConcernConfirmed
-            ? "Following their documented assessment, the directors consider the going concern basis of preparation appropriate."
-            : !string.IsNullOrWhiteSpace(period.GoingConcernNote)
-                ? period.GoingConcernNote.Trim()
+        // The directors' own note IS the going concern disclosure. Use it whenever one has been
+        // recorded, whether or not the basis is confirmed: a confirmed basis is frequently
+        // accompanied by a material uncertainty that must still be disclosed (FRS 102 3.9 /
+        // FRS 105). The generic sentence is only the fallback for a confirmed basis with no note.
+        var content = !string.IsNullOrWhiteSpace(period.GoingConcernNote)
+            ? period.GoingConcernNote.Trim()
+            : period.GoingConcernConfirmed
+                ? "Following their documented assessment, the directors consider the going concern basis of preparation appropriate."
                 : null;
         if (string.IsNullOrWhiteSpace(content))
             return ExplicitReview(StatutoryNoteCodes.GoingConcern);

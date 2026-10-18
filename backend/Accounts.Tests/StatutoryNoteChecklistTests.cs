@@ -193,6 +193,27 @@ public sealed class StatutoryNoteChecklistTests
     }
 
     [Fact]
+    public async Task GoingConcernNote_UsesTheDirectorsNoteEvenWhenTheBasisIsConfirmed()
+    {
+        // A confirmed basis often carries a material uncertainty the directors have written up; the
+        // generic sentence replaced it and dropped the disclosure.
+        await using var db = CreateDb();
+        var fixture = await SeedAsync(db, ElectedRegime.Small, includeManualReviews: true);
+        var service = new NotesDisclosureService(db);
+
+        var generic = (await service.GenerateNotesAsync(fixture.Company.Id, fixture.Period.Id))
+            .Single(note => note.Code == StatutoryNoteCodes.GoingConcern);
+        Assert.Contains("the directors consider the going concern basis of preparation appropriate", generic.Content);
+
+        fixture.Period.GoingConcernNote = "  The company has net liabilities; a material uncertainty exists.  ";
+        await db.SaveChangesAsync();
+        var directors = (await service.GenerateNotesAsync(fixture.Company.Id, fixture.Period.Id))
+            .Single(note => note.Code == StatutoryNoteCodes.GoingConcern);
+        Assert.Contains("The company has net liabilities; a material uncertainty exists.", directors.Content);
+        Assert.DoesNotContain("Following their documented assessment", directors.Content);
+    }
+
+    [Fact]
     public async Task RenderedPackage_EmitsEachGeneratedNoteOnceAndKeepsApprovalDateStable()
     {
         await using var db = CreateDb();
