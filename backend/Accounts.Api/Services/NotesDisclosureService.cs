@@ -368,14 +368,30 @@ public class NotesDisclosureService(AccountsDbContext db)
         if (!reviews.TryGetValue("going-concern", out var review))
             return ExplicitReview(StatutoryNoteCodes.GoingConcern);
 
-        var content = period.GoingConcernConfirmed
-            ? "Following their documented assessment, the directors consider the going concern basis of preparation appropriate."
-            : !string.IsNullOrWhiteSpace(period.GoingConcernNote)
-                ? period.GoingConcernNote.Trim()
-                : null;
-        if (string.IsNullOrWhiteSpace(content))
+        // The directors' own note IS the going concern disclosure. Use it whenever one has been
+        // recorded, whether or not the basis is confirmed: a confirmed basis is frequently
+        // accompanied by a material uncertainty that must still be disclosed (FRS 102 3.9 /
+        // FRS 105). The generic sentence is only the fallback for a confirmed basis with no note.
+        // The directors' text is a manual disclosure, so it carries the explicit-review state the
+        // unsupported-representation check accepts (it may say "none" or "capital commitments").
+        if (!string.IsNullOrWhiteSpace(period.GoingConcernNote))
+        {
+            return new NoteCandidate(
+                StatutoryNoteCodes.GoingConcern,
+                StatutoryNoteCodes.Titles[StatutoryNoteCodes.GoingConcern],
+                period.GoingConcernNote.Trim(),
+                NoteChecklistState.ExplicitReview,
+                true,
+                ReviewEvidence(review),
+                review.ConfirmedBy,
+                review.ConfirmedAt);
+        }
+        if (!period.GoingConcernConfirmed)
             return ExplicitReview(StatutoryNoteCodes.GoingConcern);
-        return ReviewedRequired(StatutoryNoteCodes.GoingConcern, content, review);
+        return ReviewedRequired(
+            StatutoryNoteCodes.GoingConcern,
+            "Following their documented assessment, the directors consider the going concern basis of preparation appropriate.",
+            review);
     }
 
     private static NoteCandidate ApprovalCandidate(AccountingPeriod period) =>

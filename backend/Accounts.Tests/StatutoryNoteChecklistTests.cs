@@ -193,6 +193,46 @@ public sealed class StatutoryNoteChecklistTests
     }
 
     [Fact]
+    public async Task GoingConcernNote_UsesTheDirectorsNoteEvenWhenTheBasisIsConfirmed()
+    {
+        // A confirmed basis often carries a material uncertainty the directors have written up; the
+        // generic sentence replaced it and dropped the disclosure.
+        await using var db = CreateDb();
+        var fixture = await SeedAsync(db, ElectedRegime.Small, includeManualReviews: true);
+        var service = new NotesDisclosureService(db);
+
+        var generic = (await service.GenerateNotesAsync(fixture.Company.Id, fixture.Period.Id))
+            .Single(note => note.Code == StatutoryNoteCodes.GoingConcern);
+        Assert.Contains("the directors consider the going concern basis of preparation appropriate", generic.Content);
+
+        fixture.Period.GoingConcernNote = "  The company has net liabilities; a material uncertainty exists.  ";
+        await db.SaveChangesAsync();
+        var directors = (await service.GenerateNotesAsync(fixture.Company.Id, fixture.Period.Id))
+            .Single(note => note.Code == StatutoryNoteCodes.GoingConcern);
+        Assert.Contains("The company has net liabilities; a material uncertainty exists.", directors.Content);
+        Assert.DoesNotContain("Following their documented assessment", directors.Content);
+    }
+
+    [Fact]
+    public async Task GoingConcernNote_WithUnsupportedRepresentationWords_PassesTheChecklistOnceReviewed()
+    {
+        // The directors' text may mention capital commitments or say "none"; as a reviewed manual
+        // disclosure it must not leave an issue that regenerating cannot clear.
+        await using var db = CreateDb();
+        var fixture = await SeedAsync(db, ElectedRegime.Small, includeManualReviews: true);
+        var service = new NotesDisclosureService(db);
+        fixture.Period.GoingConcernNote =
+            "The directors expect to meet the company's capital commitments from members' support; none of the creditors has sought repayment.";
+        await db.SaveChangesAsync();
+
+        await service.GenerateNotesAsync(fixture.Company.Id, fixture.Period.Id);
+
+        var issues = await service.GetChecklistIssuesAsync(fixture.Company.Id, fixture.Period.Id);
+        Assert.DoesNotContain(issues, issue => issue.Contains("Going Concern", StringComparison.OrdinalIgnoreCase)
+            || issue.Contains(StatutoryNoteCodes.GoingConcern, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task RenderedPackage_EmitsEachGeneratedNoteOnceAndKeepsApprovalDateStable()
     {
         await using var db = CreateDb();
