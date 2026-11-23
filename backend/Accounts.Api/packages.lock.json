@@ -4,9 +4,9 @@
     "net10.0": {
       "CsvHelper": {
         "type": "Direct",
-        "requested": "[33.0.1, )",
-        "resolved": "33.0.1",
-        "contentHash": "fev4lynklAU2A9GVMLtwarkwaanjSYB4wUqO2nOJX5hnzObORzUqVLe+bDYCUyIIRQM4o5Bsq3CcyJR89iMmEQ=="
+        "requested": "[34.1.0, )",
+        "resolved": "34.1.0",
+        "contentHash": "h5nMzKDFkOE/rJs4HBa1Tlj+fFvJlO+XXJd8gvguaK3Gzm7rO14C0ljyZ8tMBHsfg0szoL5RIIpEMGnaslR1uA=="
       },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "Direct",
